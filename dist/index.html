@@ -574,7 +574,7 @@ function ContactModal({contact,deals,onSave,onClose}){
           <div className="frow"><label>אימייל</label><input type="email" value={form.email||''} onChange={f('email')} placeholder="email@..."/></div>
           <div className="frow"><label>עיר</label><input value={form.city||''} onChange={f('city')} placeholder="תל אביב"/></div>
           <div className="frow"><label>סטטוס</label><select value={form.status} onChange={f('status')}>{STATUS_OPTS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
-          <TypeFields t={curType}/>
+          {TypeFields({t:curType})}
           {curType!=='private_student'&&<div className="frow full"><label>תוכניות פעילות</label><div className="prog-grid">{PROGRAMS.map(p=><label key={p} className={`prog-cb ${(form.activePrograms||[]).includes(p)?'on':''}`}><input type="checkbox" checked={(form.activePrograms||[]).includes(p)} onChange={()=>toggleProg(p)}/>{p}</label>)}</div></div>}
           {isE&&<div className="frow full"><label>תגיות</label>
             <div style={{display:'flex',gap:6}}><input value={ti} onChange={e=>setTi(e.target.value)} onKeyDown={e=>e.key==='Enter'&&(e.preventDefault(),addTag())} placeholder="תגית + Enter..." style={{flex:1}}/><button type="button" className="btn btn-o btn-sm" onClick={addTag}>+</button></div>
@@ -594,7 +594,7 @@ function ContactModal({contact,deals,onSave,onClose}){
         {isE?(
           <>
             <div className="tabs">{[['details','פרטים'],['notes','הערות'],['deals','עסקאות'],['history','היסטוריה']].map(([id,lb])=><button key={id} className={`tab ${tab===id?'on':''}`} onClick={()=>setTab(id)}>{lb}</button>)}</div>
-            {tab==='details'&&<DetailForm curType={form.type}/>}
+            {tab==='details'&&DetailForm({curType:form.type})}
             {tab==='notes'&&<div className="mb">
               <div style={{display:'flex',gap:7,marginBottom:14}}><textarea value={nt} onChange={e=>setNt(e.target.value)} placeholder="הוסף הערה..." style={{flex:1,minHeight:65}}/><button className="btn btn-p" onClick={addNote} style={{alignSelf:'flex-end',flexShrink:0}}>הוסף</button></div>
               {!(form.notes||[]).length?<div className="empty"><p>אין הערות</p></div>:(form.notes||[]).map(n=><div key={n.id} className="note-item"><div className="note-date">{fmtDT(n.date)}</div><div className="note-text">{n.text}</div></div>)}
@@ -609,7 +609,7 @@ function ContactModal({contact,deals,onSave,onClose}){
               <div className="mf"><button className="btn btn-o" onClick={onClose}>סגור</button></div>
             </div>}
           </>
-        ):<DetailForm curType={selType}/>}
+        ):DetailForm({curType:selType})}
       </div>
     </div>
   );
