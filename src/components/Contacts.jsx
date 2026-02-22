@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 
 const STATUS_OPTIONS = [
   { value: 'lead',     label: 'ליד',       badge: 'badge-yellow' },
@@ -419,9 +419,16 @@ function ContactModal({ modal, onClose, onSubmit }) {
 
 // ── Main Contacts ────────────────────────────────────────────────────────────
 export default function Contacts({ contacts, deals, onAddContact, onUpdateContact, onDeleteContact, onImportContacts }) {
-  const [search, setSearch]       = useState('')
-  const [modal, setModal]         = useState(null)
-  const [showImport, setShowImport] = useState(false)
+  const [searchInput, setSearchInput] = useState('')   // מה שרואים ב-input — מתעדכן מיידית
+  const [search, setSearch]           = useState('')   // מה שמפעיל סינון/query — אחרי debounce
+  const [modal, setModal]             = useState(null)
+  const [showImport, setShowImport]   = useState(false)
+
+  // Debounce: שולח שאילתה רק 500ms אחרי שהמשתמש הפסיק להקליד
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput), 500)
+    return () => clearTimeout(timer)
+  }, [searchInput])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -471,14 +478,14 @@ export default function Contacts({ contacts, deals, onAddContact, onUpdateContac
               className="search-input"
               type="text"
               placeholder="חיפוש לפי שם הורה, תלמיד, אימייל..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
             />
           </div>
           <div className="table-wrapper">
             {filtered.length === 0 ? (
               <div className="empty-state">
-                <p>{search ? `לא נמצאו תוצאות עבור "${search}"` : 'אין לקוחות עדיין. לחץ "הוסף לקוח" או "ייבוא CSV" להתחיל.'}</p>
+                <p>{searchInput ? `לא נמצאו תוצאות עבור "${searchInput}"` : 'אין לקוחות עדיין. לחץ "הוסף לקוח" או "ייבוא CSV" להתחיל.'}</p>
               </div>
             ) : (
               <table>
