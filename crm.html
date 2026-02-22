@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRM - מערכת ניהול לקוחות</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --primary: #2563eb; --primary-dark: #1d4ed8; --primary-light: #dbeafe;
+      --sidebar-bg: #1e293b; --sidebar-text: #94a3b8;
+      --bg: #f1f5f9; --surface: #ffffff; --border: #e2e8f0;
+      --text: #1e293b; --text-muted: #64748b;
+      --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { direction: rtl; font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); height: 100%; }
+    #root { height: 100vh; }
+    .app { display: flex; height: 100vh; overflow: hidden; }
+
+    /* Sidebar */
+    .sidebar { width: 220px; background: var(--sidebar-bg); color: var(--sidebar-text); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+    .sidebar-logo { padding: 24px 20px; border-bottom: 1px solid #334155; }
+    .sidebar-logo h1 { color: white; font-size: 20px; font-weight: 700; }
+    .sidebar-logo p  { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .sidebar-nav { flex: 1; padding: 16px 0; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 20px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; border: none; background: none; color: var(--sidebar-text); width: 100%; text-align: right; }
+    .nav-item:hover { background: #334155; color: white; }
+    .nav-item.active { background: var(--primary); color: white; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .nav-badge { margin-right: auto; background: var(--danger); color: white; font-size: 11px; padding: 2px 6px; border-radius: 10px; font-weight: 600; }
+
+    /* Layout */
+    .main-content { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+    .page-header { padding: 24px 32px 0; display: flex; align-items: center; justify-content: space-between; }
+    .page-header h2 { font-size: 22px; font-weight: 700; }
+    .page-body { padding: 20px 32px 32px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--radius); border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-outline:hover { background: var(--bg); }
+    .btn-danger { background: transparent; color: var(--danger); border: none; cursor: pointer; padding: 8px 16px; border-radius: var(--radius); font-size: 14px; font-weight: 500; }
+    .btn-danger:hover { background: #fee2e2; }
+    .btn-icon { background: transparent; border: none; cursor: pointer; color: var(--text-muted); padding: 6px; border-radius: var(--radius); display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s; }
+    .btn-icon:hover { background: var(--bg); color: var(--text); }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+    .stat-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .stat-label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+    .stat-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+    .stat-value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+    .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Dashboard grid */
+    .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+    /* Card */
+    .card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .card-header h3 { font-size: 15px; font-weight: 600; }
+
+    /* Table */
+    .table-wrapper { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { text-align: right; padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); background: #f8fafc; }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+    .badge-green  { background: #d1fae5; color: #065f46; }
+    .badge-yellow { background: #fef3c7; color: #92400e; }
+    .badge-red    { background: #fee2e2; color: #991b1b; }
+    .badge-gray   { background: #f1f5f9; color: #475569; }
+    .badge-purple { background: #ede9fe; color: #5b21b6; }
+
+    /* Search */
+    .search-bar { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .search-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; background: var(--bg); color: var(--text); outline: none; text-align: right; }
+    .search-input:focus { border-color: var(--primary); background: white; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .modal { background: var(--surface); border-radius: 12px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+    .modal-header h3 { font-size: 17px; font-weight: 600; }
+    .modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 22px; display: flex; align-items: center; padding: 4px; border-radius: 4px; }
+    .modal-close:hover { background: var(--bg); }
+    .modal-body { padding: 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: center; }
+
+    /* Form */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+    label { font-size: 13px; font-weight: 500; color: var(--text); }
+    input, select, textarea { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; color: var(--text); background: var(--surface); outline: none; text-align: right; font-family: inherit; }
+    input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+    textarea { resize: vertical; min-height: 80px; }
+
+    /* Kanban */
+    .kanban-board { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 16px; }
+    .kanban-column { min-width: 220px; flex-shrink: 0; background: var(--bg); border-radius: var(--radius); border: 1px solid var(--border); }
+    .kanban-column-header { padding: 12px 16px; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+    .kanban-count { background: var(--border); color: var(--text-muted); border-radius: 10px; font-size: 11px; padding: 1px 7px; font-weight: 600; }
+    .kanban-stage-value { padding: 4px 16px; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    .kanban-cards { padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 100px; }
+    .kanban-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; cursor: pointer; transition: box-shadow 0.15s; }
+    .kanban-card:hover { box-shadow: var(--shadow); }
+    .kanban-card-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .kanban-card-meta { font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; }
+    .kanban-card-value { font-size: 14px; font-weight: 700; color: var(--primary); margin-top: 6px; }
+
+    /* Tasks */
+    .task-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    .task-item:last-child { border-bottom: none; }
+    .task-item:hover { background: #f8fafc; }
+    .task-checkbox { width: 18px; height: 18px; border: 2px solid var(--border); border-radius: 4px; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-top: 1px; transition: all 0.15s; }
+    .task-checkbox.checked { background: var(--success); border-color: var(--success); color: white; }
+    .task-content { flex: 1; }
+    .task-title { font-size: 14px; font-weight: 500; color: var(--text); }
+    .task-title.done { text-decoration: line-through; color: var(--text-muted); }
+    .task-meta { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; align-items: center; }
+    .task-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+    .task-item:hover .task-actions { opacity: 1; }
+
+    /* Filters */
+    .filter-bar { display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .filter-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+    .filter-btn.active { background: var(--primary); border-color: var(--primary); color: white; }
+
+    /* Empty */
+    .empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+    .empty-state p { font-size: 14px; margin-top: 8px; }
+
+    /* List items */
+    .list-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+    .list-item:last-child { border-bottom: none; }
+    .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; flex-shrink: 0; }
+    .actions-cell { display: flex; gap: 4px; justify-content: flex-end; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // ── Utils ──────────────────────────────────────────────────────────
+    function useLocalStorage(key, init) {
+      const [val, setVal] = useState(() => {
+        try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : init; } catch { return init; }
+      });
+      useEffect(() => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }, [key, val]);
+      return [val, setVal];
+    }
+
+    function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+    function formatCurrency(n) { return '₪' + Number(n || 0).toLocaleString('he-IL'); }
+    function getInitials(name) { return (name || '').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2); }
+    function formatDate(d) {
+      if (!d) return null;
+      const date = new Date(d), today = new Date(); today.setHours(0,0,0,0);
+      const tom = new Date(today); tom.setDate(tom.getDate() + 1);
+      if (date < today) return { text: 'באיחור - ' + date.toLocaleDateString('he-IL'), overdue: true };
+      if (date.toDateString() === today.toDateString()) return { text: 'היום', overdue: false };
+      if (date.toDateString() === tom.toDateString()) return { text: 'מחר', overdue: false };
+      return { text: date.toLocaleDateString('he-IL', { day:'numeric', month:'short' }), overdue: false };
+    }
+
+    // ── Icons ──────────────────────────────────────────────────────────
+    const PlusIcon = () => (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+    );
+    const EditIcon = ({size=15}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+      </svg>
+    );
+    const TrashIcon = ({size=15}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+        <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+      </svg>
+    );
+    const CheckIcon = () => (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    );
+
+    // ── Sidebar ────────────────────────────────────────────────────────
+    const NAV = [
+      { id:'dashboard', label:'דשבורד',
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
+      { id:'contacts', label:'לקוחות',
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
+      { id:'deals', label:'עסקאות',
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> },
+      { id:'tasks', label:'משימות',
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> },
+    ];
+
+    function Sidebar({ page, setPage, tasks }) {
+      const overdue = tasks.filter(t => !t.completed && t.dueDate && new Date(t.dueDate) < new Date()).length;
+      return (
+        <div className="sidebar">
+          <div className="sidebar-logo"><h1>CRM</h1><p>מערכת ניהול לקוחות</p></div>
+          <nav className="sidebar-nav">
+            {NAV.map(item => (
+              <button key={item.id} className={`nav-item ${page===item.id?'active':''}`} onClick={() => setPage(item.id)}>
+                {item.icon}
+                {item.label}
+                {item.id==='tasks' && overdue>0 && <span className="nav-badge">{overdue}</span>}
+              </button>
+            ))}
+          </nav>
+        </div>
+      );
+    }
+
+    // ── Dashboard ──────────────────────────────────────────────────────
+    const STATUS_MAP = { lead:['badge-yellow','ליד'], prospect:['badge-blue','פרוספקט'], customer:['badge-green','לקוח'] };
+    const PRI_MAP    = { high:['badge-red','גבוהה'], medium:['badge-yellow','בינונית'], low:['badge-green','נמוכה'] };
+
+    function Dashboard({ contacts, deals, tasks }) {
+      const open   = tasks.filter(t => !t.completed);
+      const active = deals.filter(d => !['won','lost'].includes(d.stage));
+      const total  = deals.filter(d => d.stage!=='lost').reduce((s,d) => s+Number(d.value||0), 0);
+      const now    = new Date();
+
+      const upcoming = [...open].filter(t=>t.dueDate).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).slice(0,6);
+      const recent   = [...contacts].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,6);
+
+      return <>
+        <div className="page-header"><h2>דשבורד</h2></div>
+        <div className="page-body">
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-card-header">
+                <span className="stat-label">סה"כ לקוחות</span>
+                <div className="stat-icon" style={{background:'#dbeafe'}}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+              </div>
+              <div className="stat-value">{contacts.length}</div>
+              <div className="stat-sub">{contacts.filter(c=>c.status==='customer').length} לקוחות פעילים</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-card-header">
+                <span className="stat-label">עסקאות פעילות</span>
+                <div className="stat-icon" style={{background:'#d1fae5'}}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                </div>
+              </div>
+              <div className="stat-value">{active.length}</div>
+              <div className="stat-sub">{deals.filter(d=>d.stage==='won').length} נסגרו בהצלחה</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-card-header">
+                <span className="stat-label">משימות פתוחות</span>
+                <div className="stat-icon" style={{background:'#fef3c7'}}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                </div>
+              </div>
+              <div className="stat-value">{open.length}</div>
+              <div className="stat-sub">{open.filter(t=>t.dueDate&&new Date(t.dueDate)<now).length} באיחור</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-card-header">
+                <span className="stat-label">שווי פייפליין</span>
+                <div className="stat-icon" style={{background:'#ede9fe'}}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+              </div>
+              <div className="stat-value" style={{fontSize:20}}>{formatCurrency(total)}</div>
+              <div className="stat-sub">עסקאות פעילות וזכויות</div>
+            </div>
+          </div>
+
+          <div className="dashboard-grid">
+            <div className="card">
+              <div className="card-header"><h3>לקוחות אחרונים</h3><span className="badge badge-gray">{contacts.length}</span></div>
+              {recent.length===0
+                ? <div className="empty-state"><p>אין לקוחות עדיין</p></div>
+                : recent.map(c => {
+                    const [cls,lbl] = STATUS_MAP[c.status]||['badge-gray',c.status];
+                    return (
+                      <div key={c.id} className="list-item">
+                        <div className="avatar">{getInitials(c.name)}</div>
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:600,fontSize:14}}>{c.name}</div>
+                          <div style={{fontSize:12,color:'var(--text-muted)'}}>{c.company||c.email||''}</div>
+                        </div>
+                        <span className={`badge ${cls}`}>{lbl}</span>
+                      </div>
+                    );
+                  })
+              }
+            </div>
+            <div className="card">
+              <div className="card-header"><h3>משימות קרובות</h3><span className="badge badge-gray">{open.length}</span></div>
+              {upcoming.length===0
+                ? <div className="empty-state"><p>אין משימות פתוחות</p></div>
+                : upcoming.map(t => {
+                    const di = formatDate(t.dueDate);
+                    const [pcls,plbl] = PRI_MAP[t.priority]||['badge-gray',t.priority];
+                    return (
+                      <div key={t.id} className="list-item">
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:500,fontSize:14}}>{t.title}</div>
+                          {di && <div style={{fontSize:12,marginTop:2,color:di.overdue?'var(--danger)':'var(--text-muted)'}}>{di.text}{di.overdue&&' - באיחור'}</div>}
+                        </div>
+                        <span className={`badge ${pcls}`}>{plbl}</span>
+                      </div>
+                    );
+                  })
+              }
+            </div>
+          </div>
+        </div>
+      </>;
+    }
+
+    // ── Contacts ───────────────────────────────────────────────────────
+    const STATUS_OPTS = [
+      {value:'lead',label:'ליד',badge:'badge-yellow'},
+      {value:'prospect',label:'פרוספקט',badge:'badge-blue'},
+      {value:'customer',label:'לקוח פעיל',badge:'badge-green'},
+    ];
+    const CONTACT_EMPTY = {name:'',email:'',phone:'',company:'',status:'lead',notes:''};
+
+    function Contacts({ contacts, deals, onAdd, onUpdate, onDelete }) {
+      const [search, setSearch] = useState('');
+      const [modal, setModal]   = useState(null);
+      const [form, setForm]     = useState(CONTACT_EMPTY);
+
+      const f = contacts.filter(c => {
+        const q = search.toLowerCase();
+        return !q || [c.name,c.email,c.company].some(v=>v?.toLowerCase().includes(q));
+      });
+
+      const openAdd  = () => { setForm(CONTACT_EMPTY); setModal({mode:'add'}); };
+      const openEdit = c  => { setForm({...CONTACT_EMPTY,...c}); setModal({mode:'edit',contact:c}); };
+      const close    = () => setModal(null);
+      const fld      = k  => e => setForm(p=>({...p,[k]:e.target.value}));
+
+      const submit = e => {
+        e.preventDefault();
+        if (!form.name.trim()) return;
+        modal.mode==='add' ? onAdd(form) : onUpdate(modal.contact.id, form);
+        close();
+      };
+      const del = c => { if (window.confirm(`למחוק את ${c.name}?`)) onDelete(c.id); };
+
+      return <>
+        <div className="page-header">
+          <h2>לקוחות ואנשי קשר</h2>
+          <button className="btn btn-primary" onClick={openAdd}><PlusIcon /> הוסף לקוח</button>
+        </div>
+        <div className="page-body">
+          <div className="card">
+            <div className="search-bar">
+              <input className="search-input" placeholder="חיפוש לפי שם, אימייל, חברה..." value={search} onChange={e=>setSearch(e.target.value)} />
+            </div>
+            <div className="table-wrapper">
+              {f.length===0
+                ? <div className="empty-state"><p>{search?`לא נמצאו תוצאות עבור "${search}"`:' לחץ "הוסף לקוח" להתחיל.'}</p></div>
+                : <table>
+                    <thead><tr><th>שם</th><th>חברה</th><th>טלפון</th><th>אימייל</th><th>סטטוס</th><th>עסקאות</th><th></th></tr></thead>
+                    <tbody>
+                      {f.map(c => {
+                        const s = STATUS_OPTS.find(o=>o.value===c.status)||STATUS_OPTS[0];
+                        const dc = deals?.filter(d=>d.contactId===c.id).length||0;
+                        return (
+                          <tr key={c.id}>
+                            <td><div style={{display:'flex',alignItems:'center',gap:10}}><div className="avatar" style={{width:32,height:32,fontSize:12}}>{getInitials(c.name)}</div><span style={{fontWeight:500}}>{c.name}</span></div></td>
+                            <td>{c.company||'-'}</td><td>{c.phone||'-'}</td><td>{c.email||'-'}</td>
+                            <td><span className={`badge ${s.badge}`}>{s.label}</span></td>
+                            <td>{dc||'-'}</td>
+                            <td><div className="actions-cell">
+                              <button className="btn-icon" onClick={()=>openEdit(c)}><EditIcon /></button>
+                              <button className="btn-icon" onClick={()=>del(c)} style={{color:'var(--danger)'}}><TrashIcon /></button>
+                            </div></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+              }
+            </div>
+          </div>
+        </div>
+        {modal && (
+          <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&close()}>
+            <div className="modal">
+              <div className="modal-header">
+                <h3>{modal.mode==='add'?'הוספת לקוח חדש':'עריכת לקוח'}</h3>
+                <button className="modal-close" onClick={close}>×</button>
+              </div>
+              <form onSubmit={submit}>
+                <div className="modal-body">
+                  <div className="form-grid">
+                    <div className="form-group full"><label>שם מלא *</label><input required value={form.name} onChange={fld('name')} placeholder="ישראל ישראלי" /></div>
+                    <div className="form-group"><label>טלפון</label><input value={form.phone} onChange={fld('phone')} placeholder="050-0000000" type="tel" /></div>
+                    <div className="form-group"><label>אימייל</label><input value={form.email} onChange={fld('email')} placeholder="email@example.com" type="email" /></div>
+                    <div className="form-group"><label>חברה</label><input value={form.company} onChange={fld('company')} placeholder="שם החברה" /></div>
+                    <div className="form-group"><label>סטטוס</label><select value={form.status} onChange={fld('status')}>{STATUS_OPTS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                    <div className="form-group full"><label>הערות</label><textarea value={form.notes} onChange={fld('notes')} placeholder="הערות נוספות..." /></div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="submit" className="btn btn-primary">{modal.mode==='add'?'הוסף לקוח':'שמור שינויים'}</button>
+                  <button type="button" className="btn btn-outline" onClick={close}>ביטול</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </>;
+    }
+
+    // ── Deals ──────────────────────────────────────────────────────────
+    const STAGES = [
+      {id:'lead',label:'ליד',color:'#94a3b8'},
+      {id:'proposal',label:'הצעה',color:'#3b82f6'},
+      {id:'negotiation',label:'משא ומתן',color:'#f59e0b'},
+      {id:'won',label:'נסגר - זכינו',color:'#10b981'},
+      {id:'lost',label:'נסגר - הפסדנו',color:'#ef4444'},
+    ];
+    const DEAL_EMPTY = {title:'',contactId:'',value:'',stage:'lead',closeDate:'',notes:''};
+
+    function Deals({ deals, contacts, onAdd, onUpdate, onDelete }) {
+      const [modal, setModal] = useState(null);
+      const [form, setForm]   = useState(DEAL_EMPTY);
+
+      const openAdd  = (stage='lead') => { setForm({...DEAL_EMPTY,stage}); setModal({mode:'add'}); };
+      const openEdit = d => { setForm({...DEAL_EMPTY,...d}); setModal({mode:'edit',deal:d}); };
+      const close    = () => setModal(null);
+      const fld      = k => e => setForm(p=>({...p,[k]:e.target.value}));
+
+      const submit = e => {
+        e.preventDefault();
+        if (!form.title.trim()) return;
+        modal.mode==='add' ? onAdd(form) : onUpdate(modal.deal.id, form);
+        close();
+      };
+      const del = d => { if (window.confirm(`למחוק את "${d.title}"?`)) { onDelete(d.id); close(); } };
+      const cname = id => contacts.find(c=>c.id===id)?.name||'';
+      const pipe  = deals.filter(d=>!['won','lost'].includes(d.stage)).reduce((s,d)=>s+Number(d.value||0),0);
+
+      const fmtDate = d => d ? new Date(d).toLocaleDateString('he-IL',{day:'numeric',month:'short',year:'numeric'}) : '';
+
+      return <>
+        <div className="page-header">
+          <h2>עסקאות</h2>
+          <div style={{display:'flex',gap:12,alignItems:'center'}}>
+            <span style={{color:'var(--text-muted)',fontSize:14}}>שווי פייפליין: <strong style={{color:'var(--text)'}}>{formatCurrency(pipe)}</strong></span>
+            <button className="btn btn-primary" onClick={()=>openAdd()}><PlusIcon /> הוסף עסקה</button>
+          </div>
+        </div>
+        <div className="page-body">
+          <div className="kanban-board">
+            {STAGES.map(stage => {
+              const sd = deals.filter(d=>d.stage===stage.id);
+              const sv = sd.reduce((s,d)=>s+Number(d.value||0),0);
+              return (
+                <div key={stage.id} className="kanban-column">
+                  <div className="kanban-column-header">
+                    <span style={{color:stage.color}}>{stage.label}</span>
+                    <span className="kanban-count">{sd.length}</span>
+                  </div>
+                  {sv>0 && <div className="kanban-stage-value">{formatCurrency(sv)}</div>}
+                  <div className="kanban-cards">
+                    {sd.map(d => (
+                      <div key={d.id} className="kanban-card" onClick={()=>openEdit(d)}>
+                        <div className="kanban-card-title">{d.title}</div>
+                        <div className="kanban-card-meta">
+                          {d.contactId && <span>{cname(d.contactId)}</span>}
+                          {d.closeDate  && <span>סגירה: {fmtDate(d.closeDate)}</span>}
+                        </div>
+                        {d.value && <div className="kanban-card-value">{formatCurrency(d.value)}</div>}
+                      </div>
+                    ))}
+                    <button className="btn btn-outline" style={{fontSize:12,padding:'6px 10px',marginTop:4}} onClick={()=>openAdd(stage.id)}>+ הוסף</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {modal && (
+          <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&close()}>
+            <div className="modal">
+              <div className="modal-header">
+                <h3>{modal.mode==='add'?'הוספת עסקה חדשה':'עריכת עסקה'}</h3>
+                <button className="modal-close" onClick={close}>×</button>
+              </div>
+              <form onSubmit={submit}>
+                <div className="modal-body">
+                  <div className="form-grid">
+                    <div className="form-group full"><label>שם העסקה *</label><input required value={form.title} onChange={fld('title')} placeholder="תיאור העסקה" /></div>
+                    <div className="form-group"><label>לקוח</label><select value={form.contactId} onChange={fld('contactId')}><option value="">בחר לקוח...</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                    <div className="form-group"><label>שלב</label><select value={form.stage} onChange={fld('stage')}>{STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+                    <div className="form-group"><label>שווי (₪)</label><input type="number" value={form.value} onChange={fld('value')} placeholder="0" min="0" /></div>
+                    <div className="form-group"><label>תאריך סגירה משוער</label><input type="date" value={form.closeDate} onChange={fld('closeDate')} /></div>
+                    <div className="form-group full"><label>הערות</label><textarea value={form.notes} onChange={fld('notes')} placeholder="הערות נוספות..." /></div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="submit" className="btn btn-primary">{modal.mode==='add'?'הוסף עסקה':'שמור שינויים'}</button>
+                  <button type="button" className="btn btn-outline" onClick={close}>ביטול</button>
+                  {modal.mode==='edit' && <button type="button" className="btn btn-danger" onClick={()=>del(modal.deal)} style={{marginRight:'auto'}}>מחק עסקה</button>}
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </>;
+    }
+
+    // ── Tasks ──────────────────────────────────────────────────────────
+    const PRIORITIES = [
+      {value:'high',label:'גבוהה',badge:'badge-red'},
+      {value:'medium',label:'בינונית',badge:'badge-yellow'},
+      {value:'low',label:'נמוכה',badge:'badge-green'},
+    ];
+    const TASK_EMPTY = {title:'',contactId:'',priority:'medium',dueDate:''};
+
+    function Tasks({ tasks, contacts, onAdd, onUpdate, onDelete, onToggle }) {
+      const [filter, setFilter] = useState('open');
+      const [modal, setModal]   = useState(null);
+      const [form, setForm]     = useState(TASK_EMPTY);
+      const now = new Date();
+
+      const filtered = tasks.filter(t => {
+        if (filter==='open')    return !t.completed;
+        if (filter==='done')    return t.completed;
+        if (filter==='overdue') return !t.completed && t.dueDate && new Date(t.dueDate)<now;
+        return true;
+      });
+
+      const openCount    = tasks.filter(t=>!t.completed).length;
+      const overdueCount = tasks.filter(t=>!t.completed&&t.dueDate&&new Date(t.dueDate)<now).length;
+
+      const openAdd  = () => { setForm(TASK_EMPTY); setModal({mode:'add'}); };
+      const openEdit = t  => { setForm({...TASK_EMPTY,...t}); setModal({mode:'edit',task:t}); };
+      const close    = () => setModal(null);
+      const fld      = k  => e => setForm(p=>({...p,[k]:e.target.value}));
+
+      const submit = e => {
+        e.preventDefault();
+        if (!form.title.trim()) return;
+        modal.mode==='add' ? onAdd(form) : onUpdate(modal.task.id, form);
+        close();
+      };
+      const del = t => { if (window.confirm(`למחוק את "${t.title}"?`)) { onDelete(t.id); if(modal) close(); } };
+      const cname = id => contacts.find(c=>c.id===id)?.name||'';
+
+      const FILTERS = [
+        {id:'open',    label:`פתוחות (${openCount})`},
+        {id:'overdue', label:`באיחור (${overdueCount})`},
+        {id:'done',    label:'הושלמו'},
+        {id:'all',     label:'הכל'},
+      ];
+
+      return <>
+        <div className="page-header">
+          <h2>משימות</h2>
+          <button className="btn btn-primary" onClick={openAdd}><PlusIcon /> הוסף משימה</button>
+        </div>
+        <div className="page-body">
+          <div className="card">
+            <div className="filter-bar">
+              {FILTERS.map(f=>(
+                <button key={f.id} className={`filter-btn ${filter===f.id?'active':''}`} onClick={()=>setFilter(f.id)}>{f.label}</button>
+              ))}
+            </div>
+            {filtered.length===0
+              ? <div className="empty-state"><p>{filter==='open'?'אין משימות פתוחות':filter==='done'?'אין משימות שהושלמו':filter==='overdue'?'אין משימות באיחור':'אין משימות עדיין'}</p></div>
+              : filtered.map(task => {
+                  const di = formatDate(task.dueDate);
+                  const pr = PRIORITIES.find(p=>p.value===task.priority)||PRIORITIES[1];
+                  return (
+                    <div key={task.id} className="task-item">
+                      <div className={`task-checkbox ${task.completed?'checked':''}`} onClick={()=>onToggle(task.id)}>
+                        {task.completed && <CheckIcon />}
+                      </div>
+                      <div className="task-content">
+                        <div className={`task-title ${task.completed?'done':''}`}>{task.title}</div>
+                        <div className="task-meta">
+                          <span className={`badge ${pr.badge}`}>{pr.label}</span>
+                          {task.contactId && <span className="badge badge-gray">{cname(task.contactId)}</span>}
+                          {di && <span style={{fontSize:12,color:di.overdue?'var(--danger)':'var(--text-muted)'}}>{di.text}</span>}
+                        </div>
+                      </div>
+                      <div className="task-actions">
+                        <button className="btn-icon" onClick={()=>openEdit(task)}><EditIcon size={14} /></button>
+                        <button className="btn-icon" onClick={()=>del(task)} style={{color:'var(--danger)'}}><TrashIcon size={14} /></button>
+                      </div>
+                    </div>
+                  );
+                })
+            }
+          </div>
+        </div>
+        {modal && (
+          <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&close()}>
+            <div className="modal">
+              <div className="modal-header">
+                <h3>{modal.mode==='add'?'הוספת משימה חדשה':'עריכת משימה'}</h3>
+                <button className="modal-close" onClick={close}>×</button>
+              </div>
+              <form onSubmit={submit}>
+                <div className="modal-body">
+                  <div className="form-grid">
+                    <div className="form-group full"><label>כותרת המשימה *</label><input required value={form.title} onChange={fld('title')} placeholder="תיאור המשימה" /></div>
+                    <div className="form-group"><label>עדיפות</label><select value={form.priority} onChange={fld('priority')}>{PRIORITIES.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
+                    <div className="form-group"><label>תאריך יעד</label><input type="date" value={form.dueDate} onChange={fld('dueDate')} /></div>
+                    <div className="form-group full"><label>לקוח קשור</label><select value={form.contactId} onChange={fld('contactId')}><option value="">ללא לקוח ספציפי</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="submit" className="btn btn-primary">{modal.mode==='add'?'הוסף משימה':'שמור שינויים'}</button>
+                  <button type="button" className="btn btn-outline" onClick={close}>ביטול</button>
+                  {modal.mode==='edit' && <button type="button" className="btn btn-danger" onClick={()=>del(modal.task)} style={{marginRight:'auto'}}>מחק</button>}
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </>;
+    }
+
+    // ── App ────────────────────────────────────────────────────────────
+    function App() {
+      const [page, setPage]         = useState('dashboard');
+      const [contacts, setContacts] = useLocalStorage('crm_contacts', []);
+      const [deals, setDeals]       = useLocalStorage('crm_deals', []);
+      const [tasks, setTasks]       = useLocalStorage('crm_tasks', []);
+
+      const addContact    = d => setContacts(p => [...p, {...d, id:genId(), createdAt:new Date().toISOString()}]);
+      const updateContact = (id,d) => setContacts(p => p.map(c => c.id===id ? {...c,...d} : c));
+      const deleteContact = id => { setContacts(p=>p.filter(c=>c.id!==id)); setDeals(p=>p.filter(d=>d.contactId!==id)); setTasks(p=>p.map(t=>t.contactId===id?{...t,contactId:''}:t)); };
+
+      const addDeal    = d => setDeals(p => [...p, {...d, id:genId(), createdAt:new Date().toISOString()}]);
+      const updateDeal = (id,d) => setDeals(p => p.map(x => x.id===id ? {...x,...d} : x));
+      const deleteDeal = id => setDeals(p => p.filter(x => x.id!==id));
+
+      const addTask    = d => setTasks(p => [...p, {...d, id:genId(), completed:false, createdAt:new Date().toISOString()}]);
+      const updateTask = (id,d) => setTasks(p => p.map(t => t.id===id ? {...t,...d} : t));
+      const deleteTask = id => setTasks(p => p.filter(t => t.id!==id));
+      const toggleTask = id => setTasks(p => p.map(t => t.id===id ? {...t,completed:!t.completed} : t));
+
+      const common = { contacts, deals, tasks };
+
+      const pages = {
+        dashboard: <Dashboard {...common} />,
+        contacts:  <Contacts  {...common} onAdd={addContact} onUpdate={updateContact} onDelete={deleteContact} />,
+        deals:     <Deals     {...common} onAdd={addDeal}    onUpdate={updateDeal}    onDelete={deleteDeal} />,
+        tasks:     <Tasks     {...common} onAdd={addTask}    onUpdate={updateTask}    onDelete={deleteTask} onToggle={toggleTask} />,
+      };
+
+      return (
+        <div className="app">
+          <Sidebar page={page} setPage={setPage} tasks={tasks} />
+          <main className="main-content">{pages[page]}</main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
