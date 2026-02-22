@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 
 const STATUS_OPTIONS = [
   { value: 'lead',     label: 'ליד',       badge: 'badge-yellow' },
@@ -267,31 +267,48 @@ function ImportModal({ onClose, onImport }) {
 }
 
 // ── ContactModal ─────────────────────────────────────────────────────────────
+// משתמש ב-defaultValue (uncontrolled inputs) + FormData בשליחה.
+// כך אין state update בכל הקשה → אין רינדור מחדש → אין איבוד פוקוס.
 function ContactModal({ modal, onClose, onSubmit }) {
-  const [form, setForm] = useState(() =>
-    modal.mode === 'add'
-      ? EMPTY
-      : { ...EMPTY, ...modal.contact, students: modal.contact.students || [] }
-  )
+  const formRef = useRef(null)
 
-  const field = useCallback((key) => (e) => {
-    const val = e.target.value
-    setForm(p => ({ ...p, [key]: val }))
-  }, [])
+  // ערכים התחלתיים נקראים פעם אחת בלבד
+  const initial = modal.mode === 'add'
+    ? EMPTY
+    : { ...EMPTY, ...modal.contact, students: modal.contact.students || [] }
+
+  // רק רשימת התלמידים צריכה state (הוספה/הסרה דינמית)
+  const [students, setStudents] = useState(initial.students)
 
   const addStudent = () =>
-    setForm(p => ({ ...p, students: [...p.students, { id: newSid(), name: '', school: '', group: '', age: '' }] }))
-
-  const updateStudent = (id, key, val) =>
-    setForm(p => ({ ...p, students: p.students.map(s => s.id === id ? { ...s, [key]: val } : s) }))
+    setStudents(p => [...p, { id: newSid(), name: '', school: '', group: '', age: '' }])
 
   const removeStudent = (id) =>
-    setForm(p => ({ ...p, students: p.students.filter(s => s.id !== id) }))
+    setStudents(p => p.filter(s => s.id !== id))
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!form.name.trim()) return
-    onSubmit(form)
+    const fd = new FormData(formRef.current)
+    const name = (fd.get('name') || '').trim()
+    if (!name) return
+    onSubmit({
+      name,
+      phone:         (fd.get('phone')         || '').trim(),
+      email:         (fd.get('email')         || '').trim(),
+      company:       (fd.get('company')       || '').trim(),
+      status:        fd.get('status')         || 'lead',
+      paymentMethod: fd.get('paymentMethod')  || '',
+      notes:         (fd.get('notes')         || '').trim(),
+      students: students
+        .map(s => ({
+          ...s,
+          name:   (fd.get(`s_name_${s.id}`)   || '').trim(),
+          school: (fd.get(`s_school_${s.id}`) || '').trim(),
+          group:  (fd.get(`s_group_${s.id}`)  || '').trim(),
+          age:    (fd.get(`s_age_${s.id}`)    || '').trim(),
+        }))
+        .filter(s => s.name),
+    })
   }
 
   return (
@@ -301,53 +318,53 @@ function ContactModal({ modal, onClose, onSubmit }) {
           <h3>{modal.mode === 'add' ? 'הוספת לקוח חדש' : 'עריכת לקוח'}</h3>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
-        <form onSubmit={handleSubmit}>
+        <form ref={formRef} onSubmit={handleSubmit}>
           <div className="modal-body">
 
-            {/* Parent fields */}
+            {/* שדות הורה — defaultValue = uncontrolled, אין state update בהקלדה */}
             <div className="form-grid">
               <div className="form-group full">
                 <label>שם מלא (הורה) *</label>
-                <input required value={form.name} onChange={field('name')} placeholder="ישראל ישראלי" />
+                <input name="name" required defaultValue={initial.name} placeholder="ישראל ישראלי" />
               </div>
               <div className="form-group">
                 <label>טלפון</label>
-                <input value={form.phone} onChange={field('phone')} placeholder="050-0000000" type="tel" />
+                <input name="phone" defaultValue={initial.phone} placeholder="050-0000000" type="tel" />
               </div>
               <div className="form-group">
                 <label>אימייל</label>
-                <input value={form.email} onChange={field('email')} placeholder="email@example.com" type="email" />
+                <input name="email" defaultValue={initial.email} placeholder="email@example.com" type="email" />
               </div>
               <div className="form-group">
                 <label>סטטוס</label>
-                <select value={form.status} onChange={field('status')}>
+                <select name="status" defaultValue={initial.status}>
                   {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label>אמצעי תשלום</label>
-                <select value={form.paymentMethod} onChange={field('paymentMethod')}>
+                <select name="paymentMethod" defaultValue={initial.paymentMethod}>
                   {PAYMENT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
               <div className="form-group full">
                 <label>הערות</label>
-                <textarea value={form.notes} onChange={field('notes')} placeholder="הערות נוספות..." />
+                <textarea name="notes" defaultValue={initial.notes} placeholder="הערות נוספות..." />
               </div>
             </div>
 
-            {/* Students section */}
+            {/* תלמידים — state רק לרשימת ה-IDs, הערכים נקראים דרך FormData */}
             <div style={{ marginTop: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <label style={{ fontSize: 14, fontWeight: 600 }}>
-                  תלמידים {form.students.length > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({form.students.length})</span>}
+                  תלמידים {students.length > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({students.length})</span>}
                 </label>
                 <button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '5px 12px' }} onClick={addStudent}>
                   + הוסף תלמיד
                 </button>
               </div>
 
-              {form.students.length === 0 ? (
+              {students.length === 0 ? (
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '10px 0', textAlign: 'center' }}>
                   אין תלמידים. לחץ "הוסף תלמיד" לקישור תלמידים להורה זה.
                 </p>
@@ -362,41 +379,16 @@ function ContactModal({ modal, onClose, onSubmit }) {
                     <span style={{ flex: '0 0 28px' }}></span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {form.students.map((s, idx) => (
+                    {students.map((s, idx) => (
                       <div key={s.id} className="student-row">
                         <span className="student-row-num">{idx + 1}</span>
-                        <input
-                          value={s.name}
-                          onChange={e => updateStudent(s.id, 'name', e.target.value)}
-                          placeholder="שם תלמיד"
-                          style={{ flex: 2, minWidth: 0 }}
-                        />
-                        <input
-                          value={s.school}
-                          onChange={e => updateStudent(s.id, 'school', e.target.value)}
-                          placeholder="בית ספר"
-                          style={{ flex: 2, minWidth: 0 }}
-                        />
-                        <input
-                          value={s.group}
-                          onChange={e => updateStudent(s.id, 'group', e.target.value)}
-                          placeholder="חוג"
-                          style={{ flex: 2, minWidth: 0 }}
-                        />
-                        <input
-                          value={s.age}
-                          onChange={e => updateStudent(s.id, 'age', e.target.value)}
-                          placeholder="גיל"
-                          type="number"
-                          min="1" max="25"
-                          style={{ flex: '0 0 54px', minWidth: 0 }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeStudent(s.id)}
-                          className="student-remove-btn"
-                          title="הסר תלמיד"
-                        >×</button>
+                        <input name={`s_name_${s.id}`}   defaultValue={s.name}   placeholder="שם תלמיד" style={{ flex: 2, minWidth: 0 }} />
+                        <input name={`s_school_${s.id}`} defaultValue={s.school} placeholder="בית ספר"  style={{ flex: 2, minWidth: 0 }} />
+                        <input name={`s_group_${s.id}`}  defaultValue={s.group}  placeholder="חוג"      style={{ flex: 2, minWidth: 0 }} />
+                        <input name={`s_age_${s.id}`}    defaultValue={s.age}    placeholder="גיל"
+                          type="number" min="1" max="25" style={{ flex: '0 0 54px', minWidth: 0 }} />
+                        <button type="button" onClick={() => removeStudent(s.id)}
+                          className="student-remove-btn" title="הסר תלמיד">×</button>
                       </div>
                     ))}
                   </div>
