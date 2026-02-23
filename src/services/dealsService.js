@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 export function fromDbDeal(r) {
   return {
     id:        r.id,
+    ownerId:   r.owner_id,
     title:     r.title,
     contactId: r.contact_id,
     value:     r.value,

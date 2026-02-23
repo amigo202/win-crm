@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 export function fromDbContact(r) {
   return {
     id:             r.id,
+    ownerId:        r.owner_id,
     type:           r.type,
     name:           r.name,
     contactPerson:  r.contact_person,
@@ -50,7 +51,6 @@ export function toDbContact(c) {
     age:             c.age            || null,
     parent_name:     c.parentName     || null,
     program:         c.program        || null,
-    updated_at:      new Date().toISOString(),
   }
 }
 
@@ -64,15 +64,12 @@ export async function fetchContacts() {
 }
 
 export async function createContact(data) {
-  const now = new Date().toISOString()
-  const initAct = [{ id: crypto.randomUUID(), desc: 'נוסף איש קשר חדש', date: now }]
+  const initAct = [{ id: crypto.randomUUID(), desc: 'נוסף איש קשר חדש', date: new Date().toISOString() }]
   const dbRow = {
     ...toDbContact(data),
     activities: initAct,
     notes:      data.notes || [],
     tags:       data.tags  || [],
-    created_at: now,
-    updated_at: now,
   }
   const { data: row, error } = await supabase
     .from('contacts').insert(dbRow).select().single()

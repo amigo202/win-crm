@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 export function fromDbStudent(r) {
   return {
     id:            r.id,
+    ownerId:       r.owner_id,
     name:          r.name,
     contactId:     r.contact_id,
     program:       r.program,

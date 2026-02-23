@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 export function fromDbInstructor(r) {
   return {
     id:         r.id,
+    ownerId:    r.owner_id,
     name:       r.name,
     phone:      r.phone,
     email:      r.email,
