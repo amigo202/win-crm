@@ -11,7 +11,7 @@ const NAV = [
   { id: 'students',    label: 'תלמידים',     ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg> },
 ]
 
-export default function Sidebar({ page, setPage, tasks, instructors, students, deals, leads, dark, setDark, user, signOut }) {
+export default function Sidebar({ page, setPage, tasks, instructors, students, deals, leads, dark, setDark, user, signOut, agentOpen, setAgentOpen }) {
   const als        = computeAlerts(tasks, instructors, students, deals)
   const total      = als.overdue.length + als.instructors.length + als.students.length + als.deals.length
   const todayStr   = new Date().toISOString().split('T')[0]
@@ -42,6 +42,13 @@ export default function Sidebar({ page, setPage, tasks, instructors, students, d
         <button className="dark-btn" onClick={() => setDark(d => !d)} style={{ marginBottom: '6px' }}>
           {dark ? <Ico.sun/> : <Ico.moon/>}{dark ? 'מצב בהיר' : 'מצב כהה'}
         </button>
+        {setAgentOpen && (
+          <button className="dark-btn" onClick={() => setAgentOpen(o => !o)}
+            style={{ marginBottom: '6px', color: agentOpen ? '#f97316' : undefined, fontWeight: agentOpen ? 700 : undefined }}>
+            🤖 סוכן AI
+            <span style={{ fontSize: 10, color: 'var(--muted)', marginRight: 4 }}>Ctrl+K</span>
+          </button>
+        )}
         {signOut && (
           <button className="dark-btn" onClick={signOut} style={{ color: '#fca5a5' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>

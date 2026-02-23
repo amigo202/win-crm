@@ -6,6 +6,7 @@ import { useTasks }       from './hooks/useTasks'
 import { useInstructors } from './hooks/useInstructors'
 import { useStudents }    from './hooks/useStudents'
 import { useLeads }       from './hooks/useLeads'
+import { useAgent }       from './hooks/useAgent'
 import { STAGES }         from './constants'
 import Sidebar              from './components/Sidebar'
 import Dashboard            from './components/pages/Dashboard'
@@ -16,6 +17,7 @@ import InstructorsPage      from './components/pages/InstructorsPage'
 import StudentsPage         from './components/pages/StudentsPage'
 import LeadsPipelinePage    from './components/pages/LeadsPipelinePage'
 import AuthScreen           from './components/AuthScreen'
+import AgentPanel           from './components/agent/AgentPanel'
 
 function useLS(key, init) {
   const [v, sv] = useState(() => {
@@ -33,6 +35,7 @@ export default function App() {
   const [dark, setDark]   = useLS('crm_darkmode', false)
   const [user, setUser]   = useState(null)
   const [loading, setLoading] = useState(true)
+  const [agentOpen, setAgentOpen] = useState(false)
 
   const c  = useContacts()
   const d  = useDeals()
@@ -40,10 +43,18 @@ export default function App() {
   const i  = useInstructors()
   const s  = useStudents()
   const le = useLeads()
+  const agent = useAgent()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
   }, [dark])
+
+  // Ctrl+K → toggle agent panel
+  useEffect(() => {
+    const fn = e => { if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setAgentOpen(o => !o) } }
+    document.addEventListener('keydown', fn)
+    return () => document.removeEventListener('keydown', fn)
+  }, [])
 
   const loadAll = () => {
     c.load(); d.load(); t.load(); i.load(); s.load(); le.load()
@@ -143,8 +154,15 @@ export default function App() {
         tasks={t.tasks} instructors={i.instructors} students={s.students} deals={d.deals} leads={le.leads}
         dark={dark} setDark={setDark}
         user={user} signOut={signOut}
+        agentOpen={agentOpen} setAgentOpen={setAgentOpen}
       />
       <main className="main">{pages[page] || pages.dashboard}</main>
+      <AgentPanel
+        open={agentOpen}
+        onClose={() => setAgentOpen(false)}
+        contacts={c.contacts}
+        agent={agent}
+      />
     </div>
   )
 }
