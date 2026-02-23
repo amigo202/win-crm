@@ -88,6 +88,83 @@ export async function deleteContact(id) {
   if (error) throw error
 }
 
+// ── Bulk upsert from CSV import ────────────────────────────────────
+// rows: array of { name, type?, contact_person?, phone?, email? }
+// Dedup: email (primary) → phone (secondary) → insert new
+// owner_id is auto-set by the DB trigger on INSERT; RLS filters updates.
+export async function upsertContacts(rows) {
+  // 1. Fetch existing email + phone for duplicate detection
+  const { data: existing, error: fetchErr } = await supabase
+    .from('contacts')
+    .select('id, email, phone')
+  if (fetchErr) throw fetchErr
+
+  const emailMap = {}
+  const phoneMap = {}
+  for (const c of existing) {
+    const e = c.email?.toLowerCase().trim()
+    const p = c.phone?.replace(/\s/g, '')
+    if (e) emailMap[e] = c.id
+    if (p) phoneMap[p] = c.id
+  }
+
+  const toInsert = []
+  const toUpdate = []   // { id, data }
+  let   skipped  = 0
+
+  for (const row of rows) {
+    const name = row.name?.trim()
+    if (!name) { skipped++; continue }
+
+    const email = row.email?.toLowerCase().trim()  || null
+    const phone = row.phone?.replace(/\s/g, '')    || null
+
+    const dbRow = {
+      type:           row.type?.trim() || 'other',
+      name,
+      contact_person: row.contact_person?.trim() || null,
+      phone,
+      email,
+    }
+
+    let existingId = null
+    if (email && emailMap[email])  existingId = emailMap[email]
+    else if (phone && phoneMap[phone]) existingId = phoneMap[phone]
+
+    if (existingId) toUpdate.push({ id: existingId, data: dbRow })
+    else            toInsert.push(dbRow)
+  }
+
+  let inserted = 0
+  let updated  = 0
+  const errors = []
+
+  // 2. Insert new rows — 200 per batch (owner_id set by DB trigger)
+  for (let i = 0; i < toInsert.length; i += 200) {
+    const chunk = toInsert.slice(i, i + 200)
+    const { error } = await supabase.from('contacts').insert(chunk)
+    if (error) chunk.forEach(r => errors.push({ row: r, error: error.message }))
+    else       inserted += chunk.length
+  }
+
+  // 3. Update matched rows — 50 in parallel per round
+  for (let i = 0; i < toUpdate.length; i += 50) {
+    const chunk = toUpdate.slice(i, i + 50)
+    const results = await Promise.all(
+      chunk.map(({ id, data }) =>
+        supabase.from('contacts').update(data).eq('id', id)
+          .then(({ error }) => ({ ok: !error, msg: error?.message, data }))
+      )
+    )
+    for (const r of results) {
+      if (r.ok) updated++
+      else      errors.push({ row: r.data, error: r.msg })
+    }
+  }
+
+  return { inserted, updated, skipped, errors }
+}
+
 export async function appendActivity(contactId, act) {
   const { data: row, error: fetchErr } = await supabase
     .from('contacts').select('activities').eq('id', contactId).single()

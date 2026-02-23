@@ -1,15 +1,16 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { CONTACT_TYPES, STATUS_OPTS } from '../../constants'
 import { ini, avBg } from '../../utils/format'
-import { exportContactsCSV, parseCSV, csvToContact } from '../../utils/csv'
+import { exportContactsCSV } from '../../utils/csv'
 import { Ico } from '../icons/Ico'
 import ContactModal from '../modals/ContactModal'
+import ContactImportModal from '../import/ContactImportModal'
 
-export default function ContactsPage({ contacts, deals, onAdd, onUpdate, onDelete }) {
-  const [tf, setTf]     = useState('all')
-  const [q, setQ]       = useState('')
-  const [modal, setModal] = useState(null)
-  const fRef = useRef(null)
+export default function ContactsPage({ contacts, deals, onAdd, onUpdate, onDelete, onReload }) {
+  const [tf, setTf]          = useState('all')
+  const [q, setQ]            = useState('')
+  const [modal, setModal]    = useState(null)
+  const [importing, setImporting] = useState(false)
 
   const filtered = contacts.filter(c => {
     if (tf !== 'all' && c.type !== tf) return false
@@ -26,20 +27,12 @@ export default function ContactsPage({ contacts, deals, onAdd, onUpdate, onDelet
     return c.city || ''
   }
 
-  const impCSV = e => {
-    const f = e.target.files[0]; if (!f) return
-    const r = new FileReader()
-    r.onload = ev => { parseCSV(ev.target.result).forEach(row => { const c = csvToContact(row); if (c.name) onAdd(c) }) }
-    r.readAsText(f, 'UTF-8'); e.target.value = ''
-  }
-
   return (
     <>
       <div className="ph"><h2>אנשי קשר</h2>
         <div style={{ display: 'flex', gap: 7 }}>
           <button className="btn btn-o btn-sm" onClick={() => exportContactsCSV(contacts)}><Ico.dl/>ייצוא</button>
-          <button className="btn btn-o btn-sm" onClick={() => fRef.current?.click()}><Ico.ul/>ייבוא</button>
-          <input ref={fRef} type="file" accept=".csv" onChange={impCSV} style={{ display: 'none' }}/>
+          <button className="btn btn-o btn-sm" onClick={() => setImporting(true)}><Ico.ul/>ייבוא</button>
           <button className="btn btn-p" onClick={() => setModal({ mode: 'add' })}><Ico.plus/>הוסף</button>
         </div>
       </div>
@@ -83,6 +76,12 @@ export default function ContactsPage({ contacts, deals, onAdd, onUpdate, onDelet
           deals={deals}
           onSave={d => modal.mode === 'edit' ? onUpdate(modal.contact.id, d) : onAdd(d)}
           onClose={() => setModal(null)}
+        />
+      )}
+      {importing && (
+        <ContactImportModal
+          onClose={() => setImporting(false)}
+          onDone={() => { setImporting(false); onReload?.() }}
         />
       )}
     </>
