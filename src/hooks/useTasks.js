@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import {
   fetchTasks, createTask, updateTask, deleteTask,
-  toggleTask as toggleTaskService,
+  toggleTask as toggleTaskService, snoozeTask as snoozeTaskService,
 } from '../services/tasksService'
 
 export function useTasks() {
@@ -41,5 +41,10 @@ export function useTasks() {
     return { ...t, completed: done }
   }, [tasks])
 
-  return { tasks, setTasks, loading, error, load, addTask, editTask, removeTask, toggleTask }
+  const snoozeTask = useCallback(async (id, snoozeUntil) => {
+    setTasks(p => p.map(t => t.id === id ? { ...t, snoozedUntil: snoozeUntil } : t))
+    await snoozeTaskService(id, snoozeUntil)
+  }, [])
+
+  return { tasks, setTasks, loading, error, load, addTask, editTask, removeTask, toggleTask, snoozeTask }
 }

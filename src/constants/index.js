@@ -44,3 +44,32 @@ export const PAY_STATUS = [
   { value: 'pending', label: 'ממתין', badge: 'b-yellow' },
   { value: 'overdue', label: 'באיחור', badge: 'b-red' },
 ]
+
+export const LEAD_STAGES = [
+  { id: 'new',       label: 'חדש',     color: '#3b82f6', bg: '#dbeafe',  badge: 'b-blue'   },
+  { id: 'contacted', label: 'פנינו',   color: '#8b5cf6', bg: '#ede9fe',  badge: 'b-purple' },
+  { id: 'qualified', label: 'מוסמך',   color: '#f59e0b', bg: '#fef3c7',  badge: 'b-yellow' },
+  { id: 'proposal',  label: 'הצעה',    color: '#f97316', bg: '#ffedd5',  badge: 'b-orange' },
+  { id: 'won',       label: 'סגרנו ✓', color: '#10b981', bg: '#d1fae5',  badge: 'b-green'  },
+  { id: 'lost',      label: 'הפסדנו',  color: '#ef4444', bg: '#fee2e2',  badge: 'b-red'    },
+]
+
+export const LEAD_SOURCES = [
+  { id: 'website',   label: 'אתר',      icon: '🌐' },
+  { id: 'whatsapp',  label: 'WhatsApp', icon: '💬' },
+  { id: 'facebook',  label: 'פייסבוק',  icon: '📘' },
+  { id: 'instagram', label: 'אינסטגרם', icon: '📸' },
+  { id: 'referral',  label: 'המלצה',    icon: '🤝' },
+  { id: 'manual',    label: 'ידני',     icon: '✍️'  },
+  { id: 'csv',       label: 'CSV',      icon: '📄' },
+]
+
+export const ACTIVITY_TYPES = [
+  { id: 'note',         label: 'הערה',        icon: '📝' },
+  { id: 'call',         label: 'שיחה',        icon: '📞' },
+  { id: 'meeting',      label: 'פגישה',       icon: '🤝' },
+  { id: 'email',        label: 'אימייל',      icon: '✉️'  },
+  { id: 'stage_change', label: 'שינוי שלב',   icon: '🔄' },
+  { id: 'task_created', label: 'משימה נוצרה', icon: '📋' },
+  { id: 'lead_created', label: 'ליד נכנס',    icon: '🎯' },
+]

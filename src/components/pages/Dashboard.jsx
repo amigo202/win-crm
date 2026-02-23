@@ -5,7 +5,7 @@ import { fmtShekel, fmtDT } from '../../utils/format'
 import { computeAlerts, noSessionDays, studentStatus, monthlyHours, monthlyPay } from '../../utils/alerts'
 import { Ico } from '../icons/Ico'
 
-export default function Dashboard({ contacts, deals, tasks, instructors, students, dark }) {
+export default function Dashboard({ contacts, deals, tasks, instructors, students, leads, dark }) {
   const activePipe = deals.filter(d => ['lead','meeting','proposal'].includes(d.stage))
   const pipeVal    = activePipe.reduce((s, d) => s + Number(d.value || 0), 0)
   const thisMonth  = new Date(); thisMonth.setDate(1); thisMonth.setHours(0,0,0,0)
@@ -41,10 +41,42 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
     return () => Object.values(cRefs.current).forEach(c => c && c.destroy())
   }, [contacts, deals, students, dark])
 
+  // ── Today Focus ────────────────────────────────────────────────
+  const todayStr   = new Date().toISOString().split('T')[0]
+  const todayTasks = tasks.filter(t => !t.completed && t.dueDate === todayStr && (!t.snoozedUntil || t.snoozedUntil <= todayStr))
+  const atRiskLeads = (leads || []).filter(l => l.atRisk && !['won','lost'].includes(l.leadStage))
+  const newLeadsToday = (leads || []).filter(l => (l.createdAt || '').startsWith(todayStr))
+  const activeLeads   = (leads || []).filter(l => !['won','lost'].includes(l.leadStage))
+
   return (
     <>
       <div className="ph"><h2>דשבורד</h2></div>
       <div className="pb">
+
+        {/* ── Today Focus ─────────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
+          {[
+            { icon: '🔥', label: 'משימות להיום',  value: todayTasks.length,    color: '#f97316', bg: '#fff7ed',
+              sub: todayTasks.length ? todayTasks.slice(0,2).map(t=>t.title).join(', ')+'…' : 'כל הכבוד!' },
+            { icon: '⚠', label: 'לידים בסיכון',  value: atRiskLeads.length,  color: '#ef4444', bg: '#fee2e2',
+              sub: atRiskLeads.length ? atRiskLeads.slice(0,2).map(l=>l.name).join(', ') : '0 לידים בסיכון' },
+            { icon: '🎯', label: 'לידים פעילים',  value: activeLeads.length,  color: '#10b981', bg: '#d1fae5',
+              sub: newLeadsToday.length ? `+${newLeadsToday.length} הצטרפו היום` : 'בפייפליין' },
+          ].map((f, i) => (
+            <div key={i} style={{
+              background: f.bg, borderRadius: 12, padding: '16px 18px',
+              border: `1px solid ${f.color}22`,
+            }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                <span style={{ fontSize: 28 }}>{f.icon}</span>
+                <span style={{ fontSize: 28, fontWeight: 800, color: f.color }}>{f.value}</span>
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: f.color, marginTop: 6 }}>{f.label}</div>
+              <div style={{ fontSize: 11, color: f.color, opacity: .7, marginTop: 3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f.sub}</div>
+            </div>
+          ))}
+        </div>
+
         <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
           {[
             { label: 'אנשי קשר', val: contacts.length, sub: contacts.filter(c => c.status === 'customer').length + ' פעילים', bg: '#dbeafe', ic: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },

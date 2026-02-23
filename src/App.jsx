@@ -5,15 +5,17 @@ import { useDeals }       from './hooks/useDeals'
 import { useTasks }       from './hooks/useTasks'
 import { useInstructors } from './hooks/useInstructors'
 import { useStudents }    from './hooks/useStudents'
+import { useLeads }       from './hooks/useLeads'
 import { STAGES }         from './constants'
-import Sidebar            from './components/Sidebar'
-import Dashboard          from './components/pages/Dashboard'
-import ContactsPage       from './components/pages/ContactsPage'
-import DealsPage          from './components/pages/DealsPage'
-import TasksPage          from './components/pages/TasksPage'
-import InstructorsPage    from './components/pages/InstructorsPage'
-import StudentsPage       from './components/pages/StudentsPage'
-import AuthScreen         from './components/AuthScreen'
+import Sidebar              from './components/Sidebar'
+import Dashboard            from './components/pages/Dashboard'
+import ContactsPage         from './components/pages/ContactsPage'
+import DealsPage            from './components/pages/DealsPage'
+import TasksPage            from './components/pages/TasksPage'
+import InstructorsPage      from './components/pages/InstructorsPage'
+import StudentsPage         from './components/pages/StudentsPage'
+import LeadsPipelinePage    from './components/pages/LeadsPipelinePage'
+import AuthScreen           from './components/AuthScreen'
 
 function useLS(key, init) {
   const [v, sv] = useState(() => {
@@ -32,18 +34,19 @@ export default function App() {
   const [user, setUser]   = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const c = useContacts()
-  const d = useDeals()
-  const t = useTasks()
-  const i = useInstructors()
-  const s = useStudents()
+  const c  = useContacts()
+  const d  = useDeals()
+  const t  = useTasks()
+  const i  = useInstructors()
+  const s  = useStudents()
+  const le = useLeads()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
   }, [dark])
 
   const loadAll = () => {
-    c.load(); d.load(); t.load(); i.load(); s.load()
+    c.load(); d.load(); t.load(); i.load(); s.load(); le.load()
   }
 
   useEffect(() => {
@@ -57,7 +60,7 @@ export default function App() {
       if (session?.user) { loadAll() }
       else {
         c.setContacts([]); d.setDeals([]); t.setTasks([])
-        i.setInstructors([]); s.setStudents([])
+        i.setInstructors([]); s.setStudents([]); le.setLeads([])
         setLoading(false)
       }
     })
@@ -112,7 +115,7 @@ export default function App() {
   const updateStudent = async (id, data) => { await s.editStudent(id, data) }
   const deleteStudent = async id => { await s.removeStudent(id) }
 
-  const isLoading = loading || c.loading || d.loading || t.loading || i.loading || s.loading
+  const isLoading = loading || c.loading || d.loading || t.loading || i.loading || s.loading || le.loading
 
   if (isLoading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f172a', flexDirection: 'column', gap: '14px', fontFamily: "'Rubik','Segoe UI',Arial,sans-serif" }}>
@@ -124,10 +127,11 @@ export default function App() {
   if (!user) return <AuthScreen/>
 
   const pages = {
-    dashboard:   <Dashboard    contacts={c.contacts} deals={d.deals} tasks={t.tasks} instructors={i.instructors} students={s.students} dark={dark}/>,
+    dashboard:   <Dashboard    contacts={c.contacts} deals={d.deals} tasks={t.tasks} instructors={i.instructors} students={s.students} leads={le.leads} dark={dark}/>,
+    leads:       <LeadsPipelinePage leads={le.leads} onAdd={le.addLead} onUpdate={le.editLead} onMoveStage={le.moveStage} onDelete={le.removeLead}/>,
     contacts:    <ContactsPage contacts={c.contacts} deals={d.deals} onAdd={addContact} onUpdate={updateContact} onDelete={deleteContact} onReload={c.load}/>,
     deals:       <DealsPage    deals={d.deals} contacts={c.contacts} onAdd={addDeal} onUpdate={updateDeal} onDelete={deleteDeal}/>,
-    tasks:       <TasksPage    tasks={t.tasks} contacts={c.contacts} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onToggle={toggleTask}/>,
+    tasks:       <TasksPage    tasks={t.tasks} contacts={c.contacts} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onToggle={toggleTask} onSnooze={t.snoozeTask}/>,
     instructors: <InstructorsPage instructors={i.instructors} contacts={c.contacts} onAdd={addInstructor} onUpdate={updateInstructor} onDelete={deleteInstructor}/>,
     students:    <StudentsPage students={s.students} contacts={c.contacts} onAdd={addStudent} onUpdate={updateStudent} onDelete={deleteStudent}/>,
   }
@@ -136,7 +140,7 @@ export default function App() {
     <div className="app">
       <Sidebar
         page={page} setPage={setPage}
-        tasks={t.tasks} instructors={i.instructors} students={s.students} deals={d.deals}
+        tasks={t.tasks} instructors={i.instructors} students={s.students} deals={d.deals} leads={le.leads}
         dark={dark} setDark={setDark}
         user={user} signOut={signOut}
       />
