@@ -36,9 +36,9 @@ function toDbSalary(s) {
   }
 }
 
-export async function fetchSalaries(month, year) {
+export async function fetchpayroll_lines(month, year) {
   const { data, error } = await supabase
-    .from('salaries')
+    .from('payroll_lines')
     .select('*')
     .eq('month', month)
     .eq('year', year)
@@ -49,23 +49,23 @@ export async function fetchSalaries(month, year) {
 
 export async function createSalary(data) {
   const { data: row, error } = await supabase
-    .from('salaries').insert(toDbSalary(data)).select().single()
+    .from('payroll_lines').insert(toDbSalary(data)).select().single()
   if (error) throw error
   return fromDbSalary(row)
 }
 
 export async function updateSalary(id, data) {
   const { error } = await supabase
-    .from('salaries').update(toDbSalary(data)).eq('id', id)
+    .from('payroll_lines').update(toDbSalary(data)).eq('id', id)
   if (error) throw error
 }
 
 export async function deleteSalary(id) {
-  const { error } = await supabase.from('salaries').delete().eq('id', id)
+  const { error } = await supabase.from('payroll_lines').delete().eq('id', id)
   if (error) throw error
 }
 
-export async function autoGenerateSalaries(instructors, month, year) {
+export async function autoGeneratepayroll_lines(instructors, month, year) {
   if (!instructors.length) return []
   const rows = instructors.map(inst => ({
     instructor_id:      inst.id,
@@ -79,7 +79,7 @@ export async function autoGenerateSalaries(instructors, month, year) {
     health_insurance:   0,
   }))
   const { data, error } = await supabase
-    .from('salaries')
+    .from('payroll_lines')
     .upsert(rows, { onConflict: 'instructor_id,month,year' })
     .select()
   if (error) throw error
