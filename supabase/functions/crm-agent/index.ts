@@ -144,8 +144,10 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return err('Method not allowed')
 
   try {
+    // JWT is optional — function works in both authenticated and anon mode.
+    // Supabase gateway JWT verification is disabled (--no-verify-jwt).
     const jwt = req.headers.get('Authorization')?.replace('Bearer ', '').trim()
-    if (!jwt) return err('Unauthorized')
+    console.log('[crm-agent] jwt present:', !!jwt)
 
     const { message, context, image } = await req.json() as {
       message:  string
@@ -154,10 +156,12 @@ Deno.serve(async (req: Request) => {
     }
     if (!message?.trim()) return err('message is required')
 
+    // Build supabase client — use user JWT when available, fall back to anon
+    const authHeader = jwt ? { Authorization: `Bearer ${jwt}` } : {}
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: `Bearer ${jwt}` } }, auth: { autoRefreshToken: false, persistSession: false } },
+      { global: { headers: authHeader }, auth: { autoRefreshToken: false, persistSession: false } },
     )
 
     const contacts = (context?.contacts ?? []) as ContactCtx[]

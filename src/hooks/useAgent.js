@@ -21,6 +21,9 @@ export function useAgent() {
     setError(null)
 
     try {
+      const session = (await supabase.auth.getSession()).data.session
+      console.log('Session:', session)
+
       const body = {
         message: text.trim(),
         context: { contacts: contacts.map(c => ({ id: c.id, name: c.name, phone: c.phone || null })) },
@@ -30,7 +33,6 @@ export function useAgent() {
 
       const { data: result, error: fnError } = await supabase.functions.invoke('crm-agent', { body })
       if (fnError) {
-        // Try to extract the actual error body from the Deno runtime error response
         let detail = 'שגיאת שרת'
         try { const b = await fnError.context?.json(); detail = b?.error ?? b?.message ?? detail } catch {}
         throw new Error(detail)
