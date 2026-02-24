@@ -128,6 +128,7 @@ async function callGemini(
     userParts.push({ inline_data: { mime_type: image.mimeType, data: image.base64 } })
   }
 
+  console.log('[crm-agent] model:', GEMINI_MODEL)
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`
   const r = await fetch(url, {
     method:  'POST',
