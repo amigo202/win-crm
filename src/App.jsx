@@ -6,6 +6,7 @@ import { useTasks }       from './hooks/useTasks'
 import { useInstructors } from './hooks/useInstructors'
 import { useStudents }    from './hooks/useStudents'
 import { useLeads }       from './hooks/useLeads'
+import { useFinance }     from './hooks/useFinance'
 import { useAgent }       from './hooks/useAgent'
 import { STAGES }         from './constants'
 import Sidebar              from './components/Sidebar'
@@ -16,6 +17,7 @@ import TasksPage            from './components/pages/TasksPage'
 import InstructorsPage      from './components/pages/InstructorsPage'
 import StudentsPage         from './components/pages/StudentsPage'
 import LeadsPipelinePage    from './components/pages/LeadsPipelinePage'
+import FinancePage          from './components/pages/FinancePage'
 import AuthScreen           from './components/AuthScreen'
 import AgentPanel           from './components/agent/AgentPanel'
 
@@ -42,7 +44,8 @@ export default function App() {
   const t  = useTasks()
   const i  = useInstructors()
   const s  = useStudents()
-  const le = useLeads()
+  const le  = useLeads()
+  const fin = useFinance()
   const agent = useAgent()
 
   useEffect(() => {
@@ -57,7 +60,7 @@ export default function App() {
   }, [])
 
   const loadAll = () => {
-    c.load(); d.load(); t.load(); i.load(); s.load(); le.load()
+    c.load(); d.load(); t.load(); i.load(); s.load(); le.load(); fin.load()
   }
 
   useEffect(() => {
@@ -72,6 +75,7 @@ export default function App() {
       else {
         c.setContacts([]); d.setDeals([]); t.setTasks([])
         i.setInstructors([]); s.setStudents([]); le.setLeads([])
+        fin.setPayments([]); fin.setSalaries([])
         setLoading(false)
       }
     })
@@ -145,6 +149,7 @@ export default function App() {
     tasks:       <TasksPage    tasks={t.tasks} contacts={c.contacts} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onToggle={toggleTask} onSnooze={t.snoozeTask}/>,
     instructors: <InstructorsPage instructors={i.instructors} contacts={c.contacts} onAdd={addInstructor} onUpdate={updateInstructor} onDelete={deleteInstructor}/>,
     students:    <StudentsPage students={s.students} contacts={c.contacts} onAdd={addStudent} onUpdate={updateStudent} onDelete={deleteStudent}/>,
+    finance:     <FinancePage fin={fin} instructors={i.instructors} contacts={c.contacts}/>,
   }
 
   return (

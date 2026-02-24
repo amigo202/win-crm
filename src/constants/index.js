@@ -40,8 +40,9 @@ export const TAG_COLORS = [
 ]
 
 export const PAY_STATUS = [
-  { value: 'paid',    label: 'שולם',  badge: 'b-green' },
-  { value: 'pending', label: 'ממתין', badge: 'b-yellow' },
+  { value: 'paid',    label: 'שולם',   badge: 'b-green' },
+  { value: 'pending', label: 'ממתין',  badge: 'b-yellow' },
+  { value: 'partial', label: 'חלקי',   badge: 'b-orange' },
   { value: 'overdue', label: 'באיחור', badge: 'b-red' },
 ]
 
