@@ -59,6 +59,17 @@ export default function App() {
     return () => document.removeEventListener('keydown', fn)
   }, [])
 
+  // After agent creates items → reload the relevant data so pages update instantly
+  useEffect(() => {
+    const last = agent.messages[agent.messages.length - 1]
+    if (last?.role !== 'agent' || !last.actions?.length) return
+    const types = new Set(last.actions.map(a => a.type))
+    if (types.has('create_task'))    t.load()
+    if (types.has('create_lead'))    le.load()
+    if (types.has('create_contact')) c.load()
+    if (types.has('create_deal'))    d.load()
+  }, [agent.messages])
+
   const loadAll = () => {
     c.load(); d.load(); t.load(); i.load(); s.load(); le.load(); fin.load()
   }

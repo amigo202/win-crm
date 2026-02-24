@@ -9,14 +9,14 @@ const NAV = [
   { id: 'tasks',       label: 'משימות',      ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> },
   { id: 'instructors', label: 'מדריכים',     ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><path d="M12 12v9"/><path d="M9 15l3-3 3 3"/></svg> },
   { id: 'students',    label: 'תלמידים',     ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg> },
-  { id: 'finance',    label: 'פיננסים ₪',  ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> },
+  { id: 'finance',     label: 'פיננסים ₪',  ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> },
 ]
 
 export default function Sidebar({ page, setPage, tasks, instructors, students, deals, leads, dark, setDark, user, signOut, agentOpen, setAgentOpen }) {
-  const als        = computeAlerts(tasks, instructors, students, deals)
-  const total      = als.overdue.length + als.instructors.length + als.students.length + als.deals.length
-  const todayStr   = new Date().toISOString().split('T')[0]
-  const todayTasks = tasks.filter(t => !t.completed && t.dueDate === todayStr && (!t.snoozedUntil || t.snoozedUntil <= todayStr)).length
+  const als         = computeAlerts(tasks, instructors, students, deals)
+  const total       = als.overdue.length + als.instructors.length + als.students.length + als.deals.length
+  const todayStr    = new Date().toISOString().split('T')[0]
+  const todayTasks  = tasks.filter(t => !t.completed && t.dueDate === todayStr && (!t.snoozedUntil || t.snoozedUntil <= todayStr)).length
   const atRiskLeads = (leads || []).filter(l => l.atRisk && !['won','lost'].includes(l.leadStage)).length
   const newLeads    = (leads || []).filter(l => l.leadStage === 'new').length
 
@@ -26,7 +26,28 @@ export default function Sidebar({ page, setPage, tasks, instructors, students, d
         <div className="logo-w">W</div>
         <div className="logo-t"><h1>WIN CRM</h1><p>אמיתי כהן</p></div>
       </div>
+
       <nav className="sidebar-nav">
+        {/* ── Agent AI button — top of nav, just below logo ── */}
+        {setAgentOpen && (
+          <button
+            className={`nav-item ${agentOpen ? 'active' : ''}`}
+            onClick={() => setAgentOpen(o => !o)}
+            style={{
+              background:  agentOpen ? 'rgba(249,115,22,.15)' : 'rgba(249,115,22,.07)',
+              color:       agentOpen ? '#f97316' : '#fb923c',
+              borderRight: agentOpen ? '3px solid #f97316' : '3px solid #f9731640',
+              fontWeight:  agentOpen ? 700 : 600,
+              marginBottom: 4,
+            }}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>🤖</span>
+            <span style={{ flex: 1 }}>סוכן AI</span>
+            <span style={{ fontSize: 9, opacity: .55 }}>Ctrl+K</span>
+          </button>
+        )}
+
+        {/* ── Regular nav items ── */}
         {NAV.map(n => (
           <button key={n.id} className={`nav-item ${page === n.id ? 'active' : ''}`} onClick={() => setPage(n.id)}>
             {n.ico}{n.label}
@@ -38,18 +59,12 @@ export default function Sidebar({ page, setPage, tasks, instructors, students, d
           </button>
         ))}
       </nav>
+
       <div className="sidebar-foot">
         {user && <div style={{ fontSize: '11px', color: '#475569', padding: '0 4px 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>}
         <button className="dark-btn" onClick={() => setDark(d => !d)} style={{ marginBottom: '6px' }}>
           {dark ? <Ico.sun/> : <Ico.moon/>}{dark ? 'מצב בהיר' : 'מצב כהה'}
         </button>
-        {setAgentOpen && (
-          <button className="dark-btn" onClick={() => setAgentOpen(o => !o)}
-            style={{ marginBottom: '6px', color: agentOpen ? '#f97316' : undefined, fontWeight: agentOpen ? 700 : undefined }}>
-            🤖 סוכן AI
-            <span style={{ fontSize: 10, color: 'var(--muted)', marginRight: 4 }}>Ctrl+K</span>
-          </button>
-        )}
         {signOut && (
           <button className="dark-btn" onClick={signOut} style={{ color: '#fca5a5' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
