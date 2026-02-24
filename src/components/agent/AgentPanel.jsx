@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 
 const ACTION_ICONS = {
-  create_task:    '✅',
-  create_contact: '👤',
-  create_deal:    '💼',
-  create_lead:    '🎯',
-  open_whatsapp:  '💬',
+  create_task:       '✅',
+  create_contact:    '👤',
+  create_deal:       '💼',
+  create_lead:       '🎯',
+  open_whatsapp:     '💬',
+  create_instructor: '🏋️',
+  create_salary:     '💰',
 }
 
 const HINTS = [
@@ -104,7 +106,7 @@ function readImage(file) {
   })
 }
 
-export default function AgentPanel({ open, onClose, contacts, agent }) {
+export default function AgentPanel({ open, onClose, contacts, instructors = [], agent }) {
   const [input, setInput]   = useState('')
   const [image, setImage]   = useState(null)    // { base64, mimeType, preview }
   const bottomRef           = useRef(null)
@@ -127,7 +129,7 @@ export default function AgentPanel({ open, onClose, contacts, agent }) {
     if (!txt || loading) return
     setInput('')
     setImage(null)
-    send(txt, contacts, image)
+    send(txt, contacts, image, instructors)
   }
 
   const onKey = e => {
