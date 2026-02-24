@@ -1,5 +1,6 @@
 import { Ico } from './icons/Ico'
 import { computeAlerts } from '../utils/alerts'
+import { useState, useEffect } from 'react'
 
 const NAV = [
   { id: 'dashboard',   label: 'דשבורד',      ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
@@ -13,6 +14,14 @@ const NAV = [
 ]
 
 export default function Sidebar({ page, setPage, tasks, instructors, students, deals, leads, dark, setDark, user, signOut, agentOpen, setAgentOpen }) {
+  const [installPrompt, setInstallPrompt] = useState(null)
+  useEffect(() => {
+    const fn = e => { e.preventDefault(); setInstallPrompt(e) }
+    window.addEventListener('beforeinstallprompt', fn)
+    return () => window.removeEventListener('beforeinstallprompt', fn)
+  }, [])
+  const installPWA = () => { installPrompt?.prompt(); setInstallPrompt(null) }
+
   const als         = computeAlerts(tasks, instructors, students, deals)
   const total       = als.overdue.length + als.instructors.length + als.students.length + als.deals.length
   const todayStr    = new Date().toISOString().split('T')[0]
@@ -65,6 +74,11 @@ export default function Sidebar({ page, setPage, tasks, instructors, students, d
         <button className="dark-btn" onClick={() => setDark(d => !d)} style={{ marginBottom: '6px' }}>
           {dark ? <Ico.sun/> : <Ico.moon/>}{dark ? 'מצב בהיר' : 'מצב כהה'}
         </button>
+        {installPrompt && (
+          <button className="dark-btn" onClick={installPWA} style={{ marginBottom: '6px', color: '#f97316', fontWeight: 600 }}>
+            📱 התקן אפליקציה
+          </button>
+        )}
         {signOut && (
           <button className="dark-btn" onClick={signOut} style={{ color: '#fca5a5' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>

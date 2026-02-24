@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { LEAD_STAGES, LEAD_SOURCES } from '../../constants'
 import { Ico } from '../icons/Ico'
-import LeadDetailsModal from '../leads/LeadDetailsModal'
-import AddLeadModal     from '../leads/AddLeadModal'
+import LeadDetailsModal  from '../leads/LeadDetailsModal'
+import AddLeadModal      from '../leads/AddLeadModal'
+import LeadImportModal   from '../import/LeadImportModal'
 
 // ── Days since a date ─────────────────────────────────────────────
 function daysSince(iso) {
@@ -139,9 +140,10 @@ function KanbanCol({ stage, leads, onDrop, onCardClick }) {
 }
 
 // ── Page ──────────────────────────────────────────────────────────
-export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage, onDelete }) {
-  const [selected,    setSelected]    = useState(null)   // lead for details modal
+export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage, onDelete, onReload }) {
+  const [selected,    setSelected]    = useState(null)
   const [addOpen,     setAddOpen]     = useState(false)
+  const [importing,   setImporting]   = useState(false)
   const [showClosed,  setShowClosed]  = useState(false)
 
   const visibleStages = showClosed
@@ -174,6 +176,9 @@ export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage,
             style={{ fontSize: 12 }}
           >
             {showClosed ? 'הסתר סגורים' : 'הצג סגורים'}
+          </button>
+          <button className="btn btn-o btn-sm" onClick={() => setImporting(true)}>
+            <Ico.ul/>ייבוא Excel/CSV
           </button>
           <button className="btn btn-p" onClick={() => setAddOpen(true)}>
             <Ico.plus/>ליד חדש
@@ -210,6 +215,12 @@ export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage,
         <AddLeadModal
           onSave={async data => { await onAdd(data); setAddOpen(false) }}
           onClose={() => setAddOpen(false)}
+        />
+      )}
+      {importing && (
+        <LeadImportModal
+          onClose={() => setImporting(false)}
+          onDone={() => { setImporting(false); onReload?.() }}
         />
       )}
     </>

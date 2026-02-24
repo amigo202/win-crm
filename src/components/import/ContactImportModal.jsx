@@ -59,43 +59,53 @@ export default function ContactImportModal({ onClose, onDone }) {
   const [fileName, setFileName] = useState('')
   const [parseErr, setParseErr] = useState('')
 
-  // ── Parse an uploaded File with PapaParse ────────────────────────
-  const parseFile = useCallback((file) => {
-    setParseErr('')
-    setFileName(file.name)
+  // ── Parse CSV with PapaParse ─────────────────────────────────────
+  const parseCsv = useCallback((file, name) => {
     Papa.parse(file, {
-      header:         true,
-      skipEmptyLines: true,
-      encoding:       'UTF-8',
+      header: true, skipEmptyLines: true, encoding: 'UTF-8',
       complete(res) {
         const headers = res.meta.fields || []
-        if (!headers.length) {
-          setParseErr('הקובץ ריק או לא תקין — ודא שיש שורת כותרות')
-          return
-        }
-        setCsvHeaders(headers)
-        setCsvRows(res.data)
-        setMapping(buildAutoMap(headers))
-        setStep('map')
+        if (!headers.length) { setParseErr('הקובץ ריק — ודא שיש שורת כותרות'); return }
+        setCsvHeaders(headers); setCsvRows(res.data)
+        setMapping(buildAutoMap(headers)); setStep('map')
       },
-      error(err) {
-        setParseErr('שגיאה בפענוח: ' + err.message)
-      },
+      error(err) { setParseErr('שגיאה בפענוח: ' + err.message) },
     })
   }, [])
 
+  // ── Parse Excel with SheetJS (loaded on demand from CDN) ──────────
+  const parseXlsx = useCallback(async (file) => {
+    try {
+      const { read, utils } = await import('https://esm.sh/xlsx@0.18.5')
+      const buf     = await file.arrayBuffer()
+      const wb      = read(buf)
+      const ws      = wb.Sheets[wb.SheetNames[0]]
+      const rows    = utils.sheet_to_json(ws, { defval: '' })
+      const headers = rows.length ? Object.keys(rows[0]) : []
+      if (!headers.length) { setParseErr('הקובץ ריק — ודא שיש שורת כותרות'); return }
+      setCsvHeaders(headers); setCsvRows(rows)
+      setMapping(buildAutoMap(headers)); setStep('map')
+    } catch (e) {
+      setParseErr('שגיאה בפענוח Excel: ' + e.message)
+    }
+  }, [])
+
+  const parseFile = useCallback((file) => {
+    setParseErr(''); setFileName(file.name)
+    const ext = file.name.split('.').pop().toLowerCase()
+    if (ext === 'xlsx' || ext === 'xls') parseXlsx(file)
+    else parseCsv(file, file.name)
+  }, [parseCsv, parseXlsx])
+
   const onFileChange = e => {
-    const f = e.target.files[0]
-    if (f) parseFile(f)
-    e.target.value = ''
+    const f = e.target.files[0]; if (f) parseFile(f); e.target.value = ''
   }
 
   const onDrop = e => {
-    e.preventDefault()
-    setDragOver(false)
+    e.preventDefault(); setDragOver(false)
     const f = e.dataTransfer.files[0]
-    if (f && f.name.toLowerCase().endsWith('.csv')) parseFile(f)
-    else setParseErr('נא לגרור קובץ CSV בלבד')
+    if (f) parseFile(f)
+    else setParseErr('נא לגרור קובץ CSV או Excel')
   }
 
   // ── Prevent mapping the same DB field to two CSV columns ─────────
@@ -150,7 +160,7 @@ export default function ContactImportModal({ onClose, onDone }) {
 
         {/* ── Header ──────────────────────────────────────────────── */}
         <div className="modal-hd">
-          <span>ייבוא אנשי קשר מ-CSV</span>
+          <span>ייבוא אנשי קשר מ-CSV / Excel</span>
           {canClose && (
             <button
               className="icon-btn"
@@ -198,13 +208,13 @@ export default function ContactImportModal({ onClose, onDone }) {
                 cursor: 'pointer', transition: 'border-color .15s, background .15s',
               }}
             >
-              <div style={{ fontSize: 40, marginBottom: 10 }}>📄</div>
-              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 5 }}>גרור קובץ CSV לכאן</div>
+              <div style={{ fontSize: 40, marginBottom: 10 }}>📊</div>
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 5 }}>גרור קובץ CSV או Excel לכאן</div>
               <div style={{ fontSize: 13, color: 'var(--muted)' }}>או לחץ לבחירת קובץ מהמחשב</div>
               <input
                 id="csv-import-input"
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,.xls,text/csv"
                 style={{ display: 'none' }}
                 onChange={onFileChange}
               />
