@@ -29,7 +29,12 @@ export function useAgent() {
       if (image?.base64) body.image = { base64: image.base64, mimeType: image.mimeType }
 
       const { data: result, error: fnError } = await supabase.functions.invoke('crm-agent', { body })
-      if (fnError) throw new Error(fnError.message ?? 'שגיאת שרת')
+      if (fnError) {
+        // Try to extract the actual error body from the Deno runtime error response
+        let detail = 'שגיאת שרת'
+        try { const b = await fnError.context?.json(); detail = b?.error ?? b?.message ?? detail } catch {}
+        throw new Error(detail)
+      }
       if (result?.error) throw new Error(result.error)
 
       const actions = result.actions_taken ?? []

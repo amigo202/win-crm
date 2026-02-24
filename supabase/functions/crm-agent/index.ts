@@ -18,10 +18,12 @@ function ok(body: unknown, status = 200): Response {
   })
 }
 
-function err(msg: string, status = 500): Response {
-  // Always include response + actions_taken so the client shape is consistent
+function err(msg: string): Response {
+  // Always 200 so supabase.functions.invoke() puts body in `data` (not `error`)
+  // Client checks result.error to detect failures
+  console.error('[crm-agent] err:', msg)
   return new Response(JSON.stringify({ error: msg, response: 'שגיאת שרת — נסה שוב', actions_taken: [] }), {
-    status,
+    status: 200,
     headers: { ...CORS, 'Content-Type': 'application/json' },
   })
 }
@@ -139,18 +141,18 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: CORS })
   }
 
-  if (req.method !== 'POST') return err('Method not allowed', 405)
+  if (req.method !== 'POST') return err('Method not allowed')
 
   try {
     const jwt = req.headers.get('Authorization')?.replace('Bearer ', '').trim()
-    if (!jwt) return err('Unauthorized', 401)
+    if (!jwt) return err('Unauthorized')
 
     const { message, context, image } = await req.json() as {
       message:  string
       context?: { contacts?: ContactCtx[] }
       image?:   ImageCtx
     }
-    if (!message?.trim()) return err('message is required', 400)
+    if (!message?.trim()) return err('message is required')
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
