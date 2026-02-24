@@ -83,7 +83,7 @@ ${list}
 // ── Gemini call ───────────────────────────────────────────────────────────────
 // Model: gemini-2.5-flash  (change to gemini-2.0-flash if 2.5 unavailable)
 
-const GEMINI_MODEL = 'gemini-2.0-flash'  // change to gemini-2.5-flash once GA
+const GEMINI_MODEL = 'gemini-2.5-flash'
 
 async function callGemini(
   systemPrompt: string,
