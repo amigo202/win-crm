@@ -16,8 +16,9 @@ const HINTS = [
 ]
 
 function Bubble({ msg }) {
-  const isUser  = msg.role === 'user'
-  const isError = msg.role === 'error'
+  const isUser    = msg.role === 'user'
+  const isError   = msg.role === 'error'
+  const isQuestion = msg.role === 'agent' && !msg.actions?.length
 
   return (
     <div style={{
@@ -33,20 +34,23 @@ function Bubble({ msg }) {
         maxWidth:     '85%',
         padding:      '9px 13px',
         borderRadius: isUser ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-        background:   isUser ? '#f97316' : isError ? '#fee2e2' : 'var(--card)',
+        background:   isUser ? '#f97316' : isError ? '#fee2e2' : isQuestion ? '#fff7ed' : 'var(--card)',
         color:        isUser ? '#fff' : isError ? '#dc2626' : 'var(--fg)',
         fontSize:     13,
-        lineHeight:   1.5,
-        border:       isUser ? 'none' : '1px solid var(--border)',
+        lineHeight:   1.6,
+        border:       isUser ? 'none' : isQuestion ? '1px solid #fed7aa' : '1px solid var(--border)',
         whiteSpace:   'pre-wrap',
         wordBreak:    'break-word',
+        direction:    'rtl',
+        textAlign:    'right',
       }}>
+        {isQuestion && <span style={{ marginLeft: 5 }}>❓</span>}
         {msg.text}
       </div>
 
       {/* Action badges */}
       {msg.actions?.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 5, maxWidth: '85%' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 5, maxWidth: '85%', direction: 'rtl' }}>
           {msg.actions.map((a, i) => {
             const isErr = a.summary?.startsWith('שגיאה')
             const isWa  = a.type === 'open_whatsapp' && a.url
@@ -331,8 +335,8 @@ export default function AgentPanel({ open, onClose, contacts, agent }) {
               ➤
             </button>
           </div>
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, textAlign: 'center' }}>
-            Ctrl+Enter לשליחה · 📎 תמונה · Ctrl+V להדבקה
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, textAlign: 'center', direction: 'rtl' }}>
+            שליחה: Ctrl+Enter · צירוף תמונה: 📎 · הדבקה: Ctrl+V
           </div>
         </div>
       </div>
