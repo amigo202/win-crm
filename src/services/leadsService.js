@@ -26,10 +26,13 @@ export function fromDbLead(r) {
 export async function fetchLeads() {
   const { data, error } = await supabase
     .from('contacts')
-    .select('id, owner_id, name, phone, email, city, type, source, lead_stage, status, at_risk, last_activity_at, created_at, notes, tags')
+    .select('*')
     .not('lead_stage', 'is', null)
     .order('created_at', { ascending: false })
-  if (error) throw error
+  if (error) {
+    console.error('fetchLeads error:', error.code, error.message, error.details, error.hint)
+    return []
+  }
   return data.map(fromDbLead)
 }
 
@@ -52,7 +55,7 @@ export async function createLead(data) {
       activities:      [],
       tags:            [],
     })
-    .select('id, owner_id, name, phone, email, city, type, source, lead_stage, status, at_risk, last_activity_at, created_at, notes, tags')
+    .select('*')
     .single()
   if (error) throw error
 
