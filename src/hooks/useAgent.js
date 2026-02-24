@@ -21,9 +21,6 @@ export function useAgent() {
     setError(null)
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('לא מחובר')
-
       const body = {
         message: text.trim(),
         context: { contacts: contacts.map(c => ({ id: c.id, name: c.name, phone: c.phone || null })) },
@@ -31,20 +28,9 @@ export function useAgent() {
       // Attach image payload if provided (base64 without data-URL prefix)
       if (image?.base64) body.image = { base64: image.base64, mimeType: image.mimeType }
 
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-agent`
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify(body),
-      })
-
-      const result = await res.json()
-
-      if (!res.ok) throw new Error(result.error ?? `שגיאת שרת ${res.status}`)
+      const { data: result, error: fnError } = await supabase.functions.invoke('crm-agent', { body })
+      if (fnError) throw new Error(fnError.message ?? 'שגיאת שרת')
+      if (result?.error) throw new Error(result.error)
 
       const actions = result.actions_taken ?? []
 
