@@ -6,10 +6,16 @@ export function useAgent() {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
 
-  const send = useCallback(async (text, contacts = []) => {
+  // image: { base64: string, mimeType: string } | null
+  const send = useCallback(async (text, contacts = [], image = null) => {
     if (!text?.trim() || loading) return
 
-    const userMsg = { id: crypto.randomUUID(), role: 'user', text: text.trim() }
+    const userMsg = {
+      id:      crypto.randomUUID(),
+      role:    'user',
+      text:    text.trim(),
+      preview: image?.preview ?? null,   // data-URL for thumbnail display
+    }
     setMessages(p => [...p, userMsg])
     setLoading(true)
     setError(null)
@@ -17,6 +23,13 @@ export function useAgent() {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('לא מחובר')
+
+      const body = {
+        message: text.trim(),
+        context: { contacts: contacts.map(c => ({ id: c.id, name: c.name, phone: c.phone || null })) },
+      }
+      // Attach image payload if provided (base64 without data-URL prefix)
+      if (image?.base64) body.image = { base64: image.base64, mimeType: image.mimeType }
 
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-agent`
       const res = await fetch(url, {
@@ -26,10 +39,7 @@ export function useAgent() {
           'Authorization': `Bearer ${session.access_token}`,
           'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({
-          message: text.trim(),
-          context: { contacts: contacts.map(c => ({ id: c.id, name: c.name, phone: c.phone || null })) },
-        }),
+        body: JSON.stringify(body),
       })
 
       const result = await res.json()

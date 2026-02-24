@@ -26,6 +26,9 @@ function Bubble({ msg }) {
       alignItems:    isUser ? 'flex-end' : 'flex-start',
       marginBottom:  10,
     }}>
+      {msg.preview && (
+        <img src={msg.preview} alt="" style={{ maxWidth: 160, maxHeight: 120, borderRadius: 8, marginBottom: 4, objectFit: 'cover' }}/>
+      )}
       <div style={{
         maxWidth:     '85%',
         padding:      '9px 13px',
@@ -82,10 +85,27 @@ function TypingDots() {
   )
 }
 
+// Convert a File/Blob to { base64, mimeType, preview }
+function readImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      const dataUrl  = e.target.result          // "data:image/jpeg;base64,..."
+      const base64   = dataUrl.split(',')[1]    // raw base64 only
+      const mimeType = file.type || 'image/jpeg'
+      resolve({ base64, mimeType, preview: dataUrl })
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function AgentPanel({ open, onClose, contacts, agent }) {
   const [input, setInput]   = useState('')
+  const [image, setImage]   = useState(null)    // { base64, mimeType, preview }
   const bottomRef           = useRef(null)
   const textareaRef         = useRef(null)
+  const fileInputRef        = useRef(null)
   const { messages, loading, send } = agent
 
   // Scroll to bottom on new messages
@@ -102,7 +122,8 @@ export default function AgentPanel({ open, onClose, contacts, agent }) {
     const txt = input.trim()
     if (!txt || loading) return
     setInput('')
-    send(txt, contacts)
+    setImage(null)
+    send(txt, contacts, image)
   }
 
   const onKey = e => {
@@ -110,6 +131,22 @@ export default function AgentPanel({ open, onClose, contacts, agent }) {
       e.preventDefault()
       submit()
     }
+  }
+
+  // Paste image from clipboard
+  const onPaste = async e => {
+    const item = [...(e.clipboardData?.items ?? [])].find(i => i.type.startsWith('image/'))
+    if (!item) return
+    e.preventDefault()
+    try { setImage(await readImage(item.getAsFile())) } catch {}
+  }
+
+  // File picker
+  const onFileChange = async e => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try { setImage(await readImage(file)) } catch {}
+    e.target.value = ''
   }
 
   return (
@@ -222,17 +259,55 @@ export default function AgentPanel({ open, onClose, contacts, agent }) {
           background: 'var(--card)',
           flexShrink: 0,
         }}>
+          {/* Image preview */}
+          {image && (
+            <div style={{ position: 'relative', display: 'inline-block', marginBottom: 8 }}>
+              <img src={image.preview} alt="" style={{ height: 64, borderRadius: 8, objectFit: 'cover', maxWidth: '100%' }}/>
+              <button
+                onClick={() => setImage(null)}
+                style={{
+                  position: 'absolute', top: -6, right: -6,
+                  background: '#ef4444', color: '#fff', border: 'none',
+                  borderRadius: '50%', width: 18, height: 18, fontSize: 11,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  lineHeight: 1,
+                }}
+              >×</button>
+            </div>
+          )}
+
           <div style={{
-            display: 'flex', gap: 8, alignItems: 'flex-end',
+            display: 'flex', gap: 6, alignItems: 'flex-end',
             background: 'var(--bg)',
             border: '1px solid var(--border)',
             borderRadius: 10, padding: '6px 8px',
           }}>
+            {/* Image attach button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              title="צרף תמונה (או הדבק מהלוח)"
+              style={{
+                background: image ? 'rgba(249,115,22,.15)' : 'none',
+                border: 'none', cursor: 'pointer', padding: '4px 5px',
+                color: image ? '#f97316' : 'var(--muted)', fontSize: 16,
+                borderRadius: 6, flexShrink: 0, alignSelf: 'flex-end',
+              }}
+            >📎</button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={onFileChange}
+            />
+
             <textarea
               ref={textareaRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={onKey}
+              onPaste={onPaste}
               placeholder="כתוב משימה, איש קשר, עסקה, ליד..."
               rows={2}
               style={{
@@ -257,7 +332,7 @@ export default function AgentPanel({ open, onClose, contacts, agent }) {
             </button>
           </div>
           <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, textAlign: 'center' }}>
-            Ctrl+Enter לשליחה
+            Ctrl+Enter לשליחה · 📎 תמונה · Ctrl+V להדבקה
           </div>
         </div>
       </div>

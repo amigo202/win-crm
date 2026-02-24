@@ -1,6 +1,6 @@
 // WIN CRM — crm-agent Edge Function
 // POST /functions/v1/crm-agent
-// Secret required: ANTHROPIC_API_KEY
+// Secret required: GEMINI_API_KEY
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -39,6 +39,11 @@ interface AIResponse {
   response: string
 }
 
+interface ImageCtx {
+  base64:   string   // raw base64, no data-URL prefix
+  mimeType: string   // e.g. "image/jpeg"
+}
+
 // ── System prompt ─────────────────────────────────────────────────────────────
 
 function buildSystemPrompt(contacts: ContactCtx[]): string {
@@ -51,6 +56,7 @@ function buildSystemPrompt(contacts: ContactCtx[]): string {
 
   return `אתה עוזר AI למערכת CRM בשם WIN CRM.
 המשתמש כותב בעברית חופשית. תפקידך לנתח ולהפיק פעולות CRM מובנות.
+אם נשלחה תמונה — נתח אותה והפק פעולות מתאימות (למשל, קרא שם/טלפון מכרטיס ביקור).
 
 אנשי קשר קיימים:
 ${list}
@@ -71,34 +77,43 @@ ${list}
 {"actions":[{"type":"...","data":{...}}],"response":"תיאור בעברית"}`
 }
 
-// ── AI call ───────────────────────────────────────────────────────────────────
+// ── Gemini call ───────────────────────────────────────────────────────────────
+// Model: gemini-2.5-flash  (change to gemini-2.0-flash if 2.5 unavailable)
 
-async function callAI(systemPrompt: string, userMsg: string): Promise<string> {
-  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!anthropicKey) throw new Error('Missing secret: ANTHROPIC_API_KEY is not set in Supabase Edge Function secrets')
+const GEMINI_MODEL = 'gemini-2.5-flash'
 
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': anthropicKey,
-      'anthropic-version': '2023-06-01',
-    },
+async function callGemini(
+  systemPrompt: string,
+  userMsg:      string,
+  image?:       ImageCtx,
+): Promise<string> {
+  const apiKey = Deno.env.get('GEMINI_API_KEY')
+  if (!apiKey) throw new Error('Missing secret: GEMINI_API_KEY is not set in Supabase Edge Function secrets')
+
+  // Build parts — text always first, image optional
+  const userParts: unknown[] = [{ text: userMsg }]
+  if (image?.base64) {
+    userParts.push({ inline_data: { mime_type: image.mimeType, data: image.base64 } })
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`
+  const r = await fetch(url, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMsg }],
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: 'user', parts: userParts }],
+      generationConfig: { maxOutputTokens: 1024, responseMimeType: 'application/json' },
     }),
   })
 
   if (!r.ok) {
     const body = await r.text()
-    throw new Error(`Anthropic API error ${r.status}: ${body}`)
+    throw new Error(`Gemini ${r.status} (${GEMINI_MODEL}): ${body}`)
   }
 
   const b = await r.json()
-  return b.content?.[0]?.text ?? '{}'
+  return b.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}'
 }
 
 // ── Action helpers ────────────────────────────────────────────────────────────
@@ -111,7 +126,6 @@ function addDays(n: number) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
-  // Preflight — must return 200 with CORS headers
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: CORS })
   }
@@ -122,9 +136,10 @@ Deno.serve(async (req: Request) => {
     const jwt = req.headers.get('Authorization')?.replace('Bearer ', '').trim()
     if (!jwt) return err('Unauthorized', 401)
 
-    const { message, context } = await req.json() as {
-      message: string
+    const { message, context, image } = await req.json() as {
+      message:  string
       context?: { contacts?: ContactCtx[] }
+      image?:   ImageCtx
     }
     if (!message?.trim()) return err('message is required', 400)
 
@@ -136,8 +151,8 @@ Deno.serve(async (req: Request) => {
 
     const contacts = (context?.contacts ?? []) as ContactCtx[]
 
-    // ── AI ────────────────────────────────────────────────────────────────
-    const raw = await callAI(buildSystemPrompt(contacts), message.trim())
+    // ── Gemini ────────────────────────────────────────────────────────────────
+    const raw = await callGemini(buildSystemPrompt(contacts), message.trim(), image)
     let parsed: AIResponse
     try {
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
@@ -146,7 +161,7 @@ Deno.serve(async (req: Request) => {
       parsed = { actions: [], response: raw }
     }
 
-    // ── Execute actions ───────────────────────────────────────────────────
+    // ── Execute actions ───────────────────────────────────────────────────────
     const actions_taken: { type: string; summary: string; url?: string }[] = []
 
     const resolveId = (name?: string) =>
@@ -208,12 +223,13 @@ Deno.serve(async (req: Request) => {
           }
         }
       } catch (e) {
-        console.error(`Action ${action.type} failed:`, e)
+        console.error(`[crm-agent] action ${action.type} failed:`, e)
         actions_taken.push({ type: action.type, summary: `שגיאה: ${String(e)}` })
       }
     }
 
     return ok({ response: parsed.response ?? 'בוצע', actions_taken })
+
   } catch (e) {
     const msg   = e instanceof Error ? e.message : String(e)
     const stack = e instanceof Error ? e.stack   : undefined
