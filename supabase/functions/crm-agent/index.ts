@@ -61,20 +61,41 @@ function buildSystemPrompt(contacts: ContactCtx[]): string {
 המשתמש כותב בעברית חופשית. תפקידך לנתח ולהפיק פעולות CRM מובנות.
 אם נשלחה תמונה — נתח אותה והפק פעולות מתאימות (למשל, קרא שם/טלפון מכרטיס ביקור).
 
-אנשי קשר קיימים:
+אנשי קשר קיימים במערכת (השתמש בשמות המדויקים האלה ב-contactName):
 ${list}
 
-פעולות (type):
-1. create_task    — { title, contactName?, dueDate?(YYYY-MM-DD), priority?("low"|"medium"|"high") }
-2. create_contact — { name, phone?, email?, type?("lead"|"customer"|"partner"|"vendor"), notes? }
-3. create_deal    — { title, contactName?, value?(number), stage?("lead"|"meeting"|"proposal"|"signed"|"active") }
-4. create_lead    — { name, phone?, email?, source?("website"|"facebook"|"instagram"|"whatsapp"|"referral"|"manual"), notes? }
-5. open_whatsapp  — { contactName }
+פעולות (type) — קרא את הכללים בעיון לפני בחירה:
 
-כללים:
+1. create_task — כשהמשתמש רוצה לעשות פעולה: להתקשר, לפגוש, לשלוח, לעקוב, לזכור, לתאם.
+   { title, contactName?(שם מדויק מהרשימה למעלה בלבד), dueDate?(YYYY-MM-DD), priority?("low"|"medium"|"high") }
+   ← אם האדם קיים ברשימה — חובה לשים את שמו ב-contactName.
+   ← אם האדם לא קיים ברשימה — השאר contactName ריק, אל תמציא שם.
+
+2. create_contact — כשמוסיפים איש קשר חדש שאינו ליד (לקוח, שותף, ספק, מכר).
+   { name, phone?, email?, type?("lead"|"customer"|"partner"|"vendor"), notes? }
+
+3. create_deal — כשמוזכרת עסקה, מכירה, או סכום כסף.
+   { title, contactName?(שם מדויק מהרשימה), value?(number), stage?("lead"|"meeting"|"proposal"|"signed"|"active") }
+
+4. create_lead — רק כשהמשתמש מציין מפורשות ליד חדש / מתעניין חדש שלא קיים במערכת.
+   { name, phone?, email?, source?("website"|"facebook"|"instagram"|"whatsapp"|"referral"|"manual"), notes? }
+   ← לעולם אל תשתמש ב-create_lead עבור אנשי קשר שכבר קיימים ברשימה!
+   ← לעולם אל תשתמש ב-create_lead רק כי רוצים להתקשר — זה create_task!
+
+5. open_whatsapp — כשרוצים לשלוח ווצאפ לאיש קשר קיים.
+   { contactName }
+
+דוגמאות לבחירה נכונה:
+"להתקשר לדני מחר" → create_task (title:"להתקשר לדני", contactName:"דני כהן" אם קיים ברשימה)
+"יש ליד חדש שמו משה" → create_lead
+"הוסף איש קשר שמו יוסי" → create_contact
+"עסקה עם רונן על 5000 ₪" → create_deal
+"שלח ווצאפ לשרה" → open_whatsapp
+
+כללים נוספים:
 - מחר = ${tomorrow}, היום = ${today}
 - ענה בעברית בשדה "response"
-- החזר JSON בלבד
+- החזר JSON בלבד — ללא טקסט לפני או אחרי
 
 פורמט חובה:
 {"actions":[{"type":"...","data":{...}}],"response":"תיאור בעברית"}`
@@ -182,8 +203,19 @@ Deno.serve(async (req: Request) => {
     // ── Execute actions ───────────────────────────────────────────────────────
     const actions_taken: { type: string; summary: string; url?: string }[] = []
 
-    const resolveId = (name?: string) =>
-      contacts.find(c => c.name.trim().toLowerCase() === name?.trim().toLowerCase())?.id ?? null
+    const resolveId = (name?: string): string | null => {
+      if (!name?.trim()) return null
+      const n = name.trim().toLowerCase()
+      // 1. exact match
+      const exact = contacts.find(c => c.name.trim().toLowerCase() === n)
+      if (exact) return exact.id
+      // 2. partial match (contact name contains the search term or vice versa)
+      const partial = contacts.find(c => {
+        const cn = c.name.trim().toLowerCase()
+        return cn.includes(n) || n.includes(cn)
+      })
+      return partial?.id ?? null
+    }
 
     for (const action of (parsed.actions ?? [])) {
       try {
