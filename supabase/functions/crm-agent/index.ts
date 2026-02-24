@@ -19,7 +19,8 @@ function ok(body: unknown, status = 200): Response {
 }
 
 function err(msg: string, status = 500): Response {
-  return new Response(JSON.stringify({ error: msg }), {
+  // Always include response + actions_taken so the client shape is consistent
+  return new Response(JSON.stringify({ error: msg, response: 'שגיאת שרת — נסה שוב', actions_taken: [] }), {
     status,
     headers: { ...CORS, 'Content-Type': 'application/json' },
   })
@@ -157,8 +158,11 @@ Deno.serve(async (req: Request) => {
     try {
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
       parsed = JSON.parse(clean)
-    } catch {
-      parsed = { actions: [], response: raw }
+    } catch (parseErr) {
+      // Log the raw output for debugging — never forward it to the UI
+      console.error('[crm-agent] JSON parse failed:', String(parseErr))
+      console.error('[crm-agent] raw output (first 300):', raw.slice(0, 300))
+      parsed = { actions: [], response: 'לא הצלחתי לעבד את הבקשה — נסה לנסח מחדש' }
     }
 
     // ── Execute actions ───────────────────────────────────────────────────────
