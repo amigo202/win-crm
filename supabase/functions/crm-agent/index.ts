@@ -104,17 +104,25 @@ async function callGemini(
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: userParts }],
-      generationConfig: { maxOutputTokens: 1024, responseMimeType: 'application/json' },
+      generationConfig: { maxOutputTokens: 1024 },
     }),
   })
 
   if (!r.ok) {
     const body = await r.text()
-    throw new Error(`Gemini ${r.status} (${GEMINI_MODEL}): ${body}`)
+    console.error(`[crm-agent] Gemini HTTP ${r.status}:`, body.slice(0, 500))
+    throw new Error(`Gemini ${r.status}: ${body.slice(0, 200)}`)
   }
 
   const b = await r.json()
-  return b.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}'
+  console.log('[crm-agent] Gemini finish_reason:', b.candidates?.[0]?.finishReason)
+
+  const text = b.candidates?.[0]?.content?.parts?.[0]?.text
+  if (!text) {
+    console.error('[crm-agent] Gemini empty text, full response:', JSON.stringify(b).slice(0, 500))
+    throw new Error('Gemini returned no text content')
+  }
+  return text
 }
 
 // ── Action helpers ────────────────────────────────────────────────────────────
