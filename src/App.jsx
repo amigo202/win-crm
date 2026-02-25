@@ -64,10 +64,12 @@ export default function App() {
     const last = agent.messages[agent.messages.length - 1]
     if (last?.role !== 'agent' || !last.actions?.length) return
     const types = new Set(last.actions.map(a => a.type))
-    if (types.has('create_task'))    t.load()
-    if (types.has('create_lead'))    le.load()
-    if (types.has('create_contact')) c.load()
-    if (types.has('create_deal'))    d.load()
+    if (types.has('create_task'))       t.load()
+    if (types.has('create_lead'))       le.load()
+    if (types.has('create_contact'))    c.load()
+    if (types.has('create_deal'))       d.load()
+    if (types.has('create_instructor')) i.load()
+    if (types.has('create_salary'))     fin.load()
   }, [agent.messages])
 
   const loadAll = () => {
@@ -170,13 +172,13 @@ export default function App() {
         tasks={t.tasks} instructors={i.instructors} students={s.students} deals={d.deals} leads={le.leads}
         dark={dark} setDark={setDark}
         user={user} signOut={signOut}
-        agentOpen={agentOpen} setAgentOpen={setAgentOpen}
       />
       <main className="main">{pages[page] || pages.dashboard}</main>
       <AgentPanel
         open={agentOpen}
-        onClose={() => setAgentOpen(false)}
+        onToggle={() => setAgentOpen(o => !o)}
         contacts={c.contacts}
+        instructors={i.instructors}
         agent={agent}
       />
     </div>

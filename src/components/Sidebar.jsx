@@ -13,7 +13,7 @@ const NAV = [
   { id: 'finance',     label: 'פיננסים ₪',  ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> },
 ]
 
-export default function Sidebar({ page, setPage, tasks, instructors, students, deals, leads, dark, setDark, user, signOut, agentOpen, setAgentOpen }) {
+export default function Sidebar({ page, setPage, tasks, instructors, students, deals, leads, dark, setDark, user, signOut }) {
   const [installPrompt, setInstallPrompt] = useState(null)
   useEffect(() => {
     const fn = e => { e.preventDefault(); setInstallPrompt(e) }
@@ -37,25 +37,6 @@ export default function Sidebar({ page, setPage, tasks, instructors, students, d
       </div>
 
       <nav className="sidebar-nav">
-        {/* ── Agent AI button — top of nav, just below logo ── */}
-        {setAgentOpen && (
-          <button
-            className={`nav-item ${agentOpen ? 'active' : ''}`}
-            onClick={() => setAgentOpen(o => !o)}
-            style={{
-              background:  agentOpen ? 'rgba(249,115,22,.15)' : 'rgba(249,115,22,.07)',
-              color:       agentOpen ? '#f97316' : '#fb923c',
-              borderRight: agentOpen ? '3px solid #f97316' : '3px solid #f9731640',
-              fontWeight:  agentOpen ? 700 : 600,
-              marginBottom: 4,
-            }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>🤖</span>
-            <span style={{ flex: 1 }}>סוכן AI</span>
-            <span style={{ fontSize: 9, opacity: .55 }}>Ctrl+K</span>
-          </button>
-        )}
-
         {/* ── Regular nav items ── */}
         {NAV.map(n => (
           <button key={n.id} className={`nav-item ${page === n.id ? 'active' : ''}`} onClick={() => setPage(n.id)}>

@@ -7,7 +7,7 @@ export function useAgent() {
   const [error, setError]     = useState(null)
 
   // image: { base64: string, mimeType: string } | null
-  const send = useCallback(async (text, contacts = [], image = null) => {
+  const send = useCallback(async (text, contacts = [], image = null, instructors = [], model = 'gemini-3-pro-preview') => {
     if (!text?.trim() || loading) return
 
     const userMsg = {
@@ -26,7 +26,11 @@ export function useAgent() {
 
       const body = {
         message: text.trim(),
-        context: { contacts: contacts.map(c => ({ id: c.id, name: c.name, phone: c.phone || null })) },
+        model,
+        context: {
+          contacts:    contacts.map(c => ({ id: c.id, name: c.name, phone: c.phone || null })),
+          instructors: instructors.map(i => ({ id: i.id, name: i.name, programs: i.programs || [] })),
+        },
       }
       // Attach image payload if provided (base64 without data-URL prefix)
       if (image?.base64) body.image = { base64: image.base64, mimeType: image.mimeType }
