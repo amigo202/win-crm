@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { PROGRAMS } from '../../constants'
+
+const DAYS_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+
+function dayName(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr + 'T12:00:00')
+  return 'יום ' + DAYS_HE[d.getDay()]
+}
 
 const labelStyle = {
   display: 'block', fontSize: 12, fontWeight: 600,
@@ -15,29 +22,25 @@ const inputStyle = {
 
 export default function InstructorPortal({ instructorId, instructorName }) {
   const [form, setForm] = useState({
+    location:    '',
     report_date: new Date().toISOString().split('T')[0],
-    hours:    '',
-    program:  PROGRAMS[0],
-    location: '',
-    notes:    '',
+    hours:       '',
   })
-  const [status, setStatus]   = useState('idle') // idle | submitting | success | error
+  const [status, setStatus]     = useState('idle') // idle | submitting | success | error
   const [errorMsg, setErrorMsg] = useState('')
 
   const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }))
 
   const submit = async e => {
     e.preventDefault()
-    if (!form.hours || Number(form.hours) <= 0) return
+    if (!form.location.trim() || !form.hours || Number(form.hours) <= 0) return
     setStatus('submitting')
     try {
       const { error } = await supabase.from('hour_reports').insert({
         instructor_id: instructorId,
         report_date:   form.report_date,
         hours:         Number(form.hours),
-        program:       form.program || null,
-        location:      form.location || null,
-        notes:         form.notes   || null,
+        location:      form.location.trim(),
       })
       if (error) throw error
       setStatus('success')
@@ -79,7 +82,7 @@ export default function InstructorPortal({ instructorId, instructorName }) {
             תודה {instructorName}, הדיווח התקבל ויועבר למנהל.
           </div>
           <button
-            onClick={() => { setStatus('idle'); setForm(p => ({ ...p, hours: '', location: '', notes: '' })) }}
+            onClick={() => { setStatus('idle'); setForm(p => ({ ...p, hours: '', location: '' })) }}
             style={{
               background: '#f97316', color: '#fff', border: 'none',
               borderRadius: 9, padding: '11px 28px', cursor: 'pointer',
@@ -91,13 +94,13 @@ export default function InstructorPortal({ instructorId, instructorName }) {
         <div style={{
           background: '#fff', borderRadius: 16, padding: '28px 32px',
           border: '1px solid #e2e8f0', boxShadow: '0 4px 24px rgba(0,0,0,.08)',
-          maxWidth: 440, width: '100%',
+          maxWidth: 420, width: '100%',
         }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>
             👋 שלום, {instructorName || 'מדריך'}
           </div>
           <div style={{ color: '#64748b', fontSize: 13, marginBottom: 22 }}>
-            מלא את פרטי השיעורים לדיווח שעות
+            מלא את פרטי השיעור לדיווח שעות
           </div>
 
           {status === 'error' && (
@@ -109,33 +112,48 @@ export default function InstructorPortal({ instructorId, instructorName }) {
             </div>
           )}
 
-          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <label style={labelStyle}>שם בית ספר / מתנ"ס *</label>
+              <input
+                value={form.location}
+                onChange={f('location')}
+                placeholder='לדוגמה: בית ספר רמות / מתנ"ס גבעתיים'
+                style={inputStyle}
+                required
+              />
+            </div>
+
             <div>
               <label style={labelStyle}>תאריך *</label>
-              <input type="date" value={form.report_date} onChange={f('report_date')} style={inputStyle} required/>
+              <input
+                type="date"
+                value={form.report_date}
+                onChange={f('report_date')}
+                style={inputStyle}
+                required
+              />
+              {form.report_date && (
+                <div style={{ marginTop: 5, fontSize: 13, color: '#f97316', fontWeight: 600 }}>
+                  {dayName(form.report_date)}
+                </div>
+              )}
             </div>
+
             <div>
               <label style={labelStyle}>מספר שעות *</label>
-              <input type="number" value={form.hours} onChange={f('hours')}
-                placeholder="2.5" min=".5" step=".5" style={inputStyle} required/>
+              <input
+                type="number"
+                value={form.hours}
+                onChange={f('hours')}
+                placeholder="2"
+                min=".5"
+                step=".5"
+                style={inputStyle}
+                required
+              />
             </div>
-            <div>
-              <label style={labelStyle}>תוכנית</label>
-              <select value={form.program} onChange={f('program')} style={inputStyle}>
-                {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>מיקום (בית ספר / מתנ"ס)</label>
-              <input value={form.location} onChange={f('location')}
-                placeholder="שם המוסד..." style={inputStyle}/>
-            </div>
-            <div>
-              <label style={labelStyle}>הערות</label>
-              <textarea value={form.notes} onChange={f('notes')}
-                placeholder="הערות נוספות..." rows={3}
-                style={{ ...inputStyle, resize: 'vertical' }}/>
-            </div>
+
             <button
               type="submit"
               disabled={status === 'submitting'}
