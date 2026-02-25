@@ -13,7 +13,45 @@ const NAV = [
   { id: 'finance',     label: 'פיננסים ₪',  ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> },
 ]
 
-export default function Sidebar({ page, setPage, tasks, instructors, students, deals, leads, dark, setDark, user, signOut }) {
+// Bottom nav items (5 most used for mobile)
+const MOB_NAV = ['dashboard', 'leads', 'contacts', 'tasks', 'more']
+
+export function MobileBottomNav({ page, setPage, tasks, leads, onMore }) {
+  const todayStr = new Date().toISOString().split('T')[0]
+  const todayTasks = tasks.filter(t => !t.completed && t.dueDate === todayStr && (!t.snoozedUntil || t.snoozedUntil <= todayStr)).length
+  const atRiskLeads = (leads || []).filter(l => l.atRisk && !['won','lost'].includes(l.leadStage)).length
+  const newLeads    = (leads || []).filter(l => l.leadStage === 'new').length
+  const leadBadge   = atRiskLeads + newLeads
+
+  const items = [
+    { id: 'dashboard', label: 'דשבורד', badge: 0,         ico: NAV[0].ico },
+    { id: 'leads',     label: 'לידים',  badge: leadBadge,  ico: NAV[1].ico },
+    { id: 'contacts',  label: 'לקוחות', badge: 0,         ico: NAV[2].ico },
+    { id: 'tasks',     label: 'משימות', badge: todayTasks, ico: NAV[4].ico },
+    { id: 'more',      label: 'עוד',    badge: 0,
+      ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg> },
+  ]
+
+  return (
+    <nav className="mob-nav">
+      {items.map(item => (
+        <button
+          key={item.id}
+          className={`mob-nav-btn ${page === item.id || (item.id === 'more' && !['dashboard','leads','contacts','tasks'].includes(page)) ? 'active' : ''}`}
+          onClick={() => item.id === 'more' ? onMore() : setPage(item.id)}
+        >
+          <span className="mob-nav-ico">
+            {item.ico}
+            {item.badge > 0 && <span className="mob-badge">{item.badge}</span>}
+          </span>
+          {item.label}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+export default function Sidebar({ page, setPage, tasks, instructors, students, deals, leads, dark, setDark, user, signOut, mobOpen, setMobOpen }) {
   const [installPrompt, setInstallPrompt] = useState(null)
   useEffect(() => {
     const fn = e => { e.preventDefault(); setInstallPrompt(e) }
@@ -29,17 +67,31 @@ export default function Sidebar({ page, setPage, tasks, instructors, students, d
   const atRiskLeads = (leads || []).filter(l => l.atRisk && !['won','lost'].includes(l.leadStage)).length
   const newLeads    = (leads || []).filter(l => l.leadStage === 'new').length
 
+  const handleNav = id => {
+    setPage(id)
+    setMobOpen?.(false)
+  }
+
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${mobOpen ? 'mob-open' : ''}`}>
       <div className="sidebar-logo">
         <div className="logo-w">W</div>
         <div className="logo-t"><h1>WIN CRM</h1><p>אמיתי כהן</p></div>
+        {/* Close button — mobile only */}
+        <button
+          onClick={() => setMobOpen?.(false)}
+          style={{
+            marginRight: 'auto', background: 'none', border: 'none',
+            color: '#64748b', cursor: 'pointer', fontSize: 20, lineHeight: 1,
+            padding: '2px 6px', borderRadius: 6, display: 'none',
+          }}
+          className="mob-sidebar-close"
+        >×</button>
       </div>
 
       <nav className="sidebar-nav">
-        {/* ── Regular nav items ── */}
         {NAV.map(n => (
-          <button key={n.id} className={`nav-item ${page === n.id ? 'active' : ''}`} onClick={() => setPage(n.id)}>
+          <button key={n.id} className={`nav-item ${page === n.id ? 'active' : ''}`} onClick={() => handleNav(n.id)}>
             {n.ico}{n.label}
             {n.id === 'leads'       && (atRiskLeads + newLeads) > 0 && <span className="nav-badge" style={{ background: atRiskLeads > 0 ? '#ef4444' : '#f97316' }}>{atRiskLeads > 0 ? `⚠${atRiskLeads}` : newLeads}</span>}
             {n.id === 'tasks'       && todayTasks > 0             && <span className="nav-badge">{todayTasks}</span>}

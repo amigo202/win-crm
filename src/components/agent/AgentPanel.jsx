@@ -181,6 +181,7 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
   const { messages, loading, send, clear } = agent
 
   const currentModel = MODELS.find(m => m.id === model) || MODELS[0]
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -441,7 +442,7 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
         title="סוכן AI (Ctrl+K) — גרור להזזה"
         style={{
           position:     'fixed',
-          bottom:       fabPos.bottom,
+          bottom:       isMobile ? Math.max(fabPos.bottom, 68) : fabPos.bottom,
           right:        fabPos.right,
           width:        54,
           height:       54,

@@ -9,7 +9,7 @@ import { useLeads }       from './hooks/useLeads'
 import { useFinance }     from './hooks/useFinance'
 import { useAgent }       from './hooks/useAgent'
 import { STAGES }         from './constants'
-import Sidebar              from './components/Sidebar'
+import Sidebar, { MobileBottomNav } from './components/Sidebar'
 import Dashboard            from './components/pages/Dashboard'
 import ContactsPage         from './components/pages/ContactsPage'
 import DealsPage            from './components/pages/DealsPage'
@@ -39,11 +39,12 @@ const _portalId  = urlParams.get('portal')
 const _portalName = urlParams.get('n')
 
 export default function App() {
-  const [page, setPage]   = useState('dashboard')
-  const [dark, setDark]   = useLS('crm_darkmode', false)
-  const [user, setUser]   = useState(null)
+  const [page, setPage]       = useState('dashboard')
+  const [dark, setDark]       = useLS('crm_darkmode', false)
+  const [user, setUser]       = useState(null)
   const [loading, setLoading] = useState(true)
-  const [agentOpen, setAgentOpen] = useState(false)
+  const [agentOpen, setAgentOpen]     = useState(false)
+  const [mobSidebarOpen, setMobSidebarOpen] = useState(false)
 
   const c  = useContacts()
   const d  = useDeals()
@@ -176,13 +177,25 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* Mobile backdrop */}
+      <div className={`mob-backdrop ${mobSidebarOpen ? 'show' : ''}`} onClick={() => setMobSidebarOpen(false)}/>
+
       <Sidebar
         page={page} setPage={setPage}
         tasks={t.tasks} instructors={i.instructors} students={s.students} deals={d.deals} leads={le.leads}
         dark={dark} setDark={setDark}
         user={user} signOut={signOut}
+        mobOpen={mobSidebarOpen} setMobOpen={setMobSidebarOpen}
       />
       <main className="main">{pages[page] || pages.dashboard}</main>
+
+      {/* Mobile bottom nav */}
+      <MobileBottomNav
+        page={page} setPage={setPage}
+        tasks={t.tasks} leads={le.leads}
+        onMore={() => setMobSidebarOpen(o => !o)}
+      />
+
       <AgentPanel
         open={agentOpen}
         onToggle={() => setAgentOpen(o => !o)}

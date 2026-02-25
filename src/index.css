@@ -161,3 +161,106 @@ textarea{resize:vertical;min-height:70px}
 .empty-ico{font-size:34px;margin-bottom:8px}
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* Hide mobile-only elements on desktop */
+.mob-nav,.mob-backdrop{display:none}
+.mob-hamburger{display:none}
+
+/* ══ MOBILE RESPONSIVE ════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* ── App shell ── */
+  .app{flex-direction:column;overflow:hidden}
+  .main{padding-bottom:62px;height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+
+  /* ── Sidebar becomes right-side drawer ── */
+  .sidebar{
+    position:fixed;right:0;top:0;bottom:0;height:100%;z-index:500;
+    transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);
+    box-shadow:-8px 0 40px rgba(0,0,0,.4);
+  }
+  .sidebar.mob-open{transform:translateX(0)}
+
+  /* ── Mobile backdrop ── */
+  .mob-backdrop{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+    z-index:499;backdrop-filter:blur(2px);
+  }
+  .mob-backdrop.show{display:block}
+
+  /* ── Bottom nav ── */
+  .mob-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;
+    height:60px;background:#0f172a;border-top:1px solid #1e293b;
+    z-index:400;safe-area-inset-bottom:env(safe-area-inset-bottom);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .mob-nav-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:2px;border:none;background:none;
+    color:#64748b;font-size:9px;font-weight:600;cursor:pointer;
+    padding:0;font-family:inherit;letter-spacing:.02em;transition:color .15s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .mob-nav-btn svg{width:20px;height:20px}
+  .mob-nav-btn.active{color:#f97316}
+  .mob-nav-btn .mob-badge{
+    background:#ef4444;color:#fff;font-size:9px;font-weight:700;
+    border-radius:8px;padding:0 4px;position:absolute;top:4px;
+    margin-right:-12px;min-width:14px;text-align:center;line-height:14px;height:14px;
+  }
+  .mob-nav-ico{position:relative;display:inline-flex}
+
+  /* ── Sidebar close btn visible on mobile ── */
+  .mob-sidebar-close{display:block !important}
+
+  /* ── Hamburger ── */
+  .mob-hamburger{
+    display:flex;align-items:center;justify-content:center;
+    position:fixed;top:14px;right:14px;z-index:50;
+    width:36px;height:36px;background:var(--surface);
+    border:1px solid var(--border);border-radius:9px;
+    box-shadow:var(--sh);cursor:pointer;
+  }
+
+  /* ── Page header ── */
+  .ph{padding:14px 14px 0}
+  .ph h2{font-size:17px}
+  .pb{padding:10px 12px 24px}
+
+  /* ── Grids ── */
+  .stats-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .db-row{grid-template-columns:1fr}
+  .charts-grid{grid-template-columns:1fr}
+  .stat-card{padding:14px}
+  .sv{font-size:22px}
+
+  /* ── Filter pills wrap ── */
+  .filter-bar{gap:5px;padding:8px 10px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+  .filter-bar::-webkit-scrollbar{display:none}
+  .fp{flex-shrink:0;font-size:11px;padding:4px 10px}
+
+  /* ── Modals → bottom sheet ── */
+  .overlay{align-items:flex-end;padding:0}
+  .modal{max-width:100%;border-radius:18px 18px 0 0;max-height:90dvh;animation:slideUp .25s ease}
+  .modal-lg{max-width:100%}
+
+  /* ── Table ── */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  td,th{padding:9px 10px}
+
+  /* ── Tasks: always show actions ── */
+  .ta{opacity:1}
+
+  /* ── Type tabs ── */
+  .type-tabs{grid-template-columns:repeat(3,1fr)}
+}
+
+@media (max-width: 480px) {
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .fg{grid-template-columns:1fr}
+  .frow.full{grid-column:1}
+  .prog-grid{grid-template-columns:1fr 1fr}
+  .type-tabs{grid-template-columns:repeat(3,1fr)}
+}
+
+@keyframes slideUp{from{transform:translateY(100%);opacity:.8}to{transform:translateY(0);opacity:1}}
