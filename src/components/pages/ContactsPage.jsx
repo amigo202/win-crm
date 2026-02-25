@@ -29,7 +29,7 @@ export default function ContactsPage({ contacts, deals, onAdd, onUpdate, onDelet
 
   return (
     <>
-      <div className="ph"><h2>אנשי קשר</h2>
+      <div className="ph"><h2>לקוחות</h2>
         <div style={{ display: 'flex', gap: 7 }}>
           <button className="btn btn-o btn-sm" onClick={() => exportContactsCSV(contacts)}><Ico.dl/>ייצוא</button>
           <button className="btn btn-o btn-sm" onClick={() => setImporting(true)}><Ico.ul/>ייבוא</button>
@@ -48,14 +48,15 @@ export default function ContactsPage({ contacts, deals, onAdd, onUpdate, onDelet
           <div className="tbl-wrap">
             {!filtered.length
               ? <div className="empty"><div className="empty-ico">👥</div><p>{q ? 'לא נמצאו תוצאות' : 'לחץ "הוסף" להוסיף איש קשר ראשון'}</p></div>
-              : <table><thead><tr><th>שם</th><th>סוג</th><th>מידע</th><th>תוכניות</th><th>סטטוס</th><th></th></tr></thead>
+              : <table><thead><tr><th>שם</th><th>סוג</th><th>טלפון / איש קשר</th><th>מידע</th><th>תוכניות</th><th>סטטוס</th><th></th></tr></thead>
                 <tbody>{filtered.map(c => {
                   const ti = CONTACT_TYPES.find(t => t.id === c.type)
                   const si = STATUS_OPTS.find(s => s.value === c.status) || STATUS_OPTS[0]
                   return (
                     <tr key={c.id}>
-                      <td><div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><div className="av" style={{ width: 31, height: 31, fontSize: 12, background: avBg(c.name) }}>{ini(c.name)}</div><div><div style={{ fontWeight: 600 }}>{c.name}</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{c.email || c.phone || ''}</div></div></div></td>
+                      <td><div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><div className="av" style={{ width: 31, height: 31, fontSize: 12, background: avBg(c.name) }}>{ini(c.name)}</div><div><div style={{ fontWeight: 600 }}>{c.name}</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{c.email || ''}</div></div></div></td>
                       <td><span className={`badge ${ti?.badge || 'b-gray'}`}>{ti?.label}</span></td>
+                      <td><div style={{ fontSize: 12 }}>{c.phone && <div style={{ fontWeight: 500 }}>{c.phone}</div>}{c.contactPerson && <div style={{ color: 'var(--muted)', fontSize: 11 }}>👤 {c.contactPerson}</div>}</div></td>
                       <td><span style={{ fontSize: 12, color: 'var(--muted)' }}>{keyInfo(c)}</span></td>
                       <td><div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>{(c.activePrograms || [c.program]).filter(Boolean).slice(0, 3).map((p, i) => <span key={i} className="badge b-teal" style={{ fontSize: 11, padding: '1px 7px' }}>{p}</span>)}</div></td>
                       <td><span className={`badge ${si.badge}`}>{si.label}</span></td>

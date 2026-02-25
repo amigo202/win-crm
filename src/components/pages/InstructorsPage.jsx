@@ -1,12 +1,91 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PROGRAMS } from '../../constants'
 import { fmtShekel, fmtD, ini, avBg } from '../../utils/format'
 import { monthlyHours, monthlyPay, noSessionDays } from '../../utils/alerts'
 import { exportInstructorsCSV } from '../../utils/csv'
 import { Ico } from '../icons/Ico'
+import { supabase } from '../../lib/supabase'
+
+function HoursModal({ inst, onClose }) {
+  const url = `${window.location.origin}?portal=${inst.id}&n=${encodeURIComponent(inst.name)}`
+  const [reports, setReports] = useState([])
+  const [fetching, setFetching] = useState(true)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    supabase.from('hour_reports').select('*')
+      .eq('instructor_id', inst.id)
+      .order('report_date', { ascending: false })
+      .then(({ data }) => { setReports(data || []); setFetching(false) })
+  }, [inst.id])
+
+  const copy = () => {
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const totalHours = reports.reduce((s, r) => s + Number(r.hours || 0), 0)
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="mh"><h3>דוח שעות — {inst.name}</h3><button className="mx" onClick={onClose}>×</button></div>
+        <div className="mb">
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>
+              🔗 קישור לדיווח שעות — שלח למדריך
+            </label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input readOnly value={url} style={{
+                flex: 1, fontSize: 11, padding: '7px 10px', borderRadius: 8,
+                border: '1px solid var(--border)', background: 'var(--bg)',
+                color: 'var(--muted)', direction: 'ltr', outline: 'none',
+              }}/>
+              <button className="btn btn-o btn-sm" onClick={copy} style={{ flexShrink: 0 }}>
+                {copied ? '✅ הועתק' : '📋 העתק'}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, direction: 'rtl' }}>
+            דיווחים שהתקבלו {reports.length > 0 && <span style={{ color: 'var(--muted)', fontWeight: 400 }}>({totalHours} שעות סה"כ)</span>}
+          </div>
+
+          {fetching ? (
+            <div style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>טוען...</div>
+          ) : !reports.length ? (
+            <div className="empty"><p>אין דיווחים עדיין. שלח את הקישור למדריך.</p></div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto' }}>
+              {reports.map(r => (
+                <div key={r.id} style={{
+                  display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+                  padding: '8px 12px', background: 'var(--bg)',
+                  borderRadius: 8, border: '1px solid var(--border)', fontSize: 13, direction: 'rtl',
+                }}>
+                  <span style={{ color: 'var(--muted)', minWidth: 85, flexShrink: 0 }}>{r.report_date}</span>
+                  <strong style={{ flexShrink: 0 }}>{r.hours}ש׳</strong>
+                  {r.program  && <span className="badge b-teal" style={{ fontSize: 11 }}>{r.program}</span>}
+                  {r.location && <span style={{ color: 'var(--muted)', fontSize: 12 }}>{r.location}</span>}
+                  {r.notes    && <span style={{ color: 'var(--muted)', fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.notes}</span>}
+                  <span style={{ fontSize: 10, color: 'var(--muted)', marginRight: 'auto', flexShrink: 0 }}>
+                    {new Date(r.submitted_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="mf"><button className="btn btn-o" onClick={onClose}>סגור</button></div>
+      </div>
+    </div>
+  )
+}
 
 export default function InstructorsPage({ instructors, contacts, onAdd, onUpdate, onDelete }) {
   const [modal, setModal] = useState(null)
+  const [hoursInst, setHoursInst] = useState(null)
 
   function InstructorModal({ inst }) {
     const isE = !!inst
@@ -105,6 +184,7 @@ export default function InstructorsPage({ instructors, contacts, onAdd, onUpdate
                   <td><strong style={{ color: 'var(--accent)' }}>{fmtShekel(mp)}</strong></td>
                   <td><span className={`badge ${alert ? 'b-red' : 'b-green'}`}>{alert ? 'לא דיווח' : 'פעיל'}</span></td>
                   <td><div className="ac-cell">
+                    <button className="icon-btn" title="דוח שעות" onClick={() => setHoursInst(i)} style={{ fontSize: 13 }}>📊</button>
                     <button className="icon-btn" onClick={() => setModal({ inst: i })}><Ico.edit/></button>
                     <button className="icon-btn" style={{ color: 'var(--danger)' }} onClick={() => { if (window.confirm(`למחוק ${i.name}?`)) onDelete(i.id) }}><Ico.trash/></button>
                   </div></td>
@@ -113,6 +193,7 @@ export default function InstructorsPage({ instructors, contacts, onAdd, onUpdate
             })}</tbody></table></div>}
       </div></div>
       {modal && <InstructorModal inst={modal.inst}/>}
+      {hoursInst && <HoursModal inst={hoursInst} onClose={() => setHoursInst(null)}/>}
     </>
   )
 }

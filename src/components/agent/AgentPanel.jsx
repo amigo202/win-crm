@@ -173,9 +173,11 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
   const [image, setImage]           = useState(null)
   const [showSettings, setShowSettings] = useState(false)
   const [model, setModel]           = useLS('crm_agent_model', 'gemini-3-pro-preview')
+  const [fabPos, setFabPos]         = useLS('crm_fab_pos', { bottom: 20, right: 20 })
   const bottomRef    = useRef(null)
   const textareaRef  = useRef(null)
   const fileInputRef = useRef(null)
+  const fabDragRef   = useRef({ active: false, startX: 0, startY: 0, startRight: 20, startBottom: 20, moved: false })
   const { messages, loading, send, clear } = agent
 
   const currentModel = MODELS.find(m => m.id === model) || MODELS[0]
@@ -198,7 +200,31 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
   }
 
   const onKey = e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); submit() }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
+  }
+
+  const onFabDown = e => {
+    e.preventDefault()
+    const d = fabDragRef.current
+    d.active = true; d.startX = e.clientX; d.startY = e.clientY
+    d.startRight = fabPos.right; d.startBottom = fabPos.bottom; d.moved = false
+    const move = ev => {
+      if (!fabDragRef.current.active) return
+      const dx = ev.clientX - fabDragRef.current.startX
+      const dy = ev.clientY - fabDragRef.current.startY
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) fabDragRef.current.moved = true
+      const r = Math.max(10, Math.min(window.innerWidth  - 64, fabDragRef.current.startRight  - dx))
+      const b = Math.max(10, Math.min(window.innerHeight - 64, fabDragRef.current.startBottom - dy))
+      setFabPos({ right: r, bottom: b })
+    }
+    const up = () => {
+      fabDragRef.current.active = false
+      document.removeEventListener('pointermove', move)
+      document.removeEventListener('pointerup', up)
+      if (!fabDragRef.current.moved) onToggle()
+    }
+    document.addEventListener('pointermove', move)
+    document.addEventListener('pointerup', up)
   }
 
   const onPaste = async e => {
@@ -222,8 +248,8 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
       {/* ── Floating chat window ───────────────────────────────────── */}
       <div style={{
         position:      'fixed',
-        bottom:        84,
-        right:         20,
+        bottom:        fabPos.bottom + 64,
+        right:         fabPos.right,
         width:         370,
         height:        520,
         zIndex:        300,
@@ -404,36 +430,37 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
             >➤</button>
           </div>
           <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3, textAlign: 'center', direction: 'rtl' }}>
-            Ctrl+Enter לשלוח · 📎 תמונה · Ctrl+K פתח/סגור
+            Enter לשלוח · Shift+Enter שורה חדשה · 📎 תמונה · Ctrl+K פתח/סגור
           </div>
         </div>
       </div>
 
-      {/* ── FAB toggle button ──────────────────────────────────────── */}
+      {/* ── FAB toggle button (draggable) ──────────────────────────── */}
       <button
-        onClick={onToggle}
-        title="סוכן AI (Ctrl+K)"
+        onPointerDown={onFabDown}
+        title="סוכן AI (Ctrl+K) — גרור להזזה"
         style={{
           position:     'fixed',
-          bottom:       20,
-          right:        20,
+          bottom:       fabPos.bottom,
+          right:        fabPos.right,
           width:        54,
           height:       54,
           borderRadius: '50%',
           background:   open ? '#1e293b' : 'linear-gradient(135deg,#f97316,#ea580c)',
           border:       'none',
-          cursor:       'pointer',
+          cursor:       'grab',
           boxShadow:    open ? '0 4px 16px rgba(0,0,0,.35)' : '0 4px 22px rgba(249,115,22,.5)',
           fontSize:     open ? 22 : 20,
           zIndex:       301,
           display:      'flex',
           alignItems:   'center',
           justifyContent: 'center',
-          transition:   'all .2s ease',
+          transition:   'background .2s ease, box-shadow .2s ease',
           color:        '#fff',
           userSelect:   'none',
+          touchAction:  'none',
         }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)' }}
+        onMouseEnter={e => { if (!fabDragRef.current.active) e.currentTarget.style.transform = 'scale(1.1)' }}
         onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
       >
         {open ? '✕' : '🤖'}

@@ -30,7 +30,8 @@ function err(msg: string): Response {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface ContactCtx { id: string; name: string; phone?: string }
+interface ContactCtx    { id: string; name: string; phone?: string }
+interface InstructorCtx { id: string; name: string; programs?: string[] }
 
 interface CrmAction {
   type: string
@@ -49,33 +50,42 @@ interface ImageCtx {
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(contacts: ContactCtx[]): string {
-  const list = contacts.length
+function buildSystemPrompt(contacts: ContactCtx[], instructors: InstructorCtx[]): string {
+  const contactList = contacts.length
     ? contacts.map(c => `  - "${c.name}" (id: ${c.id})`).join('\n')
     : '  (אין אנשי קשר עדיין)'
 
+  const instructorList = instructors.length
+    ? instructors.map(i => `  - "${i.name}" (id: ${i.id}${i.programs?.length ? `, תוכניות: ${i.programs.join(', ')}` : ''})`).join('\n')
+    : '  (אין מדריכים עדיין)'
+
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
   const today    = new Date().toISOString().split('T')[0]
+  const nowMonth = new Date().getMonth() + 1
+  const nowYear  = new Date().getFullYear()
 
   return `אתה עוזר AI למערכת CRM בשם WIN CRM.
 המשתמש כותב בעברית חופשית. תפקידך לנתח ולהפיק פעולות CRM מובנות.
 אם נשלחה תמונה — נתח אותה והפק פעולות מתאימות (למשל, קרא שם/טלפון מכרטיס ביקור).
 
-אנשי קשר קיימים במערכת (השתמש בשמות המדויקים האלה ב-contactName):
-${list}
+אנשי קשר קיימים (השתמש בשמות המדויקים ב-contactName):
+${contactList}
+
+מדריכים קיימים (השתמש בשמות המדויקים ב-instructorName):
+${instructorList}
 
 פעולות (type) — קרא את הכללים בעיון לפני בחירה:
 
 1. create_task — כשהמשתמש רוצה לעשות פעולה: להתקשר, לפגוש, לשלוח, לעקוב, לזכור, לתאם.
-   { title, contactName?(שם מדויק מהרשימה למעלה בלבד), dueDate?(YYYY-MM-DD), priority?("low"|"medium"|"high") }
+   { title, contactName?(שם מדויק מרשימת אנשי הקשר), dueDate?(YYYY-MM-DD), priority?("low"|"medium"|"high") }
    ← אם האדם קיים ברשימה — חובה לשים את שמו ב-contactName.
-   ← אם האדם לא קיים ברשימה — השאר contactName ריק, אל תמציא שם.
+   ← אם האדם לא קיים — השאר contactName ריק, אל תמציא שם.
 
 2. create_contact — כשמוסיפים איש קשר חדש שאינו ליד (לקוח, שותף, ספק, מכר).
    { name, phone?, email?, type?("lead"|"customer"|"partner"|"vendor"), notes? }
 
 3. create_deal — כשמוזכרת עסקה, מכירה, או סכום כסף.
-   { title, contactName?(שם מדויק מהרשימה), value?(number), stage?("lead"|"meeting"|"proposal"|"signed"|"active") }
+   { title, contactName?(שם מדויק מרשימת אנשי הקשר), value?(number), stage?("lead"|"meeting"|"proposal"|"signed"|"active") }
 
 4. create_lead — רק כשהמשתמש מציין מפורשות ליד חדש / מתעניין חדש שלא קיים במערכת.
    { name, phone?, email?, source?("website"|"facebook"|"instagram"|"whatsapp"|"referral"|"manual"), notes? }
@@ -84,6 +94,13 @@ ${list}
 
 5. open_whatsapp — כשרוצים לשלוח ווצאפ לאיש קשר קיים.
    { contactName }
+
+6. create_instructor — כשמוסיפים מדריך חדש למערכת.
+   { name, phone?, email?, programs?(מערך מחרוזות, למשל ["קרוספיט","יוגה"]), hourlyRate?(number) }
+
+7. create_salary — כשרוצים לרשום תשלום שכר למדריך קיים.
+   { instructorName(שם מדויק מרשימת המדריכים), baseSalary(number), month?(1-12, ברירת מחדל ${nowMonth}), year?(YYYY, ברירת מחדל ${nowYear}), tax?(number), additions?(number), deductions?(number), nationalInsurance?(number), healthInsurance?(number), notes? }
+   ← חובה: instructorName חייב להיות מרשימת המדריכים הקיימים.
 
 עקרון ברזל — תפעל, אל תשאל:
 - ברירת מחדל: בצע פעולה מיד לפי מה שהבנת. אל תשאל שאלות מיותרות.
@@ -97,7 +114,9 @@ ${list}
 "הוסף איש קשר שמו יוסי" → create_contact
 "עסקה עם רונן על 5000 ₪" → create_deal
 "שלח ווצאפ לשרה" → open_whatsapp
-"מה אפשר לעשות?" → response:"אני יכול לפתוח משימות, להוסיף לידים, לרשום עסקאות ואנשי קשר. פשוט כתוב מה צריך!", actions:[]
+"הוסף מדריך שמו יוסי לוי" → create_instructor
+"שכר למדריך דני 8000 ₪ לחודש הזה" → create_salary
+"מה אפשר לעשות?" → response:"אני יכול לפתוח משימות, להוסיף לידים, לרשום עסקאות, אנשי קשר, מדריכים ושכר. פשוט כתוב מה צריך!", actions:[]
 
 כללים:
 - מחר = ${tomorrow}, היום = ${today}
@@ -109,14 +128,20 @@ ${list}
 }
 
 // ── Gemini call ───────────────────────────────────────────────────────────────
-// Model: gemini-2.5-flash  (change to gemini-2.0-flash if 2.5 unavailable)
 
-const GEMINI_MODEL = 'gemini-2.5-flash'
+const DEFAULT_MODEL  = 'gemini-3-pro-preview'
+const ALLOWED_MODELS = [
+  'gemini-3-pro-preview',
+  'gemini-3-flash-preview',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+]
 
 async function callGemini(
   systemPrompt: string,
   userMsg:      string,
   image?:       ImageCtx,
+  model:        string = DEFAULT_MODEL,
 ): Promise<string> {
   const apiKey = Deno.env.get('GEMINI_API_KEY')
   if (!apiKey) throw new Error('Missing secret: GEMINI_API_KEY is not set in Supabase Edge Function secrets')
@@ -127,8 +152,8 @@ async function callGemini(
     userParts.push({ inline_data: { mime_type: image.mimeType, data: image.base64 } })
   }
 
-  console.log('[crm-agent] model:', GEMINI_MODEL)
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`
+  console.log('[crm-agent] model:', model)
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
   const r = await fetch(url, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -178,12 +203,14 @@ Deno.serve(async (req: Request) => {
     const jwt = req.headers.get('Authorization')?.replace('Bearer ', '').trim()
     console.log('[crm-agent] jwt present:', !!jwt)
 
-    const { message, context, image } = await req.json() as {
+    const { message, context, image, model: reqModel } = await req.json() as {
       message:  string
-      context?: { contacts?: ContactCtx[] }
+      context?: { contacts?: ContactCtx[]; instructors?: InstructorCtx[] }
       image?:   ImageCtx
+      model?:   string
     }
     if (!message?.trim()) return err('message is required')
+    const model = ALLOWED_MODELS.includes(reqModel ?? '') ? reqModel! : DEFAULT_MODEL
 
     // Build supabase client — use user JWT when available, fall back to anon
     const authHeader = jwt ? { Authorization: `Bearer ${jwt}` } : {}
@@ -193,10 +220,11 @@ Deno.serve(async (req: Request) => {
       { global: { headers: authHeader }, auth: { autoRefreshToken: false, persistSession: false } },
     )
 
-    const contacts = (context?.contacts ?? []) as ContactCtx[]
+    const contacts    = (context?.contacts    ?? []) as ContactCtx[]
+    const instructors = (context?.instructors ?? []) as InstructorCtx[]
 
     // ── Gemini ────────────────────────────────────────────────────────────────
-    const raw = await callGemini(buildSystemPrompt(contacts), message.trim(), image)
+    const raw = await callGemini(buildSystemPrompt(contacts, instructors), message.trim(), image, model)
     let parsed: AIResponse
     try {
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
@@ -214,13 +242,23 @@ Deno.serve(async (req: Request) => {
     const resolveId = (name?: string): string | null => {
       if (!name?.trim()) return null
       const n = name.trim().toLowerCase()
-      // 1. exact match
       const exact = contacts.find(c => c.name.trim().toLowerCase() === n)
       if (exact) return exact.id
-      // 2. partial match (contact name contains the search term or vice versa)
       const partial = contacts.find(c => {
         const cn = c.name.trim().toLowerCase()
         return cn.includes(n) || n.includes(cn)
+      })
+      return partial?.id ?? null
+    }
+
+    const resolveInstructorId = (name?: string): string | null => {
+      if (!name?.trim()) return null
+      const n = name.trim().toLowerCase()
+      const exact = instructors.find(i => i.name.trim().toLowerCase() === n)
+      if (exact) return exact.id
+      const partial = instructors.find(i => {
+        const iname = i.name.trim().toLowerCase()
+        return iname.includes(n) || n.includes(iname)
       })
       return partial?.id ?? null
     }
@@ -279,6 +317,37 @@ Deno.serve(async (req: Request) => {
           } else {
             actions_taken.push({ type: 'open_whatsapp', summary: `לא נמצא מספר ל-${d.contactName}` })
           }
+
+        } else if (action.type === 'create_instructor') {
+          const { error } = await supabase.from('instructors').insert({
+            name:        d.name,
+            phone:       d.phone       ?? null,
+            email:       (d.email as string)?.toLowerCase() ?? null,
+            programs:    Array.isArray(d.programs) ? d.programs : [],
+            hourly_rate: Number(d.hourlyRate) || 0,
+            sessions:    [],
+          })
+          if (error) throw error
+          actions_taken.push({ type: 'create_instructor', summary: `מדריך: "${d.name}"` })
+
+        } else if (action.type === 'create_salary') {
+          const instId = resolveInstructorId(d.instructorName as string)
+          if (!instId) throw new Error(`מדריך לא נמצא: "${d.instructorName}"`)
+          const now = new Date()
+          const { error } = await supabase.from('salaries').insert({
+            instructor_id:      instId,
+            base_salary:        Number(d.baseSalary)        || 0,
+            month:              Number(d.month)             || (now.getMonth() + 1),
+            year:               Number(d.year)              || now.getFullYear(),
+            tax:                Number(d.tax)               || 0,
+            additions:          Number(d.additions)         || 0,
+            deductions:         Number(d.deductions)        || 0,
+            national_insurance: Number(d.nationalInsurance) || 0,
+            health_insurance:   Number(d.healthInsurance)   || 0,
+            notes:              d.notes                     ?? null,
+          })
+          if (error) throw error
+          actions_taken.push({ type: 'create_salary', summary: `שכר ${d.instructorName}: ₪${Number(d.baseSalary).toLocaleString()}` })
         }
       } catch (e) {
         console.error(`[crm-agent] action ${action.type} failed:`, e)

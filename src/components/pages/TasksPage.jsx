@@ -94,7 +94,7 @@ function TaskRow({ t, contacts, onToggle, onEdit, onDelete, onSnooze }) {
 
 // ── Page ──────────────────────────────────────────────────────────
 export default function TasksPage({ tasks, contacts, onAdd, onUpdate, onDelete, onToggle, onSnooze }) {
-  const [filter, setFilter] = useState('today')
+  const [filter, setFilter] = useState('all')
   const [modal, setModal]   = useState(null)
 
   const todayStr = new Date().toISOString().split('T')[0]
@@ -103,6 +103,7 @@ export default function TasksPage({ tasks, contacts, onAdd, onUpdate, onDelete, 
   const isVisible = t => !t.snoozedUntil || t.snoozedUntil <= todayStr
 
   const cnts = {
+    all:     tasks.filter(t => !t.completed).length,
     today:   tasks.filter(t => !t.completed && t.dueDate === todayStr && isVisible(t)).length,
     overdue: tasks.filter(t => !t.completed && t.dueDate && t.dueDate < todayStr && isVisible(t)).length,
     open:    tasks.filter(t => !t.completed && isVisible(t)).length,
@@ -110,19 +111,32 @@ export default function TasksPage({ tasks, contacts, onAdd, onUpdate, onDelete, 
     done:    tasks.filter(t => t.completed).length,
   }
 
+  // Urgency sort: overdue → today → upcoming → no date; then by priority
+  const urgencySort = (a, b) => {
+    const aOv = a.dueDate && a.dueDate < todayStr
+    const bOv = b.dueDate && b.dueDate < todayStr
+    if (aOv && !bOv) return -1
+    if (!aOv && bOv) return 1
+    const aTo = a.dueDate === todayStr
+    const bTo = b.dueDate === todayStr
+    if (aTo && !bTo) return -1
+    if (!aTo && bTo) return 1
+    if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate)
+    if (a.dueDate) return -1
+    if (b.dueDate) return 1
+    const pOrd = { high: 0, medium: 1, low: 2 }
+    return (pOrd[a.priority] || 1) - (pOrd[b.priority] || 1)
+  }
+
   const filtered = tasks.filter(t => {
+    if (filter === 'all')     return !t.completed
     if (filter === 'today')   return !t.completed && t.dueDate === todayStr && isVisible(t)
     if (filter === 'overdue') return !t.completed && t.dueDate && t.dueDate < todayStr && isVisible(t)
     if (filter === 'open')    return !t.completed && isVisible(t)
     if (filter === 'snoozed') return !t.completed && t.snoozedUntil && t.snoozedUntil > todayStr
     if (filter === 'done')    return t.completed
     return true
-  }).sort((a, b) => {
-    if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate)
-    if (a.dueDate) return -1
-    if (b.dueDate) return 1
-    return 0
-  })
+  }).sort(urgencySort)
 
   function TaskModal({ task }) {
     const [form, setForm] = useState(() => task || { title: '', contactId: '', priority: 'medium', dueDate: '' })
@@ -154,14 +168,16 @@ export default function TasksPage({ tasks, contacts, onAdd, onUpdate, onDelete, 
   }
 
   const tabs = [
-    { id: 'today',   l: '🔥 היום'    },
-    { id: 'overdue', l: '⚠ באיחור'   },
-    { id: 'open',    l: 'פתוחות'     },
-    { id: 'snoozed', l: '😴 נדחו'    },
-    { id: 'done',    l: '✅ הושלמו'  },
+    { id: 'all',     l: '📋 כל המשימות' },
+    { id: 'today',   l: '🔥 היום'       },
+    { id: 'overdue', l: '⚠ באיחור'      },
+    { id: 'open',    l: 'פתוחות'        },
+    { id: 'snoozed', l: '😴 נדחו'       },
+    { id: 'done',    l: '✅ הושלמו'     },
   ]
 
   const emptyMsg = {
+    all:     'אין משימות פתוחות',
     today:   '🎉 אין משימות להיום',
     overdue: '✅ אין משימות באיחור',
     open:    'אין משימות פתוחות',

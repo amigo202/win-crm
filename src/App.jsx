@@ -20,6 +20,7 @@ import LeadsPipelinePage    from './components/pages/LeadsPipelinePage'
 import FinancePage          from './components/pages/FinancePage'
 import AuthScreen           from './components/AuthScreen'
 import AgentPanel           from './components/agent/AgentPanel'
+import InstructorPortal     from './components/instructor/InstructorPortal'
 
 function useLS(key, init) {
   const [v, sv] = useState(() => {
@@ -31,6 +32,11 @@ function useLS(key, init) {
   }, [key, v])
   return [v, sv]
 }
+
+// ── Instructor portal (public, no auth needed) ─────────────────────────────
+const urlParams  = new URLSearchParams(window.location.search)
+const _portalId  = urlParams.get('portal')
+const _portalName = urlParams.get('n')
 
 export default function App() {
   const [page, setPage]   = useState('dashboard')
@@ -145,6 +151,9 @@ export default function App() {
 
   const isLoading = loading || c.loading || d.loading || t.loading || i.loading || s.loading || le.loading
 
+  // Show instructor portal without requiring auth
+  if (_portalId) return <InstructorPortal instructorId={_portalId} instructorName={decodeURIComponent(_portalName || '')}/>
+
   if (isLoading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f172a', flexDirection: 'column', gap: '14px', fontFamily: "'Rubik','Segoe UI',Arial,sans-serif" }}>
       <div style={{ width: '52px', height: '52px', background: '#f97316', borderRadius: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: '800', color: '#fff' }}>W</div>
@@ -155,7 +164,7 @@ export default function App() {
   if (!user) return <AuthScreen/>
 
   const pages = {
-    dashboard:   <Dashboard    contacts={c.contacts} deals={d.deals} tasks={t.tasks} instructors={i.instructors} students={s.students} leads={le.leads} dark={dark}/>,
+    dashboard:   <Dashboard    contacts={c.contacts} deals={d.deals} tasks={t.tasks} instructors={i.instructors} students={s.students} leads={le.leads} dark={dark} setPage={setPage}/>,
     leads:       <LeadsPipelinePage leads={le.leads} onAdd={le.addLead} onUpdate={le.editLead} onMoveStage={le.moveStage} onDelete={le.removeLead} onReload={le.load}/>,
     contacts:    <ContactsPage contacts={c.contacts} deals={d.deals} onAdd={addContact} onUpdate={updateContact} onDelete={deleteContact} onReload={c.load}/>,
     deals:       <DealsPage    deals={d.deals} contacts={c.contacts} onAdd={addDeal} onUpdate={updateDeal} onDelete={deleteDeal}/>,
