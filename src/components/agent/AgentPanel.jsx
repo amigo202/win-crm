@@ -50,6 +50,11 @@ function Bubble({ msg }) {
       {msg.preview && (
         <img src={msg.preview} alt="" style={{ maxWidth: 150, maxHeight: 110, borderRadius: 8, marginBottom: 4, objectFit: 'cover' }}/>
       )}
+      {msg.isAudio && (
+        <div style={{ background:'#ede9fe', borderRadius:8, padding:'4px 10px', marginBottom:4, fontSize:11, color:'#7c3aed', fontWeight:600 }}>
+          🎤 הודעה קולית {msg.audioDur ? `(${msg.audioDur}ש׳)` : ''}
+        </div>
+      )}
       <div style={{
         maxWidth:     '85%',
         padding:      '8px 12px',
@@ -169,15 +174,20 @@ function SettingsPanel({ model, setModel, onClear }) {
 
 // ── Main component ─────────────────────────────────────────────────────────
 export default function AgentPanel({ open, onToggle, contacts, instructors = [], agent }) {
-  const [input, setInput]           = useState('')
-  const [image, setImage]           = useState(null)
+  const [input, setInput]               = useState('')
+  const [image, setImage]               = useState(null)
+  const [audio, setAudio]               = useState(null)   // { base64, mimeType, durationSec }
+  const [recording, setRecording]       = useState(false)
+  const [recSec, setRecSec]             = useState(0)
   const [showSettings, setShowSettings] = useState(false)
-  const [model, setModel]           = useLS('crm_agent_model', 'gemini-3-pro-preview')
-  const [fabPos, setFabPos]         = useLS('crm_fab_pos', { bottom: 20, right: 20 })
-  const bottomRef    = useRef(null)
-  const textareaRef  = useRef(null)
-  const fileInputRef = useRef(null)
-  const fabDragRef   = useRef({ active: false, startX: 0, startY: 0, startRight: 20, startBottom: 20, moved: false })
+  const [model, setModel]               = useLS('crm_agent_model', 'gemini-3-pro-preview')
+  const [fabPos, setFabPos]             = useLS('crm_fab_pos', { bottom: 20, right: 20 })
+  const bottomRef      = useRef(null)
+  const textareaRef    = useRef(null)
+  const fileInputRef   = useRef(null)
+  const mediaRecRef    = useRef(null)
+  const recTimerRef    = useRef(null)
+  const fabDragRef     = useRef({ active: false, startX: 0, startY: 0, startRight: 20, startBottom: 20, moved: false })
   const { messages, loading, send, clear } = agent
 
   const currentModel = MODELS.find(m => m.id === model) || MODELS[0]
@@ -192,12 +202,42 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
     else setShowSettings(false)
   }, [open])
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const chunks = []
+      const mr = new MediaRecorder(stream)
+      mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+      mr.onstop = () => {
+        stream.getTracks().forEach(t => t.stop())
+        clearInterval(recTimerRef.current)
+        const blob = new Blob(chunks, { type: 'audio/webm' })
+        const reader = new FileReader()
+        reader.onload = e => {
+          setAudio({ base64: e.target.result.split(',')[1], mimeType: 'audio/webm', durationSec: recTimerRef._sec || 0 })
+        }
+        reader.readAsDataURL(blob)
+        setRecording(false)
+      }
+      mr.start()
+      mediaRecRef.current = mr
+      recTimerRef._sec = 0
+      setRecSec(0)
+      setRecording(true)
+      recTimerRef.current = setInterval(() => { recTimerRef._sec = (recTimerRef._sec || 0) + 1; setRecSec(s => s + 1) }, 1000)
+    } catch { alert('לא ניתן לגשת למיקרופון. בדוק הרשאות דפדפן.') }
+  }
+
+  const stopRecording = () => { mediaRecRef.current?.stop() }
+
   const submit = () => {
-    const txt = input.trim()
+    const media = audio || image
+    const txt   = input.trim() || (audio ? '🎤 הודעה קולית' : '')
     if (!txt || loading) return
     setInput('')
     setImage(null)
-    send(txt, contacts, image, instructors, model)
+    setAudio(null)
+    send(txt, contacts, media, instructors, model)
   }
 
   const onKey = e => {
@@ -372,15 +412,22 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
           {image && (
             <div style={{ position: 'relative', display: 'inline-block', marginBottom: 6 }}>
               <img src={image.preview} alt="" style={{ height: 52, borderRadius: 7, objectFit: 'cover', maxWidth: '100%' }}/>
-              <button
-                onClick={() => setImage(null)}
-                style={{
-                  position: 'absolute', top: -5, right: -5,
-                  background: '#ef4444', color: '#fff', border: 'none',
-                  borderRadius: '50%', width: 15, height: 15, fontSize: 9,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-              >×</button>
+              <button onClick={() => setImage(null)}
+                style={{ position: 'absolute', top: -5, right: -5, background: '#ef4444', color: '#fff', border: 'none', borderRadius: '50%', width: 15, height: 15, fontSize: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            </div>
+          )}
+          {audio && (
+            <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:6, background:'#ede9fe', borderRadius:8, padding:'5px 10px' }}>
+              <span style={{ fontSize:14 }}>🎤</span>
+              <span style={{ fontSize:12, color:'#7c3aed', fontWeight:600 }}>{audio.durationSec}ש׳ מוקלט</span>
+              <button onClick={() => setAudio(null)} style={{ marginRight:'auto', background:'none', border:'none', color:'#7c3aed', cursor:'pointer', fontSize:13, padding:'1px 4px' }}>×</button>
+            </div>
+          )}
+          {recording && (
+            <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:6, background:'#fee2e2', borderRadius:8, padding:'5px 10px', direction:'rtl' }}>
+              <span style={{ width:8, height:8, borderRadius:'50%', background:'#ef4444', animation:'pulse 1s ease-in-out infinite', flexShrink:0 }}/>
+              <span style={{ fontSize:12, color:'#dc2626', fontWeight:600 }}>מקליט... {recSec}ש׳</span>
+              <button onClick={stopRecording} style={{ marginRight:'auto', background:'#ef4444', border:'none', color:'#fff', cursor:'pointer', fontSize:11, borderRadius:5, padding:'2px 8px', fontFamily:'inherit' }}>עצור</button>
             </div>
           )}
 
@@ -391,7 +438,7 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
           }}>
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={loading}
+              disabled={loading || recording}
               title="צרף תמונה (Ctrl+V להדבקה)"
               style={{
                 background: image ? 'rgba(249,115,22,.15)' : 'transparent',
@@ -401,6 +448,17 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
               }}
             >📎</button>
             <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange}/>
+            <button
+              onClick={recording ? stopRecording : startRecording}
+              disabled={loading || !!image}
+              title={recording ? 'עצור הקלטה' : 'הקלטה קולית'}
+              style={{
+                background: recording ? 'rgba(239,68,68,.15)' : audio ? 'rgba(124,58,237,.15)' : 'transparent',
+                border: 'none', cursor: 'pointer', padding: '3px 4px',
+                color: recording ? '#ef4444' : audio ? '#7c3aed' : 'var(--muted)', fontSize: 15,
+                borderRadius: 6, flexShrink: 0, alignSelf: 'flex-end',
+              }}
+            >{recording ? '⏹' : '🎤'}</button>
 
             <textarea
               ref={textareaRef}
@@ -431,7 +489,7 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
             >➤</button>
           </div>
           <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3, textAlign: 'center', direction: 'rtl' }}>
-            Enter לשלוח · Shift+Enter שורה חדשה · 📎 תמונה · Ctrl+K פתח/סגור
+            Enter לשלוח · Shift+Enter שורה · 📎 תמונה · 🎤 הקלטה קולית · Ctrl+K פתח/סגור
           </div>
         </div>
       </div>

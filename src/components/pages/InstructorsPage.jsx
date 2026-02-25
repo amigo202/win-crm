@@ -6,11 +6,17 @@ import { exportInstructorsCSV } from '../../utils/csv'
 import { Ico } from '../icons/Ico'
 import { supabase } from '../../lib/supabase'
 
+const MONTHS_HE = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר']
+
 function HoursModal({ inst, onClose }) {
   const url = `${window.location.origin}?portal=${inst.id}&n=${encodeURIComponent(inst.name)}`
   const [reports, setReports] = useState([])
   const [fetching, setFetching] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [showPayslip, setShowPayslip] = useState(false)
+  const now = new Date()
+  const [ps, setPs] = useState({ month: now.getMonth() + 1, year: now.getFullYear(), amount: '', notes: '' })
+  const [psSt, setPsSt] = useState('idle')
 
   useEffect(() => {
     supabase.from('hour_reports').select('*')
@@ -23,6 +29,20 @@ function HoursModal({ inst, onClose }) {
     navigator.clipboard.writeText(url)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const sendPayslip = async () => {
+    if (!ps.amount || Number(ps.amount) <= 0) return
+    setPsSt('sending')
+    try {
+      const { error } = await supabase.from('payslips').insert({
+        instructor_id: inst.id, month: Number(ps.month),
+        year: Number(ps.year), amount: Number(ps.amount), notes: ps.notes || null,
+      })
+      if (error) throw error
+      setPsSt('sent')
+      setTimeout(() => { setPsSt('idle'); setShowPayslip(false); setPs(p => ({ ...p, amount: '', notes: '' })) }, 2500)
+    } catch { setPsSt('error'); setTimeout(() => setPsSt('idle'), 3000) }
   }
 
   const totalHours = reports.reduce((s, r) => s + Number(r.hours || 0), 0)
@@ -77,6 +97,47 @@ function HoursModal({ inst, onClose }) {
             </div>
           )}
         </div>
+          {/* ── Send Payslip ── */}
+          <div style={{ marginTop:18, borderTop:'1px solid var(--border)', paddingTop:16 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <span style={{ fontWeight:600, fontSize:13 }}>💰 שליחת תלוש שכר</span>
+              <button className="btn btn-o btn-sm" onClick={() => setShowPayslip(v => !v)}>
+                {showPayslip ? 'ביטול' : '+ שלח תלוש'}
+              </button>
+            </div>
+            {showPayslip && (
+              <div style={{ background:'var(--bg)', borderRadius:10, padding:'14px 16px', border:'1px solid var(--border)' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+                  <div>
+                    <label>חודש</label>
+                    <select className="si-input" value={ps.month} onChange={e => setPs(p => ({ ...p, month: e.target.value }))}>
+                      {MONTHS_HE.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label>שנה</label>
+                    <select className="si-input" value={ps.year} onChange={e => setPs(p => ({ ...p, year: e.target.value }))}>
+                      {[ps.year-1, ps.year, ps.year+1].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ gridColumn:'1/-1' }}>
+                    <label>סכום (₪) *</label>
+                    <input type="number" className="si-input" value={ps.amount} min="0" step="10"
+                      onChange={e => setPs(p => ({ ...p, amount: e.target.value }))} placeholder="8000"/>
+                  </div>
+                  <div style={{ gridColumn:'1/-1' }}>
+                    <label>הערות</label>
+                    <input className="si-input" value={ps.notes} onChange={e => setPs(p => ({ ...p, notes: e.target.value }))} placeholder="כולל בונוס, ניכויים וכו'..."/>
+                  </div>
+                </div>
+                {psSt === 'sent'  && <div style={{ color:'#065f46', background:'#d1fae5', borderRadius:7, padding:'7px 12px', fontSize:12, marginBottom:8 }}>✅ התלוש נשלח!</div>}
+                {psSt === 'error' && <div style={{ color:'#dc2626', background:'#fee2e2', borderRadius:7, padding:'7px 12px', fontSize:12, marginBottom:8 }}>שגיאה בשמירה</div>}
+                <button className="btn btn-p btn-sm" onClick={sendPayslip} disabled={psSt === 'sending'}>
+                  {psSt === 'sending' ? '⏳ שולח...' : '💰 שלח תלוש'}
+                </button>
+              </div>
+            )}
+          </div>
         <div className="mf"><button className="btn btn-o" onClick={onClose}>סגור</button></div>
       </div>
     </div>

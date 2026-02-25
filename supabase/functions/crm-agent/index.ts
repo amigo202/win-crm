@@ -43,10 +43,11 @@ interface AIResponse {
   response: string
 }
 
-interface ImageCtx {
+interface MediaCtx {
   base64:   string   // raw base64, no data-URL prefix
-  mimeType: string   // e.g. "image/jpeg"
+  mimeType: string   // e.g. "image/jpeg" or "audio/webm"
 }
+type ImageCtx = MediaCtx  // backward compat alias
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ function buildSystemPrompt(contacts: ContactCtx[], instructors: InstructorCtx[])
   return `אתה עוזר AI למערכת CRM בשם WIN CRM.
 המשתמש כותב בעברית חופשית. תפקידך לנתח ולהפיק פעולות CRM מובנות.
 אם נשלחה תמונה — נתח אותה והפק פעולות מתאימות (למשל, קרא שם/טלפון מכרטיס ביקור).
+אם נשלחה הקלטה קולית — תמלל אותה ועבד את הבקשה בדיוק כאילו הוקלדה.
 
 אנשי קשר קיימים (השתמש בשמות המדויקים ב-contactName):
 ${contactList}
@@ -140,17 +142,18 @@ const ALLOWED_MODELS = [
 async function callGemini(
   systemPrompt: string,
   userMsg:      string,
-  image?:       ImageCtx,
+  media?:       MediaCtx,
   model:        string = DEFAULT_MODEL,
 ): Promise<string> {
   const apiKey = Deno.env.get('GEMINI_API_KEY')
   if (!apiKey) throw new Error('Missing secret: GEMINI_API_KEY is not set in Supabase Edge Function secrets')
 
-  // Build parts — text always first, image optional
-  const userParts: unknown[] = [{ text: userMsg }]
-  if (image?.base64) {
-    userParts.push({ inline_data: { mime_type: image.mimeType, data: image.base64 } })
+  // Build parts — media first (image/audio), then text
+  const userParts: unknown[] = []
+  if (media?.base64) {
+    userParts.push({ inline_data: { mime_type: media.mimeType.split(';')[0], data: media.base64 } })
   }
+  userParts.push({ text: userMsg })
 
   console.log('[crm-agent] model:', model)
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
@@ -203,12 +206,14 @@ Deno.serve(async (req: Request) => {
     const jwt = req.headers.get('Authorization')?.replace('Bearer ', '').trim()
     console.log('[crm-agent] jwt present:', !!jwt)
 
-    const { message, context, image, model: reqModel } = await req.json() as {
+    const { message, context, image, audio, model: reqModel } = await req.json() as {
       message:  string
       context?: { contacts?: ContactCtx[]; instructors?: InstructorCtx[] }
-      image?:   ImageCtx
+      image?:   MediaCtx
+      audio?:   MediaCtx
       model?:   string
     }
+    const media = audio || image   // audio takes priority
     if (!message?.trim()) return err('message is required')
     const model = ALLOWED_MODELS.includes(reqModel ?? '') ? reqModel! : DEFAULT_MODEL
 
@@ -224,7 +229,7 @@ Deno.serve(async (req: Request) => {
     const instructors = (context?.instructors ?? []) as InstructorCtx[]
 
     // ── Gemini ────────────────────────────────────────────────────────────────
-    const raw = await callGemini(buildSystemPrompt(contacts, instructors), message.trim(), image, model)
+    const raw = await callGemini(buildSystemPrompt(contacts, instructors), message.trim(), media, model)
     let parsed: AIResponse
     try {
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()

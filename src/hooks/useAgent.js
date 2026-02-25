@@ -6,15 +6,18 @@ export function useAgent() {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
 
-  // image: { base64: string, mimeType: string } | null
-  const send = useCallback(async (text, contacts = [], image = null, instructors = [], model = 'gemini-3-pro-preview') => {
+  // media: { base64, mimeType, preview? } — image or audio
+  const send = useCallback(async (text, contacts = [], media = null, instructors = [], model = 'gemini-3-pro-preview') => {
     if (!text?.trim() || loading) return
+    const isAudio = media?.mimeType?.startsWith('audio/')
 
     const userMsg = {
-      id:      crypto.randomUUID(),
-      role:    'user',
-      text:    text.trim(),
-      preview: image?.preview ?? null,   // data-URL for thumbnail display
+      id:          crypto.randomUUID(),
+      role:        'user',
+      text:        text.trim(),
+      preview:     isAudio ? null : (media?.preview ?? null),
+      isAudio:     isAudio ?? false,
+      audioDur:    isAudio ? (media?.durationSec ?? 0) : null,
     }
     setMessages(p => [...p, userMsg])
     setLoading(true)
@@ -32,8 +35,11 @@ export function useAgent() {
           instructors: instructors.map(i => ({ id: i.id, name: i.name, programs: i.programs || [] })),
         },
       }
-      // Attach image payload if provided (base64 without data-URL prefix)
-      if (image?.base64) body.image = { base64: image.base64, mimeType: image.mimeType }
+      // Attach media payload (image or audio)
+      if (media?.base64) {
+        const key = media.mimeType?.startsWith('audio/') ? 'audio' : 'image'
+        body[key] = { base64: media.base64, mimeType: media.mimeType.split(';')[0] }
+      }
 
       const { data: result, error: fnError } = await supabase.functions.invoke('crm-agent', { body })
       if (fnError) {
