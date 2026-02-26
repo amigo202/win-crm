@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 
 // ── localStorage hook ──────────────────────────────────────────────────────
 function useLS(key, init) {
@@ -36,34 +36,45 @@ const HINTS = [
 ]
 
 // ── Bubble component ───────────────────────────────────────────────────────
-function Bubble({ msg }) {
+function Bubble({ msg, isMobile }) {
   const isUser     = msg.role === 'user'
   const isError    = msg.role === 'error'
   const isQuestion = msg.role === 'agent' && !msg.actions?.length
+  const fontSize   = isMobile ? 15 : 13
 
   return (
     <div style={{
       display: 'flex', flexDirection: 'column',
       alignItems: isUser ? 'flex-end' : 'flex-start',
-      marginBottom: 10,
+      marginBottom: isMobile ? 6 : 10,
     }}>
       {msg.preview && (
-        <img src={msg.preview} alt="" style={{ maxWidth: 150, maxHeight: 110, borderRadius: 8, marginBottom: 4, objectFit: 'cover' }}/>
+        <img src={msg.preview} alt="" style={{ maxWidth: isMobile ? 200 : 150, maxHeight: 140, borderRadius: 10, marginBottom: 4, objectFit: 'cover' }}/>
       )}
       {msg.isAudio && (
-        <div style={{ background:'#ede9fe', borderRadius:8, padding:'4px 10px', marginBottom:4, fontSize:11, color:'#7c3aed', fontWeight:600 }}>
+        <div style={{ background:'#ede9fe', borderRadius:8, padding:'4px 10px', marginBottom:4, fontSize: isMobile ? 13 : 11, color:'#7c3aed', fontWeight:600 }}>
           🎤 הודעה קולית {msg.audioDur ? `(${msg.audioDur}ש׳)` : ''}
         </div>
       )}
       <div style={{
-        maxWidth:     '85%',
-        padding:      '8px 12px',
-        borderRadius: isUser ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-        background:   isUser ? '#f97316' : isError ? '#fee2e2' : isQuestion ? '#fff7ed' : 'var(--card)',
+        maxWidth:     isMobile ? '80%' : '85%',
+        padding:      isMobile ? '9px 13px' : '8px 12px',
+        borderRadius: isUser
+          ? (isMobile ? '18px 18px 4px 18px' : '14px 14px 4px 14px')
+          : (isMobile ? '18px 18px 18px 4px' : '14px 14px 14px 4px'),
+        background:   isUser
+          ? '#f97316'
+          : isError
+            ? '#fee2e2'
+            : isMobile
+              ? (isQuestion ? '#fff7ed' : '#ffffff')
+              : (isQuestion ? '#fff7ed' : 'var(--card)'),
         color:        isUser ? '#fff' : isError ? '#dc2626' : 'var(--fg)',
-        fontSize:     13,
-        lineHeight:   1.55,
-        border:       isUser ? 'none' : isQuestion ? '1px solid #fed7aa' : '1px solid var(--border)',
+        fontSize,
+        lineHeight:   isMobile ? 1.5 : 1.55,
+        fontFamily:   isMobile ? '-apple-system, "Helvetica Neue", Arial, sans-serif' : 'inherit',
+        boxShadow:    isMobile ? '0 1px 1px rgba(0,0,0,.1)' : 'none',
+        border:       isUser ? 'none' : isQuestion ? '1px solid #fed7aa' : (isMobile ? 'none' : '1px solid var(--border)'),
         whiteSpace:   'pre-wrap',
         wordBreak:    'break-word',
         direction:    'rtl',
@@ -74,12 +85,14 @@ function Bubble({ msg }) {
       </div>
 
       {msg.actions?.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5, maxWidth: '85%', direction: 'rtl' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobile ? 5 : 4, marginTop: isMobile ? 5 : 5, maxWidth: isMobile ? '80%' : '85%', direction: 'rtl' }}>
           {msg.actions.map((a, i) => {
             const isErr = a.summary?.startsWith('שגיאה')
             const isWa  = a.type === 'open_whatsapp' && a.url
             const s = {
-              fontSize: 11, padding: '3px 8px', borderRadius: 20, fontWeight: 600,
+              fontSize: isMobile ? 12 : 11,
+              padding: isMobile ? '5px 11px' : '3px 8px',
+              borderRadius: 20, fontWeight: 600,
               background: isErr ? '#fee2e2' : isWa ? '#dcfce7' : '#d1fae5',
               color:      isErr ? '#dc2626' : isWa ? '#15803d' : '#065f46',
               textDecoration: 'none', display: 'inline-block',
@@ -173,7 +186,7 @@ function SettingsPanel({ model, setModel, onClear }) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export default function AgentPanel({ open, onToggle, contacts, instructors = [], agent }) {
+export default function AgentPanel({ open, onToggle, contacts, instructors = [], tasks = [], deals = [], leads = [], students = [], agent }) {
   const [input, setInput]               = useState('')
   const [image, setImage]               = useState(null)
   const [audio, setAudio]               = useState(null)   // { base64, mimeType, durationSec }
@@ -191,7 +204,13 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
   const { messages, loading, send, clear } = agent
 
   const currentModel = MODELS.find(m => m.id === model) || MODELS[0]
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
+  const [windowWidth, setWindowWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200)
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  const isMobile = windowWidth <= 768
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -237,7 +256,7 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
     setInput('')
     setImage(null)
     setAudio(null)
-    send(txt, contacts, media, instructors, model)
+    send(txt, contacts, media, instructors, model, { tasks, deals, leads, students })
   }
 
   const onKey = e => {
@@ -289,43 +308,52 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
       {/* ── Floating chat window ───────────────────────────────────── */}
       <div style={{
         position:      'fixed',
-        bottom:        fabPos.bottom + 64,
-        right:         fabPos.right,
-        width:         370,
-        height:        520,
+        bottom:        isMobile ? 0 : fabPos.bottom + 64,
+        right:         isMobile ? 0 : fabPos.right,
+        left:          isMobile ? 0 : 'auto',
+        top:           isMobile ? 0 : 'auto',
+        width:         isMobile ? '100%' : 370,
+        height:        isMobile ? '100%' : 520,
         zIndex:        300,
         display:       'flex',
         flexDirection: 'column',
-        background:    'var(--bg)',
-        border:        '1px solid var(--border)',
-        borderRadius:  16,
-        boxShadow:     '0 8px 48px rgba(0,0,0,.28)',
+        background:    isMobile ? '#ece5dd' : 'var(--bg)',
+        border:        isMobile ? 'none' : '1px solid var(--border)',
+        borderRadius:  isMobile ? 0 : 16,
+        boxShadow:     isMobile ? 'none' : '0 8px 48px rgba(0,0,0,.28)',
         overflow:      'hidden',
-        transform:     open ? 'scale(1) translateY(0)' : 'scale(.96) translateY(14px)',
-        opacity:       open ? 1 : 0,
+        transform:     open ? 'scale(1) translateY(0)' : isMobile ? 'translateY(100%)' : 'scale(.96) translateY(14px)',
+        opacity:       open ? 1 : (isMobile ? 1 : 0),
         pointerEvents: open ? 'auto' : 'none',
-        transition:    'transform .22s cubic-bezier(.4,0,.2,1), opacity .22s ease',
+        transition:    isMobile
+          ? 'transform .28s cubic-bezier(.4,0,.2,1)'
+          : 'transform .22s cubic-bezier(.4,0,.2,1), opacity .22s ease',
         transformOrigin: 'bottom right',
       }}>
 
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '11px 13px',
+          padding: isMobile ? '12px 16px' : '11px 13px',
+          paddingTop: isMobile ? 'max(12px, env(safe-area-inset-top))' : '11px',
           borderBottom: '1px solid var(--border)',
-          background: 'var(--card)',
+          background: isMobile ? '#075e54' : 'var(--card)',
           flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 8 }}>
+            {isMobile && (
+              <button onClick={onToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 22, padding: '0 2px', lineHeight: 1 }}>←</button>
+            )}
             <div style={{
-              width: 32, height: 32, borderRadius: 9,
+              width: isMobile ? 40 : 32, height: isMobile ? 40 : 32,
+              borderRadius: '50%',
               background: 'linear-gradient(135deg,#f97316,#ea580c)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, flexShrink: 0,
+              fontSize: isMobile ? 20 : 16, flexShrink: 0,
             }}>🤖</div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)', lineHeight: 1.2 }}>סוכן AI</div>
-              <div style={{ fontSize: 10, color: '#f97316', fontWeight: 600 }}>{currentModel.label}</div>
+              <div style={{ fontWeight: 700, fontSize: isMobile ? 16 : 13, color: isMobile ? '#fff' : 'var(--fg)', lineHeight: 1.2 }}>סוכן AI</div>
+              <div style={{ fontSize: isMobile ? 12 : 10, color: isMobile ? '#b2dfdb' : '#f97316', fontWeight: 500 }}>{currentModel.label}</div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -333,21 +361,23 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
               onClick={() => setShowSettings(s => !s)}
               title="הגדרות"
               style={{
-                background: showSettings ? 'rgba(249,115,22,.15)' : 'transparent',
+                background: showSettings ? 'rgba(255,255,255,.2)' : 'transparent',
                 border: 'none', cursor: 'pointer', padding: '5px 7px',
-                borderRadius: 7, fontSize: 14, lineHeight: 1,
-                color: showSettings ? '#f97316' : 'var(--muted)',
+                borderRadius: 7, fontSize: 16, lineHeight: 1,
+                color: isMobile ? '#fff' : (showSettings ? '#f97316' : 'var(--muted)'),
                 transition: 'background .15s',
               }}
             >⚙️</button>
-            <button
-              onClick={onToggle}
-              style={{
-                border: 'none', background: 'transparent', cursor: 'pointer',
-                fontSize: 18, color: 'var(--muted)', lineHeight: 1,
-                padding: '5px 7px', borderRadius: 7,
-              }}
-            >×</button>
+            {!isMobile && (
+              <button
+                onClick={onToggle}
+                style={{
+                  border: 'none', background: 'transparent', cursor: 'pointer',
+                  fontSize: 18, color: 'var(--muted)', lineHeight: 1,
+                  padding: '5px 7px', borderRadius: 7,
+                }}
+              >×</button>
+            )}
           </div>
         </div>
 
@@ -359,40 +389,51 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
         {/* Messages */}
         <div style={{
           flex: 1, overflowY: 'auto',
-          padding: '12px 12px 6px',
+          padding: isMobile ? '10px 10px 6px' : '12px 12px 6px',
           display: 'flex', flexDirection: 'column',
+          backgroundImage: isMobile
+            ? 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'%3E%3Crect width=\'100\' height=\'100\' fill=\'%23ece5dd\'/%3E%3C/svg%3E")'
+            : 'none',
         }}>
           {messages.length === 0 && !loading && (
-            <div style={{ textAlign: 'center', marginTop: 14 }}>
-              <div style={{ fontSize: 30, marginBottom: 6 }}>🤖</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, direction: 'rtl' }}>
-                כתוב לי מה לעשות — אני אדאג לשאר
+            <div style={{ textAlign: 'center', marginTop: isMobile ? 30 : 14 }}>
+              <div style={{ fontSize: isMobile ? 48 : 30, marginBottom: isMobile ? 12 : 6 }}>🤖</div>
+              <div style={{ fontSize: isMobile ? 15 : 12, color: isMobile ? '#555' : 'var(--muted)', marginBottom: 16, direction: 'rtl', fontWeight: isMobile ? 500 : 400 }}>
+                שלום! אני הסוכן החכם שלך — כתוב לי מה לעשות
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 5 }}>
                 {HINTS.map((h, i) => (
                   <button key={i}
                     onClick={() => { setInput(h); textareaRef.current?.focus() }}
                     style={{
-                      background: 'var(--bg2)', border: '1px solid var(--border)',
-                      borderRadius: 8, padding: '6px 10px', cursor: 'pointer',
-                      fontSize: 11, color: 'var(--fg)', textAlign: 'right',
+                      background: isMobile ? '#fff' : 'var(--bg2)',
+                      border: isMobile ? 'none' : '1px solid var(--border)',
+                      borderRadius: isMobile ? 12 : 8,
+                      padding: isMobile ? '10px 14px' : '6px 10px',
+                      cursor: 'pointer',
+                      fontSize: isMobile ? 14 : 11,
+                      color: 'var(--fg)', textAlign: 'right',
                       direction: 'rtl', transition: 'border-color .15s',
+                      boxShadow: isMobile ? '0 1px 2px rgba(0,0,0,.12)' : 'none',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = '#f97316'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                    onMouseEnter={e => !isMobile && (e.currentTarget.style.borderColor = '#f97316')}
+                    onMouseLeave={e => !isMobile && (e.currentTarget.style.borderColor = 'var(--border)')}
                   >{h}</button>
                 ))}
               </div>
             </div>
           )}
 
-          {messages.map(msg => <Bubble key={msg.id} msg={msg}/>)}
+          {messages.map(msg => <Bubble key={msg.id} msg={msg} isMobile={isMobile}/>)}
 
           {loading && (
             <div style={{ display: 'flex', alignItems: 'flex-start' }}>
               <div style={{
-                background: 'var(--card)', border: '1px solid var(--border)',
-                borderRadius: '14px 14px 14px 4px', padding: '3px 12px',
+                background: isMobile ? '#fff' : 'var(--card)',
+                border: isMobile ? 'none' : '1px solid var(--border)',
+                borderRadius: isMobile ? '18px 18px 18px 4px' : '14px 14px 14px 4px',
+                padding: '3px 12px',
+                boxShadow: isMobile ? '0 1px 1px rgba(0,0,0,.1)' : 'none',
               }}>
                 <TypingDots/>
               </div>
@@ -404,46 +445,50 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
 
         {/* Input */}
         <div style={{
-          padding: '8px 10px 10px',
-          borderTop: '1px solid var(--border)',
-          background: 'var(--card)',
+          padding: isMobile ? '8px 10px' : '8px 10px 10px',
+          paddingBottom: isMobile ? 'max(8px, env(safe-area-inset-bottom))' : '10px',
+          borderTop: isMobile ? 'none' : '1px solid var(--border)',
+          background: isMobile ? '#ece5dd' : 'var(--card)',
           flexShrink: 0,
         }}>
           {image && (
             <div style={{ position: 'relative', display: 'inline-block', marginBottom: 6 }}>
-              <img src={image.preview} alt="" style={{ height: 52, borderRadius: 7, objectFit: 'cover', maxWidth: '100%' }}/>
+              <img src={image.preview} alt="" style={{ height: isMobile ? 64 : 52, borderRadius: 7, objectFit: 'cover', maxWidth: '100%' }}/>
               <button onClick={() => setImage(null)}
-                style={{ position: 'absolute', top: -5, right: -5, background: '#ef4444', color: '#fff', border: 'none', borderRadius: '50%', width: 15, height: 15, fontSize: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                style={{ position: 'absolute', top: -5, right: -5, background: '#ef4444', color: '#fff', border: 'none', borderRadius: '50%', width: isMobile ? 20 : 15, height: isMobile ? 20 : 15, fontSize: isMobile ? 12 : 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
             </div>
           )}
           {audio && (
-            <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:6, background:'#ede9fe', borderRadius:8, padding:'5px 10px' }}>
-              <span style={{ fontSize:14 }}>🎤</span>
-              <span style={{ fontSize:12, color:'#7c3aed', fontWeight:600 }}>{audio.durationSec}ש׳ מוקלט</span>
-              <button onClick={() => setAudio(null)} style={{ marginRight:'auto', background:'none', border:'none', color:'#7c3aed', cursor:'pointer', fontSize:13, padding:'1px 4px' }}>×</button>
+            <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:6, background:'#ede9fe', borderRadius:8, padding: isMobile ? '7px 12px' : '5px 10px' }}>
+              <span style={{ fontSize: isMobile ? 18 : 14 }}>🎤</span>
+              <span style={{ fontSize: isMobile ? 14 : 12, color:'#7c3aed', fontWeight:600 }}>{audio.durationSec}ש׳ מוקלט</span>
+              <button onClick={() => setAudio(null)} style={{ marginRight:'auto', background:'none', border:'none', color:'#7c3aed', cursor:'pointer', fontSize: isMobile ? 18 : 13, padding:'1px 4px' }}>×</button>
             </div>
           )}
           {recording && (
-            <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:6, background:'#fee2e2', borderRadius:8, padding:'5px 10px', direction:'rtl' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:6, background:'#fee2e2', borderRadius:8, padding: isMobile ? '7px 12px' : '5px 10px', direction:'rtl' }}>
               <span style={{ width:8, height:8, borderRadius:'50%', background:'#ef4444', animation:'pulse 1s ease-in-out infinite', flexShrink:0 }}/>
-              <span style={{ fontSize:12, color:'#dc2626', fontWeight:600 }}>מקליט... {recSec}ש׳</span>
-              <button onClick={stopRecording} style={{ marginRight:'auto', background:'#ef4444', border:'none', color:'#fff', cursor:'pointer', fontSize:11, borderRadius:5, padding:'2px 8px', fontFamily:'inherit' }}>עצור</button>
+              <span style={{ fontSize: isMobile ? 14 : 12, color:'#dc2626', fontWeight:600 }}>מקליט... {recSec}ש׳</span>
+              <button onClick={stopRecording} style={{ marginRight:'auto', background:'#ef4444', border:'none', color:'#fff', cursor:'pointer', fontSize: isMobile ? 13 : 11, borderRadius:5, padding: isMobile ? '4px 12px' : '2px 8px', fontFamily:'inherit' }}>עצור</button>
             </div>
           )}
 
           <div style={{
-            display: 'flex', gap: 5, alignItems: 'flex-end',
-            background: 'var(--bg)', border: '1px solid var(--border)',
-            borderRadius: 10, padding: '5px 7px',
+            display: 'flex', gap: isMobile ? 8 : 5, alignItems: 'flex-end',
+            background: '#fff',
+            border: isMobile ? 'none' : '1px solid var(--border)',
+            borderRadius: isMobile ? 24 : 10,
+            padding: isMobile ? '8px 12px' : '5px 7px',
+            boxShadow: isMobile ? '0 1px 3px rgba(0,0,0,.15)' : 'none',
           }}>
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={loading || recording}
-              title="צרף תמונה (Ctrl+V להדבקה)"
+              title="צרף תמונה"
               style={{
                 background: image ? 'rgba(249,115,22,.15)' : 'transparent',
-                border: 'none', cursor: 'pointer', padding: '3px 4px',
-                color: image ? '#f97316' : 'var(--muted)', fontSize: 15,
+                border: 'none', cursor: 'pointer', padding: isMobile ? '2px 2px' : '3px 4px',
+                color: image ? '#f97316' : '#8696a0', fontSize: isMobile ? 20 : 15,
                 borderRadius: 6, flexShrink: 0, alignSelf: 'flex-end',
               }}
             >📎</button>
@@ -454,8 +499,9 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
               title={recording ? 'עצור הקלטה' : 'הקלטה קולית'}
               style={{
                 background: recording ? 'rgba(239,68,68,.15)' : audio ? 'rgba(124,58,237,.15)' : 'transparent',
-                border: 'none', cursor: 'pointer', padding: '3px 4px',
-                color: recording ? '#ef4444' : audio ? '#7c3aed' : 'var(--muted)', fontSize: 15,
+                border: 'none', cursor: 'pointer', padding: isMobile ? '2px 2px' : '3px 4px',
+                color: recording ? '#ef4444' : audio ? '#7c3aed' : '#8696a0',
+                fontSize: isMobile ? 20 : 15,
                 borderRadius: 6, flexShrink: 0, alignSelf: 'flex-end',
               }}
             >{recording ? '⏹' : '🎤'}</button>
@@ -466,64 +512,72 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
               onChange={e => setInput(e.target.value)}
               onKeyDown={onKey}
               onPaste={onPaste}
-              placeholder="כתוב משימה, איש קשר, עסקה, ליד..."
-              rows={2}
+              placeholder="הודעה..."
+              rows={isMobile ? 1 : 2}
               style={{
                 flex: 1, resize: 'none', border: 'none', background: 'transparent',
-                color: 'var(--fg)', fontSize: 12, outline: 'none',
-                fontFamily: 'inherit', lineHeight: 1.5, direction: 'rtl',
+                color: 'var(--fg)', fontSize: isMobile ? 15 : 12, outline: 'none',
+                fontFamily: isMobile ? '-apple-system, "Helvetica Neue", Arial, sans-serif' : 'inherit',
+                lineHeight: 1.5, direction: 'rtl',
+                maxHeight: isMobile ? 100 : 'none',
               }}
               disabled={loading}
             />
             <button
               onClick={submit}
-              disabled={!input.trim() || loading}
+              disabled={(!input.trim() && !audio) || loading}
               style={{
-                background: input.trim() && !loading ? '#f97316' : 'var(--bg2)',
-                border: 'none', borderRadius: 7,
-                cursor: input.trim() && !loading ? 'pointer' : 'default',
-                padding: '5px 9px', color: input.trim() && !loading ? '#fff' : 'var(--muted)',
-                fontSize: 15, transition: 'background .15s',
+                background: (input.trim() || audio) && !loading ? '#25d366' : '#8696a0',
+                border: 'none', borderRadius: '50%',
+                cursor: (input.trim() || audio) && !loading ? 'pointer' : 'default',
+                width: isMobile ? 38 : 28, height: isMobile ? 38 : 28,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: isMobile ? 17 : 15,
+                transition: 'background .15s',
                 flexShrink: 0, alignSelf: 'flex-end',
               }}
             >➤</button>
           </div>
-          <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3, textAlign: 'center', direction: 'rtl' }}>
-            Enter לשלוח · Shift+Enter שורה · 📎 תמונה · 🎤 הקלטה קולית · Ctrl+K פתח/סגור
-          </div>
+          {!isMobile && (
+            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3, textAlign: 'center', direction: 'rtl' }}>
+              Enter לשלוח · Shift+Enter שורה · 📎 תמונה · 🎤 הקלטה קולית · Ctrl+K פתח/סגור
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── FAB toggle button (draggable) ──────────────────────────── */}
-      <button
-        onPointerDown={onFabDown}
-        title="סוכן AI (Ctrl+K) — גרור להזזה"
-        style={{
-          position:     'fixed',
-          bottom:       isMobile ? Math.max(fabPos.bottom, 68) : fabPos.bottom,
-          right:        fabPos.right,
-          width:        54,
-          height:       54,
-          borderRadius: '50%',
-          background:   open ? '#1e293b' : 'linear-gradient(135deg,#f97316,#ea580c)',
-          border:       'none',
-          cursor:       'grab',
-          boxShadow:    open ? '0 4px 16px rgba(0,0,0,.35)' : '0 4px 22px rgba(249,115,22,.5)',
-          fontSize:     open ? 22 : 20,
-          zIndex:       301,
-          display:      'flex',
-          alignItems:   'center',
-          justifyContent: 'center',
-          transition:   'background .2s ease, box-shadow .2s ease',
-          color:        '#fff',
-          userSelect:   'none',
-          touchAction:  'none',
-        }}
-        onMouseEnter={e => { if (!fabDragRef.current.active) e.currentTarget.style.transform = 'scale(1.1)' }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
-      >
-        {open ? '✕' : '🤖'}
-      </button>
+      {/* ── FAB toggle button (draggable, hidden on mobile when open) ── */}
+      {(!isMobile || !open) && (
+        <button
+          onPointerDown={onFabDown}
+          title="סוכן AI (Ctrl+K) — גרור להזזה"
+          style={{
+            position:     'fixed',
+            bottom:       isMobile ? Math.max(fabPos.bottom, 80) : fabPos.bottom,
+            right:        fabPos.right,
+            width:        isMobile ? 58 : 54,
+            height:       isMobile ? 58 : 54,
+            borderRadius: '50%',
+            background:   open ? '#1e293b' : 'linear-gradient(135deg,#f97316,#ea580c)',
+            border:       'none',
+            cursor:       'grab',
+            boxShadow:    open ? '0 4px 16px rgba(0,0,0,.35)' : '0 4px 22px rgba(249,115,22,.5)',
+            fontSize:     isMobile ? 24 : (open ? 22 : 20),
+            zIndex:       301,
+            display:      'flex',
+            alignItems:   'center',
+            justifyContent: 'center',
+            transition:   'background .2s ease, box-shadow .2s ease',
+            color:        '#fff',
+            userSelect:   'none',
+            touchAction:  'none',
+          }}
+          onMouseEnter={e => { if (!fabDragRef.current.active) e.currentTarget.style.transform = 'scale(1.1)' }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+        >
+          {open ? '✕' : '🤖'}
+        </button>
+      )}
     </>
   )
 }

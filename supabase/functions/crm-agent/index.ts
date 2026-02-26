@@ -1,6 +1,6 @@
-// WIN CRM — crm-agent Edge Function
+// WIN CRM — crm-agent Edge Function v2
 // POST /functions/v1/crm-agent
-// Secret required: GEMINI_API_KEY
+// Secrets required: GEMINI_API_KEY
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -19,13 +19,11 @@ function ok(body: unknown, status = 200): Response {
 }
 
 function err(msg: string): Response {
-  // Always 200 so supabase.functions.invoke() puts body in `data` (not `error`)
-  // Client checks result.error to detect failures
   console.error('[crm-agent] err:', msg)
-  return new Response(JSON.stringify({ error: msg, response: 'שגיאת שרת — נסה שוב', actions_taken: [] }), {
-    status: 200,
-    headers: { ...CORS, 'Content-Type': 'application/json' },
-  })
+  return new Response(
+    JSON.stringify({ error: msg, response: 'שגיאת שרת — נסה שוב', actions_taken: [] }),
+    { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } },
+  )
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -33,103 +31,185 @@ function err(msg: string): Response {
 interface ContactCtx    { id: string; name: string; phone?: string }
 interface InstructorCtx { id: string; name: string; programs?: string[] }
 
+interface HistoryMsg {
+  role: 'user' | 'agent'
+  text: string
+}
+
+interface BusinessSnapshot {
+  stats?: {
+    contactsTotal?: number
+    leadsCount?:    number
+    studentsCount?: number
+    dealsTotal?:    number
+  }
+  openTasks?:    Array<{ title: string; dueDate?: string; contactName?: string; priority?: string }>
+  recentLeads?:  Array<{ name: string; phone?: string; source?: string; stage?: string }>
+  activeDeals?:  Array<{ title: string; value?: number; stage?: string; contactName?: string }>
+}
+
 interface CrmAction {
   type: string
   data: Record<string, unknown>
 }
 
 interface AIResponse {
-  actions: CrmAction[]
+  actions:  CrmAction[]
   response: string
 }
 
 interface MediaCtx {
-  base64:   string   // raw base64, no data-URL prefix
-  mimeType: string   // e.g. "image/jpeg" or "audio/webm"
+  base64:   string
+  mimeType: string
 }
-type ImageCtx = MediaCtx  // backward compat alias
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(contacts: ContactCtx[], instructors: InstructorCtx[]): string {
+function buildSystemPrompt(
+  contacts:    ContactCtx[],
+  instructors: InstructorCtx[],
+  snapshot:    BusinessSnapshot,
+): string {
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
+  const today    = new Date().toISOString().split('T')[0]
+  const nowMonth = new Date().getMonth() + 1
+  const nowYear  = new Date().getFullYear()
+
+  // ── Business snapshot section ──────────────────────────────────────────────
+  let snapshotSection = ''
+  const overdueTasks: Array<{ title: string; dueDate?: string; contactName?: string }> = []
+
+  if (snapshot.stats) {
+    const s = snapshot.stats
+    snapshotSection += `\n=== מצב עסק נוכחי (${today}) ===\n`
+    snapshotSection += `אנשי קשר: ${s.contactsTotal ?? 0} | לידים: ${s.leadsCount ?? 0} | תלמידים: ${s.studentsCount ?? 0} | עסקאות: ${s.dealsTotal ?? 0}\n`
+  }
+
+  if (snapshot.openTasks?.length) {
+    for (const t of snapshot.openTasks) {
+      if (t.dueDate && t.dueDate < today) overdueTasks.push(t)
+    }
+    snapshotSection += `\nמשימות פתוחות (${snapshot.openTasks.length}${overdueTasks.length ? `, ⚠️ ${overdueTasks.length} באיחור` : ''}):\n`
+    for (const t of snapshot.openTasks.slice(0, 15)) {
+      const contact = t.contactName ? ` — ${t.contactName}` : ''
+      const due = t.dueDate
+        ? ` (${t.dueDate === today ? '📅 היום' : t.dueDate < today ? '⚠️ באיחור!' : t.dueDate})`
+        : ''
+      const pri = t.priority === 'high' ? ' 🔴' : t.priority === 'medium' ? ' 🟡' : ''
+      snapshotSection += `  • "${t.title}"${contact}${due}${pri}\n`
+    }
+  } else if (snapshot.stats) {
+    snapshotSection += `\nאין משימות פתוחות.\n`
+  }
+
+  if (snapshot.recentLeads?.length) {
+    snapshotSection += `\nלידים אחרונים (${snapshot.recentLeads.length}):\n`
+    for (const l of snapshot.recentLeads.slice(0, 10)) {
+      const phone  = l.phone  ? ` | ${l.phone}`  : ''
+      const source = l.source ? ` (${l.source})` : ''
+      const stage  = l.stage  ? ` [${l.stage}]`  : ''
+      snapshotSection += `  • ${l.name}${phone}${source}${stage}\n`
+    }
+  }
+
+  if (snapshot.activeDeals?.length) {
+    const totalValue = snapshot.activeDeals.reduce((s, d) => s + (d.value ?? 0), 0)
+    snapshotSection += `\nעסקאות פעילות (${snapshot.activeDeals.length}, סה"כ ₪${totalValue.toLocaleString()}):\n`
+    for (const d of snapshot.activeDeals.slice(0, 10)) {
+      const contact = d.contactName ? ` — ${d.contactName}` : ''
+      const val     = d.value != null ? ` ₪${d.value.toLocaleString()}` : ''
+      snapshotSection += `  • "${d.title}"${contact}${val} [${d.stage ?? ''}]\n`
+    }
+  }
+
+  // ── Build proactive insights for the agent to leverage ────────────────────
+  let insightsSection = ''
+  if (overdueTasks.length > 0) {
+    insightsSection += `\n🚨 התראות דחופות:\n`
+    insightsSection += `  • יש ${overdueTasks.length} משימות שעברו את המועד שלהן! שקול לטפל בהן בדחיפות.\n`
+  }
+  if ((snapshot.stats?.leadsCount ?? 0) > 10 && (snapshot.openTasks?.length ?? 0) < 3) {
+    insightsSection += `  • יש ${snapshot.stats?.leadsCount} לידים אך מעט מאוד משימות — שקול פולואפ פעיל.\n`
+  }
+
+  // ── Contacts / Instructors lists ──────────────────────────────────────────
   const contactList = contacts.length
-    ? contacts.map(c => `  - "${c.name}" (id: ${c.id})`).join('\n')
+    ? contacts.slice(0, 100).map(c => `  - "${c.name}"${c.phone ? ` | ${c.phone}` : ''} (id: ${c.id})`).join('\n')
     : '  (אין אנשי קשר עדיין)'
 
   const instructorList = instructors.length
     ? instructors.map(i => `  - "${i.name}" (id: ${i.id}${i.programs?.length ? `, תוכניות: ${i.programs.join(', ')}` : ''})`).join('\n')
     : '  (אין מדריכים עדיין)'
 
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
-  const today    = new Date().toISOString().split('T')[0]
-  const nowMonth = new Date().getMonth() + 1
-  const nowYear  = new Date().getFullYear()
+  return `אתה יועץ עסקי ו-AI חכם של מערכת WIN CRM — מכון כושר / סטודיו לאימונים.
+המשתמש כותב בעברית. אתה מבין את העסק לעומק: לידים, תלמידים, מדריכים, תשלומים, תוכניות אימון ועסקאות.
 
-  return `אתה עוזר AI למערכת CRM בשם WIN CRM.
-המשתמש כותב בעברית חופשית. תפקידך לנתח ולהפיק פעולות CRM מובנות.
-אם נשלחה תמונה — נתח אותה והפק פעולות מתאימות (למשל, קרא שם/טלפון מכרטיס ביקור).
-אם נשלחה הקלטה קולית — תמלל אותה ועבד את הבקשה בדיוק כאילו הוקלדה.
-
-אנשי קשר קיימים (השתמש בשמות המדויקים ב-contactName):
+=== תפקידך ===
+1. לבצע פעולות CRM (יצירת משימות, לידים, עסקאות וכו׳)
+2. לענות על שאלות עסקיות בחכמה, על בסיס הנתונים שלך
+3. להיות פרואקטיבי — שים לב לבעיות ומגמות, והצע פעולות גם מבלי שביקשו
+4. לייעץ על בסיס הנתונים — אם רואים בעיה (משימות באיחור, לידים ללא פולואפ, הכנסה נמוכה), ציין זאת
+${snapshotSection}${insightsSection}
+אנשי קשר קיימים:
 ${contactList}
 
-מדריכים קיימים (השתמש בשמות המדויקים ב-instructorName):
+מדריכים קיימים:
 ${instructorList}
 
-פעולות (type) — קרא את הכללים בעיון לפני בחירה:
+=== 📷 קריאת תמונות — חובה לנתח! ===
+כשנשלחת תמונה, תמיד פתח את תשובתך עם: "📷 ראיתי בתמונה: [תיאור מה רואים]"
+לאחר מכן בצע את הפעולה המתאימה:
+  • כרטיס ביקור → חלץ שם/טלפון/אימייל/חברה → create_contact (ציין "מכרטיס ביקור" ב-notes)
+  • חשבונית/קבלה → חלץ שם לקוח/סכום/תיאור → create_deal
+  • רשימת שמות/טלפונים → צור create_lead לכל שם
+  • מסמך/הוראות → קרא וצא בהתאם
+  • צילום מסך/אחר → תאר מה ראית ואז שאל שאלה אחת: "מה לעשות עם זה?"
+חשוב: גם אם התמונה מטושטשת — נסה לחלץ מידע ודווח על מה שראית.
 
-1. create_task — כשהמשתמש רוצה לעשות פעולה: להתקשר, לפגוש, לשלוח, לעקוב, לזכור, לתאם.
+🎤 הקלטה קולית — תמלל ועבד בדיוק כאילו הוקלד.
+
+=== 💼 יועץ עסקי — כיצד להגיב ===
+• שאלות על מצב העסק → ענה עם ניתוח + המלצה אחת: "יש לך X לידים חדשים, אבל Y מהם ללא פולואפ — כדאי ליצור משימות."
+• אחרי ביצוע פעולה → הוסף בriefing קצר: "בוצע! אגב, שים לב ש..."
+• כשרואים בעיה → ציין אותה בשפה ישירה: "⚠️ 3 משימות כבר עברו את המועד שלהן"
+• הצעות פעולה → כשרלוונטי, הצע פעולה נוספת: "רוצה שאצור גם משימת פולואפ?"
+
+=== פעולות (type) ===
+
+1. create_task — פעולה לביצוע (להתקשר, לפגוש, לשלוח, לעקוב, לתאם)
    { title, contactName?(שם מדויק מרשימת אנשי הקשר), dueDate?(YYYY-MM-DD), priority?("low"|"medium"|"high") }
-   ← אם האדם קיים ברשימה — חובה לשים את שמו ב-contactName.
-   ← אם האדם לא קיים — השאר contactName ריק, אל תמציא שם.
+   ← אם האדם קיים ברשימה — חובה לשים שמו ב-contactName.
 
-2. create_contact — כשמוסיפים איש קשר חדש שאינו ליד (לקוח, שותף, ספק, מכר).
+2. create_contact — הוספת איש קשר חדש (שאינו ליד)
    { name, phone?, email?, type?("lead"|"customer"|"partner"|"vendor"), notes? }
 
-3. create_deal — כשמוזכרת עסקה, מכירה, או סכום כסף.
-   { title, contactName?(שם מדויק מרשימת אנשי הקשר), value?(number), stage?("lead"|"meeting"|"proposal"|"signed"|"active") }
+3. create_deal — עסקה, מכירה, או סכום כסף
+   { title, contactName?(שם מדויק), value?(number), stage?("lead"|"meeting"|"proposal"|"signed"|"active") }
 
-4. create_lead — רק כשהמשתמש מציין מפורשות ליד חדש / מתעניין חדש שלא קיים במערכת.
+4. create_lead — ליד/מתעניין חדש בלבד (שאינו קיים במערכת)
    { name, phone?, email?, source?("website"|"facebook"|"instagram"|"whatsapp"|"referral"|"manual"), notes? }
-   ← לעולם אל תשתמש ב-create_lead עבור אנשי קשר שכבר קיימים ברשימה!
-   ← לעולם אל תשתמש ב-create_lead רק כי רוצים להתקשר — זה create_task!
+   ← לא לשימוש עבור אנשי קשר קיימים! לא לשימוש רק כי רוצים להתקשר (זה create_task)!
 
-5. open_whatsapp — כשרוצים לשלוח ווצאפ לאיש קשר קיים.
+5. open_whatsapp — שליחת ווצאפ לאיש קשר קיים
    { contactName }
 
-6. create_instructor — כשמוסיפים מדריך חדש למערכת.
-   { name, phone?, email?, programs?(מערך מחרוזות, למשל ["קרוספיט","יוגה"]), hourlyRate?(number) }
+6. create_instructor — הוספת מדריך חדש
+   { name, phone?, email?, programs?(מערך מחרוזות), hourlyRate?(number) }
 
-7. create_salary — כשרוצים לרשום תשלום שכר למדריך קיים.
-   { instructorName(שם מדויק מרשימת המדריכים), baseSalary(number), month?(1-12, ברירת מחדל ${nowMonth}), year?(YYYY, ברירת מחדל ${nowYear}), tax?(number), additions?(number), deductions?(number), nationalInsurance?(number), healthInsurance?(number), notes? }
-   ← חובה: instructorName חייב להיות מרשימת המדריכים הקיימים.
+7. create_salary — רישום שכר למדריך קיים
+   { instructorName(שם מדויק), baseSalary(number), month?(1-12, ברירת מחדל ${nowMonth}), year?(YYYY, ברירת מחדל ${nowYear}), tax?, additions?, deductions?, nationalInsurance?, healthInsurance?, notes? }
 
-עקרון ברזל — תפעל, אל תשאל:
-- ברירת מחדל: בצע פעולה מיד לפי מה שהבנת. אל תשאל שאלות מיותרות.
-- שאל רק אם חסר פרט שבלעדיו אי אפשר לבצע כלום (למשל שם כשצריך שם).
-- שאלה אחת בלבד, קצרה, עם אפשרות לדלג: "על מי מדובר? (או כתוב דלג)"
-- אם הבקשה כללית לגמרי ואין מה לבצע — ענה בקצרה ב-response בלבד, actions:[].
-
-דוגמאות:
-"להתקשר לדני מחר" → create_task title:"התקשר לדני" + contactName אם קיים
-"יש ליד חדש שמו משה" → create_lead
-"הוסף איש קשר שמו יוסי" → create_contact
-"עסקה עם רונן על 5000 ₪" → create_deal
-"שלח ווצאפ לשרה" → open_whatsapp
-"הוסף מדריך שמו יוסי לוי" → create_instructor
-"שכר למדריך דני 8000 ₪ לחודש הזה" → create_salary
-"מה אפשר לעשות?" → response:"אני יכול לפתוח משימות, להוסיף לידים, לרשום עסקאות, אנשי קשר, מדריכים ושכר. פשוט כתוב מה צריך!", actions:[]
-
-כללים:
+=== עקרונות ===
+- בצע פעולה מיד לפי הבנתך. אל תשאל שאלות מיותרות.
+- שאל רק אם חסר פרט קריטי שבלעדיו אי אפשר לבצע כלום (שאלה אחת קצרה).
+- היה יועץ אמיתי: אחרי כל פעולה — הוסף תובנה קצרה רלוונטית מהנתונים.
 - מחר = ${tomorrow}, היום = ${today}
 - ענה בעברית בשדה "response"
-- החזר JSON בלבד — ללא טקסט לפני או אחרי
-
-פורמט חובה:
+- החזר JSON בלבד — ללא טקסט לפני או אחרי:
 {"actions":[{"type":"...","data":{...}}],"response":"תיאור בעברית"}`
 }
 
-// ── Gemini call ───────────────────────────────────────────────────────────────
+// ── Gemini multi-turn call ────────────────────────────────────────────────────
 
 const DEFAULT_MODEL  = 'gemini-3-pro-preview'
 const ALLOWED_MODELS = [
@@ -139,8 +219,36 @@ const ALLOWED_MODELS = [
   'gemini-2.5-pro',
 ]
 
+function buildContents(
+  history: HistoryMsg[],
+  userMsg: string,
+  media?:  MediaCtx,
+): unknown[] {
+  const contents: unknown[] = []
+
+  // Add conversation history (ensure alternating user/model)
+  const filtered = history.filter(h => h.role === 'user' || h.role === 'agent')
+  for (const h of filtered) {
+    contents.push({
+      role:  h.role === 'user' ? 'user' : 'model',
+      parts: [{ text: h.text }],
+    })
+  }
+
+  // Add current user message (with optional media)
+  const userParts: unknown[] = []
+  if (media?.base64) {
+    userParts.push({ inline_data: { mime_type: media.mimeType.split(';')[0], data: media.base64 } })
+  }
+  userParts.push({ text: userMsg })
+  contents.push({ role: 'user', parts: userParts })
+
+  return contents
+}
+
 async function callGemini(
   systemPrompt: string,
+  history:      HistoryMsg[],
   userMsg:      string,
   media?:       MediaCtx,
   model:        string = DEFAULT_MODEL,
@@ -148,21 +256,16 @@ async function callGemini(
   const apiKey = Deno.env.get('GEMINI_API_KEY')
   if (!apiKey) throw new Error('Missing secret: GEMINI_API_KEY is not set in Supabase Edge Function secrets')
 
-  // Build parts — media first (image/audio), then text
-  const userParts: unknown[] = []
-  if (media?.base64) {
-    userParts.push({ inline_data: { mime_type: media.mimeType.split(';')[0], data: media.base64 } })
-  }
-  userParts.push({ text: userMsg })
+  const contents = buildContents(history, userMsg, media)
+  console.log('[crm-agent] model:', model, '| history turns:', history.length, '| hasMedia:', !!media?.base64)
 
-  console.log('[crm-agent] model:', model)
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
   const r = await fetch(url, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: userParts }],
+      contents,
       generationConfig: { maxOutputTokens: 1024 },
     }),
   })
@@ -197,27 +300,36 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: CORS })
   }
-
   if (req.method !== 'POST') return err('Method not allowed')
 
   try {
-    // JWT is optional — function works in both authenticated and anon mode.
-    // Supabase gateway JWT verification is disabled (--no-verify-jwt).
     const jwt = req.headers.get('Authorization')?.replace('Bearer ', '').trim()
     console.log('[crm-agent] jwt present:', !!jwt)
 
-    const { message, context, image, audio, model: reqModel } = await req.json() as {
-      message:  string
-      context?: { contacts?: ContactCtx[]; instructors?: InstructorCtx[] }
-      image?:   MediaCtx
-      audio?:   MediaCtx
-      model?:   string
+    const {
+      message,
+      context,
+      image,
+      audio,
+      model: reqModel,
+      history: reqHistory,
+      businessSnapshot,
+    } = await req.json() as {
+      message:           string
+      context?:          { contacts?: ContactCtx[]; instructors?: InstructorCtx[] }
+      image?:            MediaCtx
+      audio?:            MediaCtx
+      model?:            string
+      history?:          HistoryMsg[]
+      businessSnapshot?: BusinessSnapshot
     }
-    const media = audio || image   // audio takes priority
+
+    const media = audio || image  // audio takes priority
     if (!message?.trim()) return err('message is required')
+
     const model = ALLOWED_MODELS.includes(reqModel ?? '') ? reqModel! : DEFAULT_MODEL
 
-    // Build supabase client — use user JWT when available, fall back to anon
+    // Build supabase client (for action execution)
     const authHeader = jwt ? { Authorization: `Bearer ${jwt}` } : {}
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -227,21 +339,29 @@ Deno.serve(async (req: Request) => {
 
     const contacts    = (context?.contacts    ?? []) as ContactCtx[]
     const instructors = (context?.instructors ?? []) as InstructorCtx[]
+    const history     = (reqHistory ?? []) as HistoryMsg[]
+    const snapshot    = (businessSnapshot ?? {}) as BusinessSnapshot
 
-    // ── Gemini ────────────────────────────────────────────────────────────────
-    const raw = await callGemini(buildSystemPrompt(contacts, instructors), message.trim(), media, model)
+    // ── Call Gemini ────────────────────────────────────────────────────────────
+    const systemPrompt = buildSystemPrompt(contacts, instructors, snapshot)
+    const raw = await callGemini(systemPrompt, history, message.trim(), media, model)
+
     let parsed: AIResponse
     try {
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
       parsed = JSON.parse(clean)
     } catch (parseErr) {
-      // Log the raw output for debugging — never forward it to the UI
       console.error('[crm-agent] JSON parse failed:', String(parseErr))
       console.error('[crm-agent] raw output (first 300):', raw.slice(0, 300))
-      parsed = { actions: [], response: 'לא הצלחתי לעבד את הבקשה — נסה לנסח מחדש' }
+      // If Gemini returned plain text (e.g. a clarifying question), wrap it
+      if (raw.length < 300 && !raw.startsWith('{')) {
+        parsed = { actions: [], response: raw.trim() }
+      } else {
+        parsed = { actions: [], response: 'לא הצלחתי לעבד את הבקשה — נסה לנסח מחדש' }
+      }
     }
 
-    // ── Execute actions ───────────────────────────────────────────────────────
+    // ── Execute actions ────────────────────────────────────────────────────────
     const actions_taken: { type: string; summary: string; url?: string }[] = []
 
     const resolveId = (name?: string): string | null => {
@@ -274,41 +394,65 @@ Deno.serve(async (req: Request) => {
 
         if (action.type === 'create_task') {
           const { error } = await supabase.from('tasks').insert({
-            title: d.title, contact_id: resolveId(d.contactName as string),
-            due_date: d.dueDate ?? null, priority: d.priority ?? 'medium', completed: false,
+            title:      d.title,
+            contact_id: resolveId(d.contactName as string),
+            due_date:   d.dueDate ?? null,
+            priority:   d.priority ?? 'medium',
+            completed:  false,
           })
           if (error) throw error
           actions_taken.push({ type: 'create_task', summary: `משימה: "${d.title}"` })
 
         } else if (action.type === 'create_contact') {
           const { error } = await supabase.from('contacts').insert({
-            name: d.name, phone: d.phone ?? null, email: (d.email as string)?.toLowerCase() ?? null,
-            type: d.type ?? 'lead', status: 'lead',
-            notes: [], activities: [], tags: [], active_programs: [],
+            name:             d.name,
+            phone:            d.phone ?? null,
+            email:            (d.email as string)?.toLowerCase() ?? null,
+            type:             d.type ?? 'lead',
+            status:           'lead',
+            notes:            [],
+            activities:       [],
+            tags:             [],
+            active_programs:  [],
           })
           if (error) throw error
           actions_taken.push({ type: 'create_contact', summary: `איש קשר: "${d.name}"` })
 
         } else if (action.type === 'create_deal') {
           const { error } = await supabase.from('deals').insert({
-            title: d.title, contact_id: resolveId(d.contactName as string),
-            value: d.value ?? 0, stage: d.stage ?? 'lead',
+            title:      d.title,
+            contact_id: resolveId(d.contactName as string),
+            value:      d.value ?? 0,
+            stage:      d.stage ?? 'lead',
           })
           if (error) throw error
-          actions_taken.push({ type: 'create_deal', summary: `עסקה: "${d.title}"${d.value ? ` — ₪${Number(d.value).toLocaleString()}` : ''}` })
+          actions_taken.push({
+            type:    'create_deal',
+            summary: `עסקה: "${d.title}"${d.value ? ` — ₪${Number(d.value).toLocaleString()}` : ''}`,
+          })
 
         } else if (action.type === 'create_lead') {
           const { data: row, error: cErr } = await supabase.from('contacts').insert({
-            name: d.name, phone: d.phone ?? null,
-            email: (d.email as string)?.toLowerCase() ?? null,
-            source: d.source ?? 'manual', lead_stage: 'new', status: 'lead',
+            name:             d.name,
+            phone:            d.phone ?? null,
+            email:            (d.email as string)?.toLowerCase() ?? null,
+            source:           d.source ?? 'manual',
+            lead_stage:       'new',
+            status:           'lead',
             last_activity_at: new Date().toISOString(),
-            notes: [], activities: [], tags: [], active_programs: [],
+            notes:            [],
+            activities:       [],
+            tags:             [],
+            active_programs:  [],
           }).select('id').single()
           if (cErr) throw cErr
           await supabase.from('tasks').insert({
-            contact_id: row.id, title: `פולואפ עם ${d.name}`,
-            priority: 'high', due_date: addDays(2), completed: false, auto_generated: true,
+            contact_id:     row.id,
+            title:          `פולואפ עם ${d.name}`,
+            priority:       'high',
+            due_date:       addDays(2),
+            completed:      false,
+            auto_generated: true,
           })
           actions_taken.push({ type: 'create_lead', summary: `ליד: "${d.name}"` })
 
@@ -352,7 +496,10 @@ Deno.serve(async (req: Request) => {
             notes:              d.notes                     ?? null,
           })
           if (error) throw error
-          actions_taken.push({ type: 'create_salary', summary: `שכר ${d.instructorName}: ₪${Number(d.baseSalary).toLocaleString()}` })
+          actions_taken.push({
+            type:    'create_salary',
+            summary: `שכר ${d.instructorName}: ₪${Number(d.baseSalary).toLocaleString()}`,
+          })
         }
       } catch (e) {
         console.error(`[crm-agent] action ${action.type} failed:`, e)

@@ -14,6 +14,273 @@ const MONTHS = [
 const CY = new Date().getFullYear()
 const YEARS = [CY - 2, CY - 1, CY, CY + 1, CY + 2]
 
+// ── PaymentModal (defined OUTSIDE FinancePage to avoid React remount on every render) ──
+function PaymentModal({ data, fin, contacts, instructors, onClose }) {
+  const isE = !!data
+  const [form, setForm]     = useState(() => data
+    ? { ...data }
+    : { contactId: '', instructorId: '', amount: '', month: fin.month, year: fin.year, status: 'pending', program: '', notes: '' }
+  )
+  const [saveErr, setSaveErr] = useState(null)
+  const [saving,  setSaving]  = useState(false)
+
+  const f         = k => e => setForm(p => ({ ...p, [k]: e.target.value }))
+  const amountNum = Number(form.amount)
+  const isValid   = amountNum > 0
+
+  const save = async () => {
+    if (!isValid || saving) return
+    setSaveErr(null)
+    setSaving(true)
+
+    const payload = {
+      contactId:    form.contactId    || null,
+      instructorId: form.instructorId || null,
+      amount:       amountNum,
+      month:        Number(form.month),
+      year:         Number(form.year),
+      status:       form.status       || 'pending',
+      program:      form.program      || null,
+      notes:        form.notes        || null,
+    }
+    console.log('[PaymentModal] saving payload:', payload)
+
+    try {
+      isE ? await fin.editPayment(data.id, payload) : await fin.addPayment(payload)
+      onClose()
+    } catch (e) {
+      console.error('[PaymentModal] save error:', e)
+      setSaveErr(e?.message ?? 'שגיאה בשמירה — ראה Console לפרטים')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="mh">
+          <h3>{isE ? 'עריכת תשלום' : 'תשלום חדש'}</h3>
+          <button className="mx" onClick={onClose}>×</button>
+        </div>
+        <div className="mb">
+          <div className="fg">
+            <div className="frow full">
+              <label>איש קשר</label>
+              <select value={form.contactId} onChange={f('contactId')}>
+                <option value="">בחר איש קשר</option>
+                {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="frow full">
+              <label>תוכנית</label>
+              <select value={form.program} onChange={f('program')}>
+                <option value="">בחר תוכנית</option>
+                {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div className="frow full">
+              <label>מדריך</label>
+              <select value={form.instructorId} onChange={f('instructorId')}>
+                <option value="">בחר מדריך</option>
+                {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+            </div>
+            <div className="frow">
+              <label>סכום (₪) *</label>
+              <input
+                type="number"
+                value={form.amount}
+                onChange={f('amount')}
+                placeholder="0"
+                min="0"
+                style={!isValid && form.amount !== '' ? { borderColor: 'var(--danger)' } : {}}
+              />
+              {!isValid && form.amount !== '' && (
+                <span style={{ color: 'var(--danger)', fontSize: 11, marginTop: 2 }}>הסכום חייב להיות גדול מ-0</span>
+              )}
+              {!isValid && form.amount === '' && (
+                <span style={{ color: 'var(--muted)', fontSize: 11, marginTop: 2 }}>שדה חובה</span>
+              )}
+            </div>
+            <div className="frow">
+              <label>סטטוס</label>
+              <select value={form.status} onChange={f('status')}>
+                {PAY_STATUS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+            <div className="frow">
+              <label>חודש</label>
+              <select value={form.month} onChange={f('month')}>
+                {MONTHS.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
+              </select>
+            </div>
+            <div className="frow">
+              <label>שנה</label>
+              <select value={form.year} onChange={f('year')}>
+                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <div className="frow full">
+              <label>הערות</label>
+              <input value={form.notes || ''} onChange={f('notes')} placeholder="הערות..."/>
+            </div>
+          </div>
+
+          {saveErr && (
+            <div style={{ marginTop: 10, padding: '8px 12px', background: '#fee2e2', color: '#991b1b', borderRadius: 7, fontSize: 13, direction: 'rtl' }}>
+              ⚠️ {saveErr}
+            </div>
+          )}
+        </div>
+        <div className="mf">
+          <button
+            className="btn btn-p"
+            onClick={save}
+            disabled={!isValid || saving}
+            style={{ opacity: !isValid || saving ? 0.5 : 1, cursor: !isValid || saving ? 'not-allowed' : 'pointer' }}
+          >
+            {saving ? 'שומר...' : isE ? 'שמור' : 'הוסף'}
+          </button>
+          <button className="btn btn-o" onClick={onClose} disabled={saving}>ביטול</button>
+          {isE && <button className="del-link" disabled={saving} onClick={async () => { if (window.confirm('למחוק תשלום זה?')) { await fin.removePayment(data.id); onClose() } }}>מחק</button>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── SalaryModal (defined OUTSIDE FinancePage) ──────────────────────────────
+function SalaryModal({ data, fin, instructors, onClose }) {
+  const isE = !!data
+  const [form, setForm]     = useState(() => data
+    ? { ...data }
+    : { instructorId: '', month: fin.month, year: fin.year, baseSalary: '', additions: 0, deductions: 0, tax: 0, nationalInsurance: 0, healthInsurance: 0, notes: '' }
+  )
+  const [saveErr, setSaveErr] = useState(null)
+  const [saving,  setSaving]  = useState(false)
+
+  const f            = k => e => setForm(p => ({ ...p, [k]: e.target.value }))
+  const selectedInst = instructors.find(i => i.id === form.instructorId)
+  const suggested    = selectedInst ? monthlyPay(selectedInst) : 0
+  const net          = (Number(form.baseSalary) || 0) + (Number(form.additions) || 0)
+                     - (Number(form.deductions) || 0) - (Number(form.tax) || 0)
+                     - (Number(form.nationalInsurance) || 0) - (Number(form.healthInsurance) || 0)
+  const isValid      = !!form.instructorId
+
+  const save = async () => {
+    if (!isValid || saving) return
+    setSaveErr(null)
+    setSaving(true)
+
+    const payload = {
+      instructorId:      form.instructorId,
+      month:             Number(form.month),
+      year:              Number(form.year),
+      baseSalary:        Number(form.baseSalary)        || 0,
+      additions:         Number(form.additions)         || 0,
+      deductions:        Number(form.deductions)        || 0,
+      tax:               Number(form.tax)               || 0,
+      nationalInsurance: Number(form.nationalInsurance) || 0,
+      healthInsurance:   Number(form.healthInsurance)   || 0,
+      notes:             form.notes || null,
+    }
+    console.log('[SalaryModal] saving payload:', payload)
+
+    try {
+      isE ? await fin.editSalary(data.id, payload) : await fin.addSalary(payload)
+      onClose()
+    } catch (e) {
+      console.error('[SalaryModal] save error:', e)
+      setSaveErr(e?.message ?? 'שגיאה בשמירה — ראה Console לפרטים')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal modal-lg">
+        <div className="mh">
+          <h3>{isE ? 'עריכת שכר' : 'שכר חדש'}</h3>
+          <button className="mx" onClick={onClose}>×</button>
+        </div>
+        <div className="mb">
+          <div className="fg">
+            <div className="frow full">
+              <label>מדריך *</label>
+              <select value={form.instructorId} onChange={f('instructorId')}>
+                <option value="">בחר מדריך</option>
+                {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+            </div>
+            {selectedInst && suggested > 0 && (
+              <div className="frow full">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--accent)' }}>
+                  💡 לפי שיעורי החודש: {fmtShekel(suggested)}
+                  <button className="btn btn-o btn-sm"
+                    onClick={() => setForm(p => ({ ...p, baseSalary: suggested }))}>חשב מסשנים</button>
+                </div>
+              </div>
+            )}
+            <div className="frow">
+              <label>שכר בסיס (₪)</label>
+              <input type="number" value={form.baseSalary} onChange={f('baseSalary')} placeholder="0" min="0"/>
+            </div>
+            <div className="frow">
+              <label>תוספות (₪)</label>
+              <input type="number" value={form.additions} onChange={f('additions')} placeholder="0" min="0"/>
+            </div>
+            <div className="frow">
+              <label>ניכויים (₪)</label>
+              <input type="number" value={form.deductions} onChange={f('deductions')} placeholder="0" min="0"/>
+            </div>
+            <div className="frow">
+              <label>מס הכנסה (₪)</label>
+              <input type="number" value={form.tax} onChange={f('tax')} placeholder="0" min="0"/>
+            </div>
+            <div className="frow">
+              <label>ביטוח לאומי (₪)</label>
+              <input type="number" value={form.nationalInsurance} onChange={f('nationalInsurance')} placeholder="0" min="0"/>
+            </div>
+            <div className="frow">
+              <label>ביטוח בריאות (₪)</label>
+              <input type="number" value={form.healthInsurance} onChange={f('healthInsurance')} placeholder="0" min="0"/>
+            </div>
+            <div className="frow full">
+              <label>הערות</label>
+              <input value={form.notes || ''} onChange={f('notes')} placeholder="הערות..."/>
+            </div>
+          </div>
+          <div style={{ marginTop: 16, padding: '14px 0 2px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 600, color: 'var(--muted)' }}>שכר נטו (חישוב):</span>
+            <span style={{ fontWeight: 800, fontSize: 20, color: net >= 0 ? 'var(--success)' : 'var(--danger)' }}>{fmtShekel(net)}</span>
+          </div>
+        </div>
+        {saveErr && (
+          <div style={{ margin: '10px 0 0', padding: '8px 12px', background: '#fee2e2', color: '#991b1b', borderRadius: 7, fontSize: 13, direction: 'rtl' }}>
+            ⚠️ {saveErr}
+          </div>
+        )}
+        <div className="mf">
+          <button
+            className="btn btn-p"
+            onClick={save}
+            disabled={!isValid || saving}
+            style={{ opacity: !isValid || saving ? 0.5 : 1, cursor: !isValid || saving ? 'not-allowed' : 'pointer' }}
+          >
+            {saving ? 'שומר...' : isE ? 'שמור' : 'הוסף'}
+          </button>
+          {!isValid && <span style={{ fontSize: 12, color: 'var(--danger)', alignSelf: 'center' }}>יש לבחור מדריך</span>}
+          <button className="btn btn-o" onClick={onClose} disabled={saving}>ביטול</button>
+          {isE && <button className="del-link" disabled={saving} onClick={async () => { if (window.confirm('למחוק רשומת שכר זו?')) { await fin.removeSalary(data.id); onClose() } }}>מחק</button>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main FinancePage ───────────────────────────────────────────────────────
 export default function FinancePage({ fin, instructors, contacts }) {
   const [tab, setTab]     = useState('income')
   const [modal, setModal] = useState(null)
@@ -28,172 +295,6 @@ export default function FinancePage({ fin, instructors, contacts }) {
 
   const instName = id => instructors.find(i => i.id === id)?.name || '–'
   const contName = id => contacts.find(c => c.id === id)?.name || '–'
-
-  function PaymentModal({ data }) {
-    const isE = !!data
-    const [form, setForm] = useState(() => data
-      ? { ...data }
-      : { contactId: '', instructorId: '', amount: '', month: fin.month, year: fin.year, status: 'pending', program: '', notes: '' }
-    )
-    const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }))
-    const save = async () => {
-      if (!form.amount) return
-      isE ? await fin.editPayment(data.id, form) : await fin.addPayment(form)
-      setModal(null)
-    }
-    return (
-      <div className="overlay" onClick={e => e.target === e.currentTarget && setModal(null)}>
-        <div className="modal">
-          <div className="mh">
-            <h3>{isE ? 'עריכת תשלום' : 'תשלום חדש'}</h3>
-            <button className="mx" onClick={() => setModal(null)}>×</button>
-          </div>
-          <div className="mb">
-            <div className="fg">
-              <div className="frow full">
-                <label>איש קשר</label>
-                <select value={form.contactId} onChange={f('contactId')}>
-                  <option value="">בחר איש קשר</option>
-                  {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div className="frow full">
-                <label>תוכנית</label>
-                <select value={form.program} onChange={f('program')}>
-                  <option value="">בחר תוכנית</option>
-                  {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div className="frow full">
-                <label>מדריך</label>
-                <select value={form.instructorId} onChange={f('instructorId')}>
-                  <option value="">בחר מדריך</option>
-                  {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                </select>
-              </div>
-              <div className="frow">
-                <label>סכום (₪) *</label>
-                <input type="number" value={form.amount} onChange={f('amount')} placeholder="0" min="0"/>
-              </div>
-              <div className="frow">
-                <label>סטטוס</label>
-                <select value={form.status} onChange={f('status')}>
-                  {PAY_STATUS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </div>
-              <div className="frow">
-                <label>חודש</label>
-                <select value={form.month} onChange={f('month')}>
-                  {MONTHS.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
-                </select>
-              </div>
-              <div className="frow">
-                <label>שנה</label>
-                <select value={form.year} onChange={f('year')}>
-                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-              <div className="frow full">
-                <label>הערות</label>
-                <input value={form.notes || ''} onChange={f('notes')} placeholder="הערות..."/>
-              </div>
-            </div>
-          </div>
-          <div className="mf">
-            <button className="btn btn-p" onClick={save}>{isE ? 'שמור' : 'הוסף'}</button>
-            <button className="btn btn-o" onClick={() => setModal(null)}>ביטול</button>
-            {isE && <button className="del-link" onClick={async () => { if (window.confirm('למחוק תשלום זה?')) { await fin.removePayment(data.id); setModal(null) } }}>מחק</button>}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  function SalaryModal({ data }) {
-    const isE = !!data
-    const [form, setForm] = useState(() => data
-      ? { ...data }
-      : { instructorId: '', month: fin.month, year: fin.year, baseSalary: '', additions: 0, deductions: 0, tax: 0, nationalInsurance: 0, healthInsurance: 0, notes: '' }
-    )
-    const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }))
-    const selectedInst = instructors.find(i => i.id === form.instructorId)
-    const suggested    = selectedInst ? monthlyPay(selectedInst) : 0
-    const net = (Number(form.baseSalary) || 0) + (Number(form.additions) || 0)
-              - (Number(form.deductions) || 0) - (Number(form.tax) || 0)
-              - (Number(form.nationalInsurance) || 0) - (Number(form.healthInsurance) || 0)
-    const save = async () => {
-      if (!form.instructorId) return
-      isE ? await fin.editSalary(data.id, form) : await fin.addSalary(form)
-      setModal(null)
-    }
-    return (
-      <div className="overlay" onClick={e => e.target === e.currentTarget && setModal(null)}>
-        <div className="modal modal-lg">
-          <div className="mh">
-            <h3>{isE ? 'עריכת שכר' : 'שכר חדש'}</h3>
-            <button className="mx" onClick={() => setModal(null)}>×</button>
-          </div>
-          <div className="mb">
-            <div className="fg">
-              <div className="frow full">
-                <label>מדריך *</label>
-                <select value={form.instructorId} onChange={f('instructorId')}>
-                  <option value="">בחר מדריך</option>
-                  {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                </select>
-              </div>
-              {selectedInst && suggested > 0 && (
-                <div className="frow full">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--accent)' }}>
-                    💡 לפי שיעורי החודש: {fmtShekel(suggested)}
-                    <button className="btn btn-o btn-sm"
-                      onClick={() => setForm(p => ({ ...p, baseSalary: suggested }))}>חשב מסשנים</button>
-                  </div>
-                </div>
-              )}
-              <div className="frow">
-                <label>שכר בסיס (₪)</label>
-                <input type="number" value={form.baseSalary} onChange={f('baseSalary')} placeholder="0" min="0"/>
-              </div>
-              <div className="frow">
-                <label>תוספות (₪)</label>
-                <input type="number" value={form.additions} onChange={f('additions')} placeholder="0" min="0"/>
-              </div>
-              <div className="frow">
-                <label>ניכויים (₪)</label>
-                <input type="number" value={form.deductions} onChange={f('deductions')} placeholder="0" min="0"/>
-              </div>
-              <div className="frow">
-                <label>מס הכנסה (₪)</label>
-                <input type="number" value={form.tax} onChange={f('tax')} placeholder="0" min="0"/>
-              </div>
-              <div className="frow">
-                <label>ביטוח לאומי (₪)</label>
-                <input type="number" value={form.nationalInsurance} onChange={f('nationalInsurance')} placeholder="0" min="0"/>
-              </div>
-              <div className="frow">
-                <label>ביטוח בריאות (₪)</label>
-                <input type="number" value={form.healthInsurance} onChange={f('healthInsurance')} placeholder="0" min="0"/>
-              </div>
-              <div className="frow full">
-                <label>הערות</label>
-                <input value={form.notes || ''} onChange={f('notes')} placeholder="הערות..."/>
-              </div>
-            </div>
-            <div style={{ marginTop: 16, padding: '14px 0 2px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, color: 'var(--muted)' }}>שכר נטו (חישוב):</span>
-              <span style={{ fontWeight: 800, fontSize: 20, color: net >= 0 ? 'var(--success)' : 'var(--danger)' }}>{fmtShekel(net)}</span>
-            </div>
-          </div>
-          <div className="mf">
-            <button className="btn btn-p" onClick={save}>{isE ? 'שמור' : 'הוסף'}</button>
-            <button className="btn btn-o" onClick={() => setModal(null)}>ביטול</button>
-            {isE && <button className="del-link" onClick={async () => { if (window.confirm('למחוק רשומת שכר זו?')) { await fin.removeSalary(data.id); setModal(null) } }}>מחק</button>}
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <>
@@ -410,8 +511,23 @@ export default function FinancePage({ fin, instructors, contacts }) {
         )}
       </div>
 
-      {modal?.type === 'payment' && <PaymentModal data={modal.data}/>}
-      {modal?.type === 'salary'  && <SalaryModal  data={modal.data}/>}
+      {modal?.type === 'payment' && (
+        <PaymentModal
+          data={modal.data}
+          fin={fin}
+          contacts={contacts}
+          instructors={instructors}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'salary' && (
+        <SalaryModal
+          data={modal.data}
+          fin={fin}
+          instructors={instructors}
+          onClose={() => setModal(null)}
+        />
+      )}
     </>
   )
 }
