@@ -7,10 +7,11 @@ export function useClasses() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('classes')
       .select('*, instructors(name)')
       .order('created_at', { ascending: false })
+    if (error) console.error('[useClasses] load error:', error.message)
     setClasses(data || [])
     setLoading(false)
   }, [])
