@@ -6,8 +6,25 @@ export default function DealModal({ deal, contacts, initStage, onSave, onClose, 
     title: '', contactId: '', value: '', stage: initStage || 'lead',
     program: '', closeDate: '', notes: '',
   })
-  const f   = k => e => setForm(p => ({ ...p, [k]: e.target.value }))
-  const sub = e => { e.preventDefault(); if (!form.title.trim()) return; onSave(form); onClose() }
+  const [saving, setSaving] = useState(false)
+  const [saveErr, setSaveErr] = useState(null)
+
+  const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }))
+
+  const sub = async e => {
+    e.preventDefault()
+    if (!form.title.trim() || saving) return
+    setSaving(true)
+    setSaveErr(null)
+    try {
+      await onSave(form)
+      onClose()
+    } catch (err) {
+      setSaveErr(err?.message ?? 'שגיאה בשמירה, נסה שוב')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -23,9 +40,10 @@ export default function DealModal({ deal, contacts, initStage, onSave, onClose, 
             <div className="frow full"><label>תאריך סגירה</label><input type="date" value={form.closeDate} onChange={f('closeDate')}/></div>
             <div className="frow full"><label>הערות</label><textarea value={form.notes} onChange={f('notes')} placeholder="הערות..."/></div>
           </div></div>
+          {saveErr && <div style={{ color: '#ef4444', padding: '6px 16px', fontSize: '13px', background: '#fef2f2', borderRadius: 6, margin: '0 16px 8px' }}>⚠️ {saveErr}</div>}
           <div className="mf">
-            <button type="submit" className="btn btn-p">{deal ? 'שמור' : 'הוסף'}</button>
-            <button type="button" className="btn btn-o" onClick={onClose}>ביטול</button>
+            <button type="submit" className="btn btn-p" disabled={saving}>{saving ? '...' : (deal ? 'שמור' : 'הוסף')}</button>
+            <button type="button" className="btn btn-o" onClick={onClose} disabled={saving}>ביטול</button>
             {deal && <button type="button" className="del-link" onClick={() => { if (window.confirm('למחוק?')) onDel(deal.id) }}>מחק</button>}
           </div>
         </form>

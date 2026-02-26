@@ -26,6 +26,8 @@ export function useFinance() {
       ])
       setPayments(p)
       setSalaries(s)
+    } catch (e) {
+      console.error('[useFinance] load error:', e?.message ?? e)
     } finally {
       setLoading(false)
     }

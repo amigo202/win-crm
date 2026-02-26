@@ -7,6 +7,7 @@ import { useInstructors } from './hooks/useInstructors'
 import { useStudents }    from './hooks/useStudents'
 import { useLeads }       from './hooks/useLeads'
 import { useFinance }     from './hooks/useFinance'
+import { useClasses }     from './hooks/useClasses'
 import { useAgent }       from './hooks/useAgent'
 import { STAGES }         from './constants'
 import Sidebar, { MobileBottomNav } from './components/Sidebar'
@@ -18,6 +19,7 @@ import InstructorsPage      from './components/pages/InstructorsPage'
 import StudentsPage         from './components/pages/StudentsPage'
 import LeadsPipelinePage    from './components/pages/LeadsPipelinePage'
 import FinancePage          from './components/pages/FinancePage'
+import ClassesPage          from './components/pages/ClassesPage'
 import AuthScreen           from './components/AuthScreen'
 import AgentPanel           from './components/agent/AgentPanel'
 import InstructorPortal     from './components/instructor/InstructorPortal'
@@ -53,6 +55,7 @@ export default function App() {
   const s  = useStudents()
   const le  = useLeads()
   const fin = useFinance()
+  const cls = useClasses()
   const agent = useAgent()
 
   useEffect(() => {
@@ -80,7 +83,7 @@ export default function App() {
   }, [agent.messages])
 
   const loadAll = () => {
-    c.load(); d.load(); t.load(); i.load(); s.load(); le.load(); fin.load()
+    c.load(); d.load(); t.load(); i.load(); s.load(); le.load(); fin.load(); cls.load()
   }
 
   useEffect(() => {
@@ -95,7 +98,7 @@ export default function App() {
       else {
         c.setContacts([]); d.setDeals([]); t.setTasks([])
         i.setInstructors([]); s.setStudents([]); le.setLeads([])
-        fin.setPayments([]); fin.setSalaries([])
+        fin.setPayments([]); fin.setSalaries([]); cls.setClasses([])
         setLoading(false)
       }
     })
@@ -150,7 +153,7 @@ export default function App() {
   const updateStudent = async (id, data) => { await s.editStudent(id, data) }
   const deleteStudent = async id => { await s.removeStudent(id) }
 
-  const isLoading = loading || c.loading || d.loading || t.loading || i.loading || s.loading || le.loading
+  const isLoading = loading || c.loading || d.loading || t.loading || i.loading || s.loading || le.loading || cls.loading
 
   // Show instructor portal without requiring auth
   if (_portalId) return <InstructorPortal instructorId={_portalId} instructorName={decodeURIComponent(_portalName || '')}/>
@@ -173,6 +176,7 @@ export default function App() {
     instructors: <InstructorsPage instructors={i.instructors} contacts={c.contacts} onAdd={addInstructor} onUpdate={updateInstructor} onDelete={deleteInstructor}/>,
     students:    <StudentsPage students={s.students} contacts={c.contacts} onAdd={addStudent} onUpdate={updateStudent} onDelete={deleteStudent}/>,
     finance:     <FinancePage fin={fin} instructors={i.instructors} contacts={c.contacts}/>,
+    classes:     <ClassesPage classes={cls.classes} instructors={i.instructors} contacts={c.contacts} onAdd={cls.addClass} onUpdate={cls.editClass} onDelete={cls.removeClass} onReload={cls.load}/>,
   }
 
   return (
@@ -201,6 +205,10 @@ export default function App() {
         onToggle={() => setAgentOpen(o => !o)}
         contacts={c.contacts}
         instructors={i.instructors}
+        tasks={t.tasks}
+        deals={d.deals}
+        leads={le.leads}
+        students={s.students}
         agent={agent}
       />
     </div>

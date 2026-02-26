@@ -14,7 +14,15 @@
       "Bash(npx supabase --version)",
       "Bash(npx supabase secrets set:*)",
       "Bash(npx supabase functions deploy:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "WebSearch",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git stash pop:*)",
+      "Bash(find:*)",
+      "Bash(node -e:*)",
+      "Bash(ls:*)",
+      "Bash(git -c http.sslVerify=false push)"
     ]
   }
 }
