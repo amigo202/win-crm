@@ -92,16 +92,37 @@ export function useAgent() {
           }
         })
 
+      // ── Calculate business insights ──────────────────────────────────────
+      const overdueTaskCount = openTasks.filter(t => t.dueDate && t.dueDate < today).length
+      const hotLeads = leads.filter(l => {
+        const stage = l.leadStage || l.lead_stage || ''
+        return stage === 'new' || stage === 'contacted'
+      }).length
+      const totalPipelineValue = deals
+        .filter(d => d.stage !== 'closed' && d.stage !== 'lost')
+        .reduce((sum, d) => sum + (d.value || 0), 0)
+      const staleLeads = leads.filter(l => {
+        const lastTouch = l.lastTouchAt || l.last_touch_at
+        if (!lastTouch) return true
+        const daysSince = Math.floor((Date.now() - new Date(lastTouch).getTime()) / 86400000)
+        return daysSince > 7
+      }).length
+
       const businessSnapshot = {
         stats: {
-          contactsTotal: contacts.length,
-          leadsCount:    leads.length,
-          studentsCount: students.length,
-          dealsTotal:    deals.filter(d => d.stage !== 'closed').length,
+          contactsTotal:    contacts.length,
+          leadsCount:       leads.length,
+          studentsCount:    students.length,
+          dealsTotal:       deals.filter(d => d.stage !== 'closed').length,
+          overdueTaskCount,
+          hotLeads,
+          staleLeads,
+          totalPipelineValue,
         },
         openTasks,
         recentLeads,
         activeDeals,
+        role: 'business_advisor',
       }
 
       // ── Build request body ────────────────────────────────────────────────

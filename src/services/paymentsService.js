@@ -25,7 +25,6 @@ function toDbPayment(p) {
     month:         Number(p.month),
     year:          Number(p.year),
     status:        p.status || 'pending',
-    program:       p.program || null,
     notes:         p.notes   || null,
   }
 }

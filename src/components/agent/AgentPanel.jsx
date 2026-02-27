@@ -24,15 +24,17 @@ const ACTION_ICONS = {
 }
 
 const MODELS = [
-  { id: 'gemini-3-pro-preview',   label: 'Gemini 3 Pro 🧠',   desc: 'חכם ומדויק יותר' },
-  { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash ⚡',  desc: 'מהיר יותר' },
+  { id: 'gemini-3-pro-preview',   label: 'Gemini 3 Pro',   icon: '🧠', desc: 'חכם ומדויק יותר' },
+  { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash', icon: '⚡', desc: 'מהיר יותר' },
 ]
 
 const HINTS = [
-  'להתקשר לדני מחר',
-  'הוסף איש קשר שמו יוסי כהן 050-1234567',
-  'יש ליד חדש מפייסבוק שמו דנה לוי',
-  'עסקה עם משה על סך 5000 ₪',
+  { text: 'תן לי סיכום עסקי של השבוע',                icon: '📊' },
+  { text: 'אילו לקוחות כדאי לי להתקשר אליהם היום?',     icon: '📞' },
+  { text: 'תציע רעיונות להגדלת המכירות',               icon: '💡' },
+  { text: 'יש ליד חדש מפייסבוק שמו דנה לוי',           icon: '🎯' },
+  { text: 'תזכיר לי לטפל בנושא מסיבת פורים',            icon: '✅' },
+  { text: 'מה המצב הכלכלי שלי החודש?',                 icon: '💰' },
 ]
 
 // ── Bubble component ───────────────────────────────────────────────────────
@@ -40,58 +42,52 @@ function Bubble({ msg, isMobile }) {
   const isUser     = msg.role === 'user'
   const isError    = msg.role === 'error'
   const isQuestion = msg.role === 'agent' && !msg.actions?.length
-  const fontSize   = isMobile ? 15 : 13
 
   return (
     <div style={{
       display: 'flex', flexDirection: 'column',
       alignItems: isUser ? 'flex-end' : 'flex-start',
-      marginBottom: isMobile ? 6 : 10,
+      marginBottom: 12,
     }}>
       {msg.preview && (
-        <img src={msg.preview} alt="" style={{ maxWidth: isMobile ? 200 : 150, maxHeight: 140, borderRadius: 10, marginBottom: 4, objectFit: 'cover' }}/>
+        <img src={msg.preview} alt="" style={{ maxWidth: isMobile ? 200 : 180, maxHeight: 160, borderRadius: 12, marginBottom: 6, objectFit: 'cover' }}/>
       )}
       {msg.isAudio && (
-        <div style={{ background:'#ede9fe', borderRadius:8, padding:'4px 10px', marginBottom:4, fontSize: isMobile ? 13 : 11, color:'#7c3aed', fontWeight:600 }}>
+        <div style={{ background:'#ede9fe', borderRadius:10, padding:'5px 12px', marginBottom:5, fontSize: 13, color:'#7c3aed', fontWeight:600 }}>
           🎤 הודעה קולית {msg.audioDur ? `(${msg.audioDur}ש׳)` : ''}
         </div>
       )}
       <div style={{
-        maxWidth:     isMobile ? '80%' : '85%',
-        padding:      isMobile ? '9px 13px' : '8px 12px',
-        borderRadius: isUser
-          ? (isMobile ? '18px 18px 4px 18px' : '14px 14px 4px 14px')
-          : (isMobile ? '18px 18px 18px 4px' : '14px 14px 14px 4px'),
+        maxWidth:     '82%',
+        padding:      '10px 14px',
+        borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
         background:   isUser
-          ? '#f97316'
+          ? 'linear-gradient(135deg,#f97316,#ea580c)'
           : isError
             ? '#fee2e2'
-            : isMobile
-              ? (isQuestion ? '#fff7ed' : '#ffffff')
-              : (isQuestion ? '#fff7ed' : 'var(--card)'),
-        color:        isUser ? '#fff' : isError ? '#dc2626' : 'var(--fg)',
-        fontSize,
-        lineHeight:   isMobile ? 1.5 : 1.55,
-        fontFamily:   isMobile ? '-apple-system, "Helvetica Neue", Arial, sans-serif' : 'inherit',
-        boxShadow:    isMobile ? '0 1px 1px rgba(0,0,0,.1)' : 'none',
-        border:       isUser ? 'none' : isQuestion ? '1px solid #fed7aa' : (isMobile ? 'none' : '1px solid var(--border)'),
+            : isQuestion ? '#fff7ed' : '#ffffff',
+        color:        isUser ? '#fff' : isError ? '#dc2626' : '#1e293b',
+        fontSize:     14,
+        lineHeight:   1.6,
+        boxShadow:    '0 1px 3px rgba(0,0,0,.08)',
+        border:       isUser ? 'none' : isQuestion ? '1px solid #fed7aa' : '1px solid #e2e8f0',
         whiteSpace:   'pre-wrap',
         wordBreak:    'break-word',
         direction:    'rtl',
         textAlign:    'right',
       }}>
-        {isQuestion && <span style={{ marginLeft: 5 }}>❓</span>}
+        {isQuestion && <span style={{ marginLeft: 5 }}>💡</span>}
         {msg.text}
       </div>
 
       {msg.actions?.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobile ? 5 : 4, marginTop: isMobile ? 5 : 5, maxWidth: isMobile ? '80%' : '85%', direction: 'rtl' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6, maxWidth: '82%', direction: 'rtl' }}>
           {msg.actions.map((a, i) => {
             const isErr = a.summary?.startsWith('שגיאה')
             const isWa  = a.type === 'open_whatsapp' && a.url
             const s = {
-              fontSize: isMobile ? 12 : 11,
-              padding: isMobile ? '5px 11px' : '3px 8px',
+              fontSize: 12,
+              padding: '5px 12px',
               borderRadius: 20, fontWeight: 600,
               background: isErr ? '#fee2e2' : isWa ? '#dcfce7' : '#d1fae5',
               color:      isErr ? '#dc2626' : isWa ? '#15803d' : '#065f46',
@@ -108,18 +104,18 @@ function Bubble({ msg, isMobile }) {
 
 function TypingDots() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 4px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 6px' }}>
       {[0,1,2].map(i => (
         <div key={i} style={{
-          width: 6, height: 6, borderRadius: '50%',
-          background: '#f97316',
+          width: 8, height: 8, borderRadius: '50%',
+          background: 'linear-gradient(135deg,#f97316,#ea580c)',
           animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
         }}/>
       ))}
       <style>{`
         @keyframes bounce {
           0%, 80%, 100% { transform: translateY(0); opacity: .5; }
-          40%            { transform: translateY(-5px); opacity: 1; }
+          40%            { transform: translateY(-6px); opacity: 1; }
         }
       `}</style>
     </div>
@@ -144,39 +140,41 @@ function readImage(file) {
 function SettingsPanel({ model, setModel, onClear }) {
   return (
     <div style={{
-      background: 'var(--card)',
-      borderBottom: '1px solid var(--border)',
-      padding: '12px 14px',
+      borderBottom: '1px solid #e2e8f0',
+      padding: '16px 18px',
       flexShrink: 0,
+      background: '#fafbfc',
     }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 8, direction: 'rtl', textTransform: 'uppercase', letterSpacing: '.5px' }}>
-        מודל AI
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 10, direction: 'rtl', letterSpacing: '.3px' }}>
+        בחר מודל AI
       </div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
         {MODELS.map(m => (
           <button
             key={m.id}
             onClick={() => setModel(m.id)}
             style={{
-              flex: 1, padding: '7px 6px', borderRadius: 9, cursor: 'pointer',
-              border: `2px solid ${model === m.id ? '#f97316' : 'var(--border)'}`,
-              background: model === m.id ? 'rgba(249,115,22,.1)' : 'var(--bg)',
-              color: model === m.id ? '#f97316' : 'var(--muted)',
-              fontSize: 11, fontWeight: 700, textAlign: 'center',
+              flex: 1, padding: '10px 8px', borderRadius: 11, cursor: 'pointer',
+              border: `2px solid ${model === m.id ? '#f97316' : '#e2e8f0'}`,
+              background: model === m.id ? 'rgba(249,115,22,.08)' : '#fff',
+              color: model === m.id ? '#f97316' : '#64748b',
+              fontSize: 13, fontWeight: 700, textAlign: 'center',
               transition: 'all .15s', direction: 'rtl',
             }}
           >
-            <div style={{ fontSize: 12 }}>{m.label}</div>
-            <div style={{ fontWeight: 400, fontSize: 10, marginTop: 2, opacity: .8 }}>{m.desc}</div>
+            <div style={{ fontSize: 18, marginBottom: 2 }}>{m.icon}</div>
+            <div>{m.label}</div>
+            <div style={{ fontWeight: 400, fontSize: 11, marginTop: 2, opacity: .7 }}>{m.desc}</div>
           </button>
         ))}
       </div>
       <button
         onClick={onClear}
         style={{
-          width: '100%', padding: '7px', borderRadius: 8, cursor: 'pointer',
+          width: '100%', padding: '9px', borderRadius: 9, cursor: 'pointer',
           border: '1px solid #fca5a5', background: '#fff1f2',
-          color: '#ef4444', fontSize: 12, fontWeight: 600, direction: 'rtl',
+          color: '#ef4444', fontSize: 13, fontWeight: 600, direction: 'rtl',
+          fontFamily: 'inherit',
         }}
       >
         🗑️ נקה היסטוריית שיחה
@@ -189,7 +187,7 @@ function SettingsPanel({ model, setModel, onClear }) {
 export default function AgentPanel({ open, onToggle, contacts, instructors = [], tasks = [], deals = [], leads = [], students = [], agent }) {
   const [input, setInput]               = useState('')
   const [image, setImage]               = useState(null)
-  const [audio, setAudio]               = useState(null)   // { base64, mimeType, durationSec }
+  const [audio, setAudio]               = useState(null)
   const [recording, setRecording]       = useState(false)
   const [recSec, setRecSec]             = useState(0)
   const [showSettings, setShowSettings] = useState(false)
@@ -303,24 +301,29 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
 
   const handleClear = () => { clear(); setShowSettings(false) }
 
+  // ── Quick stat for welcome screen ──
+  const openTaskCount = tasks.filter(t => !t.completed).length
+  const activeLeadCount = leads.length
+  const totalDealValue = deals.filter(d => d.stage !== 'closed' && d.stage !== 'lost').reduce((s, d) => s + (d.value || 0), 0)
+
   return (
     <>
       {/* ── Floating chat window ───────────────────────────────────── */}
       <div style={{
         position:      'fixed',
-        bottom:        isMobile ? 0 : fabPos.bottom + 64,
+        bottom:        isMobile ? 0 : fabPos.bottom + 68,
         right:         isMobile ? 0 : fabPos.right,
         left:          isMobile ? 0 : 'auto',
         top:           isMobile ? 0 : 'auto',
-        width:         isMobile ? '100%' : 370,
-        height:        isMobile ? '100%' : 520,
+        width:         isMobile ? '100%' : 420,
+        height:        isMobile ? '100%' : 600,
         zIndex:        300,
         display:       'flex',
         flexDirection: 'column',
-        background:    isMobile ? '#ece5dd' : 'var(--bg)',
-        border:        isMobile ? 'none' : '1px solid var(--border)',
-        borderRadius:  isMobile ? 0 : 16,
-        boxShadow:     isMobile ? 'none' : '0 8px 48px rgba(0,0,0,.28)',
+        background:    '#fff',
+        border:        isMobile ? 'none' : '1px solid #e2e8f0',
+        borderRadius:  isMobile ? 0 : 18,
+        boxShadow:     isMobile ? 'none' : '0 12px 60px rgba(0,0,0,.25)',
         overflow:      'hidden',
         transform:     open ? 'scale(1) translateY(0)' : isMobile ? 'translateY(100%)' : 'scale(.96) translateY(14px)',
         opacity:       open ? 1 : (isMobile ? 1 : 0),
@@ -331,52 +334,55 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
         transformOrigin: 'bottom right',
       }}>
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: isMobile ? '12px 16px' : '11px 13px',
-          paddingTop: isMobile ? 'max(12px, env(safe-area-inset-top))' : '11px',
-          borderBottom: '1px solid var(--border)',
-          background: isMobile ? '#075e54' : 'var(--card)',
+          padding: isMobile ? '14px 18px' : '14px 18px',
+          paddingTop: isMobile ? 'max(14px, env(safe-area-inset-top))' : '14px',
+          background: 'linear-gradient(135deg,#0f172a,#1e293b)',
           flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {isMobile && (
               <button onClick={onToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 22, padding: '0 2px', lineHeight: 1 }}>←</button>
             )}
             <div style={{
-              width: isMobile ? 40 : 32, height: isMobile ? 40 : 32,
-              borderRadius: '50%',
+              width: 42, height: 42,
+              borderRadius: 12,
               background: 'linear-gradient(135deg,#f97316,#ea580c)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: isMobile ? 20 : 16, flexShrink: 0,
+              fontSize: 22, flexShrink: 0,
+              boxShadow: '0 4px 12px rgba(249,115,22,.4)',
             }}>🤖</div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: isMobile ? 16 : 13, color: isMobile ? '#fff' : 'var(--fg)', lineHeight: 1.2 }}>סוכן AI</div>
-              <div style={{ fontSize: isMobile ? 12 : 10, color: isMobile ? '#b2dfdb' : '#f97316', fontWeight: 500 }}>{currentModel.label}</div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: '#fff', lineHeight: 1.2 }}>היועץ העסקי שלך</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500, marginTop: 2 }}>
+                {currentModel.icon} {currentModel.label} · מוכן לעזור
+              </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <button
               onClick={() => setShowSettings(s => !s)}
               title="הגדרות"
               style={{
-                background: showSettings ? 'rgba(255,255,255,.2)' : 'transparent',
-                border: 'none', cursor: 'pointer', padding: '5px 7px',
-                borderRadius: 7, fontSize: 16, lineHeight: 1,
-                color: isMobile ? '#fff' : (showSettings ? '#f97316' : 'var(--muted)'),
-                transition: 'background .15s',
+                background: showSettings ? 'rgba(249,115,22,.3)' : 'rgba(255,255,255,.1)',
+                border: 'none', cursor: 'pointer', padding: '7px 9px',
+                borderRadius: 9, fontSize: 17, lineHeight: 1,
+                color: showSettings ? '#f97316' : '#94a3b8',
+                transition: 'all .15s',
               }}
             >⚙️</button>
             {!isMobile && (
               <button
                 onClick={onToggle}
                 style={{
-                  border: 'none', background: 'transparent', cursor: 'pointer',
-                  fontSize: 18, color: 'var(--muted)', lineHeight: 1,
-                  padding: '5px 7px', borderRadius: 7,
+                  border: 'none', background: 'rgba(255,255,255,.1)', cursor: 'pointer',
+                  fontSize: 18, color: '#94a3b8', lineHeight: 1,
+                  padding: '7px 9px', borderRadius: 9,
+                  transition: 'all .15s',
                 }}
-              >×</button>
+              >✕</button>
             )}
           </div>
         </div>
@@ -386,39 +392,70 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
           <SettingsPanel model={model} setModel={setModel} onClear={handleClear}/>
         )}
 
-        {/* Messages */}
+        {/* ── Messages ── */}
         <div style={{
           flex: 1, overflowY: 'auto',
-          padding: isMobile ? '10px 10px 6px' : '12px 12px 6px',
+          padding: '14px 16px 8px',
           display: 'flex', flexDirection: 'column',
-          backgroundImage: isMobile
-            ? 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'%3E%3Crect width=\'100\' height=\'100\' fill=\'%23ece5dd\'/%3E%3C/svg%3E")'
-            : 'none',
+          background: '#f8fafc',
         }}>
           {messages.length === 0 && !loading && (
-            <div style={{ textAlign: 'center', marginTop: isMobile ? 30 : 14 }}>
-              <div style={{ fontSize: isMobile ? 48 : 30, marginBottom: isMobile ? 12 : 6 }}>🤖</div>
-              <div style={{ fontSize: isMobile ? 15 : 12, color: isMobile ? '#555' : 'var(--muted)', marginBottom: 16, direction: 'rtl', fontWeight: isMobile ? 500 : 400 }}>
-                שלום! אני הסוכן החכם שלך — כתוב לי מה לעשות
+            <div style={{ textAlign: 'center', marginTop: 10, direction: 'rtl' }}>
+              {/* Welcome card */}
+              <div style={{
+                background: 'linear-gradient(135deg,#fff7ed,#fef3c7)',
+                borderRadius: 16, padding: '22px 18px', marginBottom: 16,
+                border: '1px solid #fed7aa',
+              }}>
+                <div style={{ fontSize: 36, marginBottom: 8 }}>🚀</div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: '#1e293b', marginBottom: 6 }}>
+                  שלום! אני היועץ העסקי שלך
+                </div>
+                <div style={{ fontSize: 13, color: '#64748b', lineHeight: 1.7 }}>
+                  אני כאן כדי לעזור לך למכור יותר, לנהל את העסק בצורה חכמה, ולוודא שאתה לא מפספס הזדמנויות.
+                </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 5 }}>
+
+              {/* Quick stats */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16, justifyContent: 'center' }}>
+                <div style={{ background: '#fff', borderRadius: 10, padding: '10px 14px', border: '1px solid #e2e8f0', flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#f97316' }}>{openTaskCount}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>משימות פתוחות</div>
+                </div>
+                <div style={{ background: '#fff', borderRadius: 10, padding: '10px 14px', border: '1px solid #e2e8f0', flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#3b82f6' }}>{activeLeadCount}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>לידים</div>
+                </div>
+                <div style={{ background: '#fff', borderRadius: 10, padding: '10px 14px', border: '1px solid #e2e8f0', flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981' }}>{totalDealValue > 0 ? `${Math.round(totalDealValue/1000)}K` : '0'}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>בפייפליין</div>
+                </div>
+              </div>
+
+              {/* Hint chips */}
+              <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 8 }}>💬 שאל אותי כל שאלה:</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {HINTS.map((h, i) => (
                   <button key={i}
-                    onClick={() => { setInput(h); textareaRef.current?.focus() }}
+                    onClick={() => { setInput(h.text); textareaRef.current?.focus() }}
                     style={{
-                      background: isMobile ? '#fff' : 'var(--bg2)',
-                      border: isMobile ? 'none' : '1px solid var(--border)',
-                      borderRadius: isMobile ? 12 : 8,
-                      padding: isMobile ? '10px 14px' : '6px 10px',
+                      background: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 12,
+                      padding: '10px 14px',
                       cursor: 'pointer',
-                      fontSize: isMobile ? 14 : 11,
-                      color: 'var(--fg)', textAlign: 'right',
-                      direction: 'rtl', transition: 'border-color .15s',
-                      boxShadow: isMobile ? '0 1px 2px rgba(0,0,0,.12)' : 'none',
+                      fontSize: 13,
+                      color: '#334155', textAlign: 'right',
+                      direction: 'rtl', transition: 'all .15s',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      fontFamily: 'inherit',
                     }}
-                    onMouseEnter={e => !isMobile && (e.currentTarget.style.borderColor = '#f97316')}
-                    onMouseLeave={e => !isMobile && (e.currentTarget.style.borderColor = 'var(--border)')}
-                  >{h}</button>
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#f97316'; e.currentTarget.style.background = '#fff7ed' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#fff' }}
+                  >
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>{h.icon}</span>
+                    {h.text}
+                  </button>
                 ))}
               </div>
             </div>
@@ -429,11 +466,11 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
           {loading && (
             <div style={{ display: 'flex', alignItems: 'flex-start' }}>
               <div style={{
-                background: isMobile ? '#fff' : 'var(--card)',
-                border: isMobile ? 'none' : '1px solid var(--border)',
-                borderRadius: isMobile ? '18px 18px 18px 4px' : '14px 14px 14px 4px',
-                padding: '3px 12px',
-                boxShadow: isMobile ? '0 1px 1px rgba(0,0,0,.1)' : 'none',
+                background: '#fff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '16px 16px 16px 4px',
+                padding: '4px 14px',
+                boxShadow: '0 1px 3px rgba(0,0,0,.05)',
               }}>
                 <TypingDots/>
               </div>
@@ -443,43 +480,43 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
           <div ref={bottomRef}/>
         </div>
 
-        {/* Input */}
+        {/* ── Input area ── */}
         <div style={{
-          padding: isMobile ? '8px 10px' : '8px 10px 10px',
-          paddingBottom: isMobile ? 'max(8px, env(safe-area-inset-bottom))' : '10px',
-          borderTop: isMobile ? 'none' : '1px solid var(--border)',
-          background: isMobile ? '#ece5dd' : 'var(--card)',
+          padding: '12px 14px',
+          paddingBottom: isMobile ? 'max(12px, env(safe-area-inset-bottom))' : '14px',
+          borderTop: '1px solid #e2e8f0',
+          background: '#fff',
           flexShrink: 0,
         }}>
           {image && (
-            <div style={{ position: 'relative', display: 'inline-block', marginBottom: 6 }}>
-              <img src={image.preview} alt="" style={{ height: isMobile ? 64 : 52, borderRadius: 7, objectFit: 'cover', maxWidth: '100%' }}/>
+            <div style={{ position: 'relative', display: 'inline-block', marginBottom: 8 }}>
+              <img src={image.preview} alt="" style={{ height: 60, borderRadius: 10, objectFit: 'cover', maxWidth: '100%' }}/>
               <button onClick={() => setImage(null)}
-                style={{ position: 'absolute', top: -5, right: -5, background: '#ef4444', color: '#fff', border: 'none', borderRadius: '50%', width: isMobile ? 20 : 15, height: isMobile ? 20 : 15, fontSize: isMobile ? 12 : 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                style={{ position: 'absolute', top: -6, right: -6, background: '#ef4444', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
             </div>
           )}
           {audio && (
-            <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:6, background:'#ede9fe', borderRadius:8, padding: isMobile ? '7px 12px' : '5px 10px' }}>
-              <span style={{ fontSize: isMobile ? 18 : 14 }}>🎤</span>
-              <span style={{ fontSize: isMobile ? 14 : 12, color:'#7c3aed', fontWeight:600 }}>{audio.durationSec}ש׳ מוקלט</span>
-              <button onClick={() => setAudio(null)} style={{ marginRight:'auto', background:'none', border:'none', color:'#7c3aed', cursor:'pointer', fontSize: isMobile ? 18 : 13, padding:'1px 4px' }}>×</button>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, background:'#ede9fe', borderRadius:10, padding:'8px 14px' }}>
+              <span style={{ fontSize: 18 }}>🎤</span>
+              <span style={{ fontSize: 13, color:'#7c3aed', fontWeight:600 }}>{audio.durationSec}ש׳ מוקלט</span>
+              <button onClick={() => setAudio(null)} style={{ marginRight:'auto', background:'none', border:'none', color:'#7c3aed', cursor:'pointer', fontSize: 16, padding:'2px 4px' }}>×</button>
             </div>
           )}
           {recording && (
-            <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:6, background:'#fee2e2', borderRadius:8, padding: isMobile ? '7px 12px' : '5px 10px', direction:'rtl' }}>
-              <span style={{ width:8, height:8, borderRadius:'50%', background:'#ef4444', animation:'pulse 1s ease-in-out infinite', flexShrink:0 }}/>
-              <span style={{ fontSize: isMobile ? 14 : 12, color:'#dc2626', fontWeight:600 }}>מקליט... {recSec}ש׳</span>
-              <button onClick={stopRecording} style={{ marginRight:'auto', background:'#ef4444', border:'none', color:'#fff', cursor:'pointer', fontSize: isMobile ? 13 : 11, borderRadius:5, padding: isMobile ? '4px 12px' : '2px 8px', fontFamily:'inherit' }}>עצור</button>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, background:'#fee2e2', borderRadius:10, padding:'8px 14px', direction:'rtl' }}>
+              <span style={{ width:10, height:10, borderRadius:'50%', background:'#ef4444', animation:'pulse 1s ease-in-out infinite', flexShrink:0 }}/>
+              <span style={{ fontSize: 13, color:'#dc2626', fontWeight:600 }}>מקליט... {recSec}ש׳</span>
+              <button onClick={stopRecording} style={{ marginRight:'auto', background:'#ef4444', border:'none', color:'#fff', cursor:'pointer', fontSize: 12, borderRadius:6, padding:'4px 14px', fontFamily:'inherit', fontWeight: 600 }}>עצור</button>
             </div>
           )}
 
           <div style={{
-            display: 'flex', gap: isMobile ? 8 : 5, alignItems: 'flex-end',
-            background: '#fff',
-            border: isMobile ? 'none' : '1px solid var(--border)',
-            borderRadius: isMobile ? 24 : 10,
-            padding: isMobile ? '8px 12px' : '5px 7px',
-            boxShadow: isMobile ? '0 1px 3px rgba(0,0,0,.15)' : 'none',
+            display: 'flex', gap: 8, alignItems: 'flex-end',
+            background: '#f1f5f9',
+            borderRadius: 14,
+            padding: '10px 14px',
+            border: '1px solid #e2e8f0',
+            transition: 'border-color .15s',
           }}>
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -487,9 +524,10 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
               title="צרף תמונה"
               style={{
                 background: image ? 'rgba(249,115,22,.15)' : 'transparent',
-                border: 'none', cursor: 'pointer', padding: isMobile ? '2px 2px' : '3px 4px',
-                color: image ? '#f97316' : '#8696a0', fontSize: isMobile ? 20 : 15,
-                borderRadius: 6, flexShrink: 0, alignSelf: 'flex-end',
+                border: 'none', cursor: 'pointer', padding: '4px',
+                color: image ? '#f97316' : '#94a3b8', fontSize: 20,
+                borderRadius: 8, flexShrink: 0, alignSelf: 'flex-end',
+                transition: 'color .15s',
               }}
             >📎</button>
             <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange}/>
@@ -499,10 +537,10 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
               title={recording ? 'עצור הקלטה' : 'הקלטה קולית'}
               style={{
                 background: recording ? 'rgba(239,68,68,.15)' : audio ? 'rgba(124,58,237,.15)' : 'transparent',
-                border: 'none', cursor: 'pointer', padding: isMobile ? '2px 2px' : '3px 4px',
-                color: recording ? '#ef4444' : audio ? '#7c3aed' : '#8696a0',
-                fontSize: isMobile ? 20 : 15,
-                borderRadius: 6, flexShrink: 0, alignSelf: 'flex-end',
+                border: 'none', cursor: 'pointer', padding: '4px',
+                color: recording ? '#ef4444' : audio ? '#7c3aed' : '#94a3b8',
+                fontSize: 20,
+                borderRadius: 8, flexShrink: 0, alignSelf: 'flex-end',
               }}
             >{recording ? '⏹' : '🎤'}</button>
 
@@ -513,13 +551,13 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
               onKeyDown={onKey}
               onPaste={onPaste}
               placeholder="הודעה..."
-              rows={isMobile ? 1 : 2}
+              rows={1}
               style={{
                 flex: 1, resize: 'none', border: 'none', background: 'transparent',
-                color: 'var(--fg)', fontSize: isMobile ? 15 : 12, outline: 'none',
-                fontFamily: isMobile ? '-apple-system, "Helvetica Neue", Arial, sans-serif' : 'inherit',
+                color: '#1e293b', fontSize: 14, outline: 'none',
+                fontFamily: "'Rubik','Segoe UI',Arial,sans-serif",
                 lineHeight: 1.5, direction: 'rtl',
-                maxHeight: isMobile ? 100 : 'none',
+                maxHeight: 100,
               }}
               disabled={loading}
             />
@@ -527,26 +565,27 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
               onClick={submit}
               disabled={(!input.trim() && !audio) || loading}
               style={{
-                background: (input.trim() || audio) && !loading ? '#25d366' : '#8696a0',
+                background: (input.trim() || audio) && !loading
+                  ? 'linear-gradient(135deg,#f97316,#ea580c)'
+                  : '#cbd5e1',
                 border: 'none', borderRadius: '50%',
                 cursor: (input.trim() || audio) && !loading ? 'pointer' : 'default',
-                width: isMobile ? 38 : 28, height: isMobile ? 38 : 28,
+                width: 38, height: 38, minWidth: 38,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: isMobile ? 17 : 15,
-                transition: 'background .15s',
+                color: '#fff', fontSize: 17,
+                transition: 'all .15s',
                 flexShrink: 0, alignSelf: 'flex-end',
+                boxShadow: (input.trim() || audio) && !loading ? '0 3px 10px rgba(249,115,22,.3)' : 'none',
               }}
             >➤</button>
           </div>
-          {!isMobile && (
-            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3, textAlign: 'center', direction: 'rtl' }}>
-              Enter לשלוח · Shift+Enter שורה · 📎 תמונה · 🎤 הקלטה קולית · Ctrl+K פתח/סגור
-            </div>
-          )}
+          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 5, textAlign: 'center', direction: 'rtl' }}>
+            Enter לשלוח · Shift+Enter שורה · 📎 תמונה · 🎤 הקלטה קולית · Ctrl+K פתח/סגור
+          </div>
         </div>
       </div>
 
-      {/* ── FAB toggle button (draggable, hidden on mobile when open) ── */}
+      {/* ── FAB toggle button ── */}
       {(!isMobile || !open) && (
         <button
           onPointerDown={onFabDown}
@@ -555,19 +594,19 @@ export default function AgentPanel({ open, onToggle, contacts, instructors = [],
             position:     'fixed',
             bottom:       isMobile ? Math.max(fabPos.bottom, 80) : fabPos.bottom,
             right:        fabPos.right,
-            width:        isMobile ? 58 : 54,
-            height:       isMobile ? 58 : 54,
+            width:        isMobile ? 62 : 58,
+            height:       isMobile ? 62 : 58,
             borderRadius: '50%',
             background:   open ? '#1e293b' : 'linear-gradient(135deg,#f97316,#ea580c)',
             border:       'none',
             cursor:       'grab',
-            boxShadow:    open ? '0 4px 16px rgba(0,0,0,.35)' : '0 4px 22px rgba(249,115,22,.5)',
-            fontSize:     isMobile ? 24 : (open ? 22 : 20),
+            boxShadow:    open ? '0 4px 16px rgba(0,0,0,.35)' : '0 6px 28px rgba(249,115,22,.5)',
+            fontSize:     isMobile ? 26 : 24,
             zIndex:       301,
             display:      'flex',
             alignItems:   'center',
             justifyContent: 'center',
-            transition:   'background .2s ease, box-shadow .2s ease',
+            transition:   'background .2s ease, box-shadow .2s ease, transform .15s ease',
             color:        '#fff',
             userSelect:   'none',
             touchAction:  'none',
