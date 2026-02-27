@@ -34,6 +34,42 @@ export function exportInstructorsCSV(instructors) {
   dlCSV('win-crm-instructors.csv', hd, rows)
 }
 
+export function exportStudentsCSV(students, contacts) {
+  const cname = id => contacts?.find(c => c.id === id)?.name || ''
+  const hd = ['שם','תוכנית','מוסד','סטטוס תשלום','טלפון הורה','הערות']
+  const rows = students.map(s => [
+    s.name || '', s.program || '', cname(s.contactId),
+    s.paymentStatus || '', s.parentPhone || '', s.notes || '',
+  ])
+  dlCSV('win-crm-students.csv', hd, rows)
+}
+
+export function exportClassesCSV(classes) {
+  const hd = ['שם חוג','סוג','מוסד','עיר','מדריך','יום','שעה','תלמידים','מפגשים','סוכם','בפועל','סטטוס','תשלום']
+  const rows = classes.map(c => [
+    c.class_name || '', c.activity_type || '', c.location || '', c.city || '',
+    c.instructors?.name || '', c.day || '', c.time_start || '',
+    c.students_count || '', c.sessions_count || '',
+    c.agreed_price || '', c.actual_income || '',
+    c.status || '', c.paid ? 'שולם' : 'ממתין',
+  ])
+  dlCSV('win-crm-classes.csv', hd, rows)
+}
+
+export function exportLeadsCSV(leads) {
+  const srcLabels = { website: 'אתר', whatsapp: 'WhatsApp', facebook: 'פייסבוק', instagram: 'אינסטגרם', referral: 'המלצה', manual: 'ידני', csv: 'CSV' }
+  const stageLabels = { new: 'חדש', contacted: 'פנינו', qualified: 'מוסמך', proposal: 'הצעה', won: 'סגרנו', lost: 'הפסדנו' }
+  const hd = ['שם','טלפון','אימייל','עיר','מקור','שלב','תוכנית','הערות','תאריך יצירה']
+  const rows = leads.map(l => [
+    l.name || '', l.phone || '', l.email || '', l.city || '',
+    srcLabels[l.source] || l.source || '',
+    stageLabels[l.leadStage] || l.leadStage || '',
+    l.program || '', l.notes || '',
+    l.createdAt ? new Date(l.createdAt).toLocaleDateString('he-IL') : '',
+  ])
+  dlCSV('win-crm-leads.csv', hd, rows)
+}
+
 function splitCSV(line) {
   const v = []; let c = '', q = false
   for (const ch of line) {

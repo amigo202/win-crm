@@ -1,13 +1,103 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { PROGRAMS, PAY_STATUS } from '../../constants'
 import { fmtD, ini, avBg } from '../../utils/format'
 import { attPct, studentStatus } from '../../utils/alerts'
+import { exportStudentsCSV } from '../../utils/csv'
 import { Ico } from '../icons/Ico'
+import Papa from 'papaparse'
 
+// ── Student Import Modal ─────────────────────────────────────────
+function StudentImportModal({ onClose, onImport }) {
+  const [step, setStep]     = useState('upload') // upload | preview | done
+  const [rows, setRows]     = useState([])
+  const [error, setError]   = useState(null)
+  const fileRef             = useRef()
+
+  const handleFile = e => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setError(null)
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: result => {
+        if (!result.data?.length) { setError('הקובץ ריק'); return }
+        const mapped = result.data.map(r => ({
+          name:          r['שם'] || r['name'] || r['Name'] || '',
+          program:       r['תוכנית'] || r['program'] || r['Program'] || PROGRAMS[0],
+          paymentStatus: r['סטטוס תשלום'] || r['payment_status'] || 'pending',
+          parentPhone:   r['טלפון הורה'] || r['parent_phone'] || r['phone'] || '',
+          notes:         r['הערות'] || r['notes'] || '',
+        })).filter(r => r.name.trim())
+        if (!mapped.length) { setError('לא נמצאו שורות תקינות'); return }
+        setRows(mapped)
+        setStep('preview')
+      },
+      error: () => setError('שגיאה בקריאת הקובץ'),
+    })
+  }
+
+  const doImport = async () => {
+    try {
+      for (const r of rows) await onImport(r)
+      setStep('done')
+    } catch (e) {
+      setError(e?.message || 'שגיאה בייבוא')
+    }
+  }
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal modal-lg">
+        <div className="mh"><h3>ייבוא תלמידים מ-CSV/Excel</h3><button className="mx" onClick={onClose}>×</button></div>
+        <div className="mb">
+          {step === 'upload' && (
+            <div style={{ textAlign: 'center', padding: 24 }}>
+              <p style={{ color: 'var(--muted)', marginBottom: 16 }}>
+                העלה קובץ CSV או Excel עם עמודות: שם, תוכנית, סטטוס תשלום, טלפון הורה, הערות
+              </p>
+              <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} style={{ display: 'none' }}/>
+              <button className="btn btn-p" onClick={() => fileRef.current?.click()}>📁 בחר קובץ</button>
+              {error && <p style={{ color: 'var(--danger)', marginTop: 12 }}>{error}</p>}
+            </div>
+          )}
+          {step === 'preview' && (
+            <>
+              <p style={{ padding: '0 8px', marginBottom: 12, fontSize: 13, color: 'var(--muted)' }}>
+                נמצאו {rows.length} תלמידים לייבוא:
+              </p>
+              <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                <table><thead><tr><th>שם</th><th>תוכנית</th><th>תשלום</th><th>טלפון</th></tr></thead>
+                <tbody>{rows.slice(0, 50).map((r, i) => (
+                  <tr key={i}><td>{r.name}</td><td>{r.program}</td><td>{r.paymentStatus}</td><td>{r.parentPhone}</td></tr>
+                ))}</tbody></table>
+              </div>
+              {error && <p style={{ color: 'var(--danger)', marginTop: 8 }}>{error}</p>}
+              <div className="mf">
+                <button className="btn btn-p" onClick={doImport}>✓ ייבא {rows.length} תלמידים</button>
+                <button className="btn btn-o" onClick={onClose}>ביטול</button>
+              </div>
+            </>
+          )}
+          {step === 'done' && (
+            <div style={{ textAlign: 'center', padding: 32 }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+              <p style={{ fontWeight: 600 }}>יובאו {rows.length} תלמידים בהצלחה!</p>
+              <button className="btn btn-p" onClick={onClose} style={{ marginTop: 16 }}>סגור</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ────────────────────────────────────────────────────
 export default function StudentsPage({ students, contacts, onAdd, onUpdate, onDelete }) {
-  const [pf, setPf]     = useState('all')
-  const [payf, setPayf] = useState('all')
-  const [modal, setModal] = useState(null)
+  const [pf, setPf]         = useState('all')
+  const [payf, setPayf]     = useState('all')
+  const [modal, setModal]   = useState(null)
+  const [importing, setImporting] = useState(false)
 
   const filtered = students.filter(s => (pf === 'all' || s.program === pf) && (payf === 'all' || s.paymentStatus === payf))
   const cname = id => contacts.find(c => c.id === id)?.name || ''
@@ -84,7 +174,18 @@ export default function StudentsPage({ students, contacts, onAdd, onUpdate, onDe
 
   return (
     <>
-      <div className="ph"><h2>תלמידים</h2><button className="btn btn-p" onClick={() => setModal({ student: null })}><Ico.plus/>הוסף תלמיד</button></div>
+      <div className="ph">
+        <h2>תלמידים</h2>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="btn btn-o btn-sm" onClick={() => exportStudentsCSV(students, contacts)}>
+            <Ico.dl/>ייצוא CSV
+          </button>
+          <button className="btn btn-o btn-sm" onClick={() => setImporting(true)}>
+            <Ico.ul/>ייבוא
+          </button>
+          <button className="btn btn-p" onClick={() => setModal({ student: null })}><Ico.plus/>הוסף תלמיד</button>
+        </div>
+      </div>
       <div className="pb"><div className="card">
         <div className="filter-bar">
           <button className={`fp ${pf === 'all' ? 'on' : ''}`} onClick={() => setPf('all')}>הכל<span className="fp-cnt">{students.length}</span></button>
@@ -114,6 +215,7 @@ export default function StudentsPage({ students, contacts, onAdd, onUpdate, onDe
             })}</tbody></table></div>}
       </div></div>
       {modal && <StudentModal student={modal.student}/>}
+      {importing && <StudentImportModal onClose={() => setImporting(false)} onImport={onAdd}/>}
     </>
   )
 }

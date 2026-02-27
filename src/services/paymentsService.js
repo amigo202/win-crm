@@ -18,18 +18,16 @@ export function fromDbPayment(r) {
 }
 
 function toDbPayment(p) {
-  const obj = {
+  return {
     contact_id:    p.contactId    || null,
+    instructor_id: p.instructorId || null,
     amount:        Number(p.amount) || 0,
     month:         Number(p.month),
     year:          Number(p.year),
-    status:        p.status       || 'pending',
-    program:       p.program      || null,
-    notes:         p.notes        || null,
+    status:        p.status || 'pending',
+    program:       p.program || null,
+    notes:         p.notes   || null,
   }
-  // instructor_id — only include if provided (column may not exist in older DBs)
-  if (p.instructorId) obj.instructor_id = p.instructorId
-  return obj
 }
 
 export async function fetchPayments(month, year) {

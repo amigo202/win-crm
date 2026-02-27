@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { LEAD_STAGES, LEAD_SOURCES } from '../../constants'
+import { exportLeadsCSV } from '../../utils/csv'
 import { Ico } from '../icons/Ico'
 import LeadDetailsModal  from '../leads/LeadDetailsModal'
 import AddLeadModal      from '../leads/AddLeadModal'
@@ -16,9 +17,10 @@ function sourceInfo(id) {
 }
 
 // ── Lead card ─────────────────────────────────────────────────────
-function LeadCard({ lead, onClick, onMoveStage }) {
+function LeadCard({ lead, onClick }) {
   const ds   = daysSince(lead.lastActivityAt)
   const risk = lead.atRisk || (ds !== null && ds >= 7)
+  const src  = sourceInfo(lead.source)
 
   return (
     <div
@@ -50,10 +52,14 @@ function LeadCard({ lead, onClick, onMoveStage }) {
         {lead.name}
       </div>
 
-      {/* Source */}
+      {/* Source badge */}
       <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span>{sourceInfo(lead.source).icon}</span>
-        <span>{sourceInfo(lead.source).label}</span>
+        <span style={{
+          background: src.id === 'whatsapp' ? '#dcfce7' : src.id === 'facebook' ? '#dbeafe' : src.id === 'instagram' ? '#fce7f3' : 'var(--bg)',
+          padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+        }}>
+          {src.icon} {src.label}
+        </span>
         {lead.city && <span>• {lead.city}</span>}
       </div>
 
@@ -68,6 +74,13 @@ function LeadCard({ lead, onClick, onMoveStage }) {
       {lead.email && (
         <div style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           ✉️ {lead.email}
+        </div>
+      )}
+
+      {/* Program interest */}
+      {lead.program && (
+        <div style={{ fontSize: 11, marginTop: 4, color: 'var(--accent)' }}>
+          🎯 {lead.program}
         </div>
       )}
 
@@ -145,31 +158,56 @@ export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage,
   const [addOpen,     setAddOpen]     = useState(false)
   const [importing,   setImporting]   = useState(false)
   const [showClosed,  setShowClosed]  = useState(false)
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [view,        setView]        = useState('kanban') // kanban | table
 
   const visibleStages = showClosed
     ? LEAD_STAGES
     : LEAD_STAGES.filter(s => !['won','lost'].includes(s.id))
 
-  const atRiskCount = leads.filter(l => l.atRisk && !['won','lost'].includes(l.leadStage)).length
+  const activeLeads = leads.filter(l => !['won','lost'].includes(l.leadStage))
+  const atRiskCount = activeLeads.filter(l => l.atRisk).length
   const newToday    = leads.filter(l => {
     const d = new Date(l.createdAt); d.setHours(0,0,0,0)
     const t = new Date(); t.setHours(0,0,0,0)
     return d.getTime() === t.getTime()
   }).length
 
+  // Source counts
+  const sourceCounts = useMemo(() => {
+    const map = {}
+    for (const l of activeLeads) {
+      const s = l.source || 'manual'
+      map[s] = (map[s] || 0) + 1
+    }
+    return map
+  }, [activeLeads])
+
+  // Filtered leads
+  const filteredLeads = sourceFilter === 'all'
+    ? leads
+    : leads.filter(l => l.source === sourceFilter)
+
   return (
     <>
       {/* ── Page header ──────────────────────────────────────────── */}
       <div className="ph">
         <div>
-          <h2>Pipeline לידים</h2>
+          <h2>לידים נכנסים</h2>
           <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 12 }}>
-            <span style={{ color: 'var(--muted)' }}>{leads.filter(l => !['won','lost'].includes(l.leadStage)).length} פעילים</span>
+            <span style={{ color: 'var(--muted)' }}>{activeLeads.length} פעילים</span>
             {atRiskCount > 0 && <span style={{ color: '#ef4444', fontWeight: 600 }}>⚠ {atRiskCount} בסיכון</span>}
             {newToday   > 0 && <span style={{ color: '#10b981', fontWeight: 600 }}>+{newToday} היום</span>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+          <button
+            className={`btn btn-o btn-sm`}
+            onClick={() => setView(v => v === 'kanban' ? 'table' : 'kanban')}
+            style={{ fontSize: 12 }}
+          >
+            {view === 'kanban' ? '📋 טבלה' : '📊 קנבן'}
+          </button>
           <button
             className="btn btn-o btn-sm"
             onClick={() => setShowClosed(v => !v)}
@@ -177,8 +215,11 @@ export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage,
           >
             {showClosed ? 'הסתר סגורים' : 'הצג סגורים'}
           </button>
+          <button className="btn btn-o btn-sm" onClick={() => exportLeadsCSV(leads)}>
+            <Ico.dl/>ייצוא
+          </button>
           <button className="btn btn-o btn-sm" onClick={() => setImporting(true)}>
-            <Ico.ul/>ייבוא Excel/CSV
+            <Ico.ul/>ייבוא
           </button>
           <button className="btn btn-p" onClick={() => setAddOpen(true)}>
             <Ico.plus/>ליד חדש
@@ -186,20 +227,83 @@ export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage,
         </div>
       </div>
 
-      {/* ── Kanban board ─────────────────────────────────────────── */}
-      <div style={{ padding: '0 20px 20px', overflowX: 'auto' }}>
-        <div style={{ display: 'flex', gap: 14, minWidth: 'max-content', paddingBottom: 8 }}>
-          {visibleStages.map(stage => (
-            <KanbanCol
-              key={stage.id}
-              stage={stage}
-              leads={leads.filter(l => l.leadStage === stage.id)}
-              onDrop={onMoveStage}
-              onCardClick={setSelected}
-            />
-          ))}
-        </div>
+      {/* ── Source filter chips ── */}
+      <div style={{ padding: '0 20px', display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+        <button
+          className={`fp ${sourceFilter === 'all' ? 'on' : ''}`}
+          onClick={() => setSourceFilter('all')}
+        >
+          הכל <span className="fp-cnt">{activeLeads.length}</span>
+        </button>
+        {LEAD_SOURCES.filter(s => sourceCounts[s.id]).map(s => (
+          <button
+            key={s.id}
+            className={`fp ${sourceFilter === s.id ? 'on' : ''}`}
+            onClick={() => setSourceFilter(sourceFilter === s.id ? 'all' : s.id)}
+          >
+            {s.icon} {s.label} <span className="fp-cnt">{sourceCounts[s.id]}</span>
+          </button>
+        ))}
       </div>
+
+      {view === 'kanban' ? (
+        /* ── Kanban board ─────────────────────────────────────────── */
+        <div style={{ padding: '0 20px 20px', overflowX: 'auto' }}>
+          <div style={{ display: 'flex', gap: 14, minWidth: 'max-content', paddingBottom: 8 }}>
+            {visibleStages.map(stage => (
+              <KanbanCol
+                key={stage.id}
+                stage={stage}
+                leads={filteredLeads.filter(l => l.leadStage === stage.id)}
+                onDrop={onMoveStage}
+                onCardClick={setSelected}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        /* ── Table view ──────────────────────────────────────────── */
+        <div className="pb"><div className="card">
+          {!filteredLeads.length
+            ? <div className="empty"><div className="empty-ico">🎯</div><p>אין לידים</p></div>
+            : <div className="tbl-wrap"><table><thead><tr>
+                <th>שם</th><th>מקור</th><th>טלפון</th><th>עיר</th><th>תוכנית</th><th>שלב</th><th>ימים ללא מגע</th><th>סטטוס</th><th></th>
+              </tr></thead>
+              <tbody>
+                {filteredLeads.filter(l => showClosed || !['won','lost'].includes(l.leadStage)).map(l => {
+                  const ds = daysSince(l.lastActivityAt)
+                  const risk = l.atRisk || (ds !== null && ds >= 7)
+                  const stage = LEAD_STAGES.find(s => s.id === l.leadStage) || LEAD_STAGES[0]
+                  const src = sourceInfo(l.source)
+                  return (
+                    <tr key={l.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(l)}>
+                      <td><strong>{l.name}</strong></td>
+                      <td>
+                        <span style={{
+                          background: src.id === 'whatsapp' ? '#dcfce7' : src.id === 'facebook' ? '#dbeafe' : src.id === 'instagram' ? '#fce7f3' : 'var(--bg)',
+                          padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                        }}>
+                          {src.icon} {src.label}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: 12 }}>{l.phone || '–'}</td>
+                      <td style={{ fontSize: 12, color: 'var(--muted)' }}>{l.city || '–'}</td>
+                      <td style={{ fontSize: 12 }}>{l.program || '–'}</td>
+                      <td><span className={`badge ${stage.badge}`}>{stage.label}</span></td>
+                      <td style={{ color: risk ? '#ef4444' : 'var(--muted)', fontWeight: risk ? 600 : 400 }}>
+                        {ds !== null ? `${ds} ימים` : '–'}
+                      </td>
+                      <td>{risk && <span className="badge b-red">⚠ בסיכון</span>}</td>
+                      <td><div className="ac-cell">
+                        <button className="icon-btn" onClick={e => { e.stopPropagation(); setSelected(l) }}><Ico.edit/></button>
+                      </div></td>
+                    </tr>
+                  )
+                })}
+              </tbody></table></div>
+          }
+        </div></div>
+      )}
 
       {/* ── Modals ───────────────────────────────────────────────── */}
       {selected && (

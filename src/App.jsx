@@ -153,12 +153,11 @@ export default function App() {
   const updateStudent = async (id, data) => { await s.editStudent(id, data) }
   const deleteStudent = async id => { await s.removeStudent(id) }
 
-  const isLoading = loading || c.loading || d.loading || t.loading || i.loading || s.loading || le.loading || cls.loading
-
   // Show instructor portal without requiring auth
   if (_portalId) return <InstructorPortal instructorId={_portalId} instructorName={decodeURIComponent(_portalName || '')}/>
 
-  if (isLoading) return (
+  // Only show full-screen loading on initial auth check — NOT on data refreshes
+  if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f172a', flexDirection: 'column', gap: '14px', fontFamily: "'Rubik','Segoe UI',Arial,sans-serif" }}>
       <div style={{ width: '52px', height: '52px', background: '#f97316', borderRadius: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: '800', color: '#fff' }}>W</div>
       <p style={{ color: '#94a3b8', fontSize: '14px' }}>טוען...</p>

@@ -1,4 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
+import { exportClassesCSV } from '../../utils/csv'
+import Papa from 'papaparse'
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const DAYS_HE    = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת']
@@ -361,8 +363,124 @@ function ClassModal({ cls, instructors, contacts, onSave, onClose, onDel }) {
 }
 
 // ── Main ClassesPage ─────────────────────────────────────────────────────────
+// ── Class Import Modal ───────────────────────────────────────────────────────
+function ClassImportModal({ onClose, onAdd }) {
+  const [step, setStep]   = useState('upload')
+  const [rows, setRows]   = useState([])
+  const [error, setError] = useState(null)
+  const fileRef           = useRef()
+
+  const handleFile = e => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setError(null)
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: result => {
+        if (!result.data?.length) { setError('הקובץ ריק'); return }
+        const mapped = result.data.map(r => ({
+          ...emptyClass(),
+          class_name:     r['שם חוג'] || r['name'] || r['class_name'] || '',
+          activity_type:  r['סוג'] || r['activity_type'] || 'חוג',
+          location:       r['מוסד'] || r['location'] || '',
+          city:           r['עיר'] || r['city'] || '',
+          day:            r['יום'] || r['day'] || 'ראשון',
+          time_start:     r['שעה'] || r['time_start'] || '',
+          students_count: Number(r['תלמידים'] || r['students_count'] || 0),
+          sessions_count: Number(r['מפגשים'] || r['sessions_count'] || 0),
+          agreed_price:   Number(r['סוכם'] || r['agreed_price'] || 0),
+          actual_income:  Number(r['בפועל'] || r['actual_income'] || 0),
+          status:         r['סטטוס'] || r['status'] || 'פעיל',
+        })).filter(r => r.class_name.trim())
+        if (!mapped.length) { setError('לא נמצאו שורות תקינות'); return }
+        setRows(mapped)
+        setStep('preview')
+      },
+      error: () => setError('שגיאה בקריאת הקובץ'),
+    })
+  }
+
+  const doImport = async () => {
+    try {
+      for (const r of rows) await onAdd(r)
+      setStep('done')
+    } catch (e) {
+      setError(e?.message || 'שגיאה בייבוא')
+    }
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:560, maxHeight:'90vh', display:'flex', flexDirection:'column', boxShadow:'0 20px 60px rgba(0,0,0,.2)', direction:'rtl', overflow:'hidden' }}>
+        <div style={{ padding:'16px 20px', borderBottom:'1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>ייבוא חוגים מ-CSV</h3>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', fontSize:20, color:'#94a3b8' }}>×</button>
+        </div>
+        <div style={{ padding:20 }}>
+          {step === 'upload' && (
+            <div style={{ textAlign:'center', padding:24 }}>
+              <p style={{ color:'#64748b', marginBottom:16, fontSize:13 }}>
+                העלה קובץ CSV עם עמודות: שם חוג, סוג, מוסד, עיר, יום, שעה, תלמידים, מפגשים, סוכם, בפועל, סטטוס
+              </p>
+              <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} style={{ display:'none' }}/>
+              <button onClick={() => fileRef.current?.click()}
+                style={{ padding:'10px 20px', background:'#f97316', color:'#fff', border:'none', borderRadius:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                📁 בחר קובץ
+              </button>
+              {error && <p style={{ color:'#ef4444', marginTop:12 }}>{error}</p>}
+            </div>
+          )}
+          {step === 'preview' && (
+            <>
+              <p style={{ marginBottom:12, fontSize:13, color:'#64748b' }}>נמצאו {rows.length} חוגים:</p>
+              <div style={{ maxHeight:300, overflowY:'auto', borderRadius:8, border:'1px solid #e2e8f0' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                  <thead><tr style={{ background:'#f8fafc' }}>
+                    <th style={{ padding:'8px', textAlign:'right' }}>שם</th>
+                    <th style={{ padding:'8px', textAlign:'right' }}>מוסד</th>
+                    <th style={{ padding:'8px', textAlign:'right' }}>עיר</th>
+                    <th style={{ padding:'8px', textAlign:'right' }}>סוכם</th>
+                  </tr></thead>
+                  <tbody>{rows.slice(0,50).map((r,i) => (
+                    <tr key={i} style={{ borderTop:'1px solid #f1f5f9' }}>
+                      <td style={{ padding:'6px 8px' }}>{r.class_name}</td>
+                      <td style={{ padding:'6px 8px' }}>{r.location}</td>
+                      <td style={{ padding:'6px 8px' }}>{r.city}</td>
+                      <td style={{ padding:'6px 8px' }}>{r.agreed_price ? `₪${r.agreed_price}` : '–'}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+              {error && <p style={{ color:'#ef4444', marginTop:8 }}>{error}</p>}
+              <div style={{ display:'flex', gap:10, marginTop:16 }}>
+                <button onClick={doImport}
+                  style={{ flex:1, padding:'10px', background:'#f97316', color:'#fff', border:'none', borderRadius:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                  ✓ ייבא {rows.length} חוגים
+                </button>
+                <button onClick={onClose}
+                  style={{ padding:'10px 18px', border:'1px solid #e2e8f0', borderRadius:10, background:'#fff', cursor:'pointer', fontFamily:'inherit', color:'#64748b' }}>ביטול</button>
+              </div>
+            </>
+          )}
+          {step === 'done' && (
+            <div style={{ textAlign:'center', padding:32 }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>✅</div>
+              <p style={{ fontWeight:600 }}>יובאו {rows.length} חוגים בהצלחה!</p>
+              <button onClick={onClose}
+                style={{ marginTop:16, padding:'10px 24px', background:'#f97316', color:'#fff', border:'none', borderRadius:10, cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>סגור</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ClassesPage({ classes, instructors, contacts, onAdd, onUpdate, onDelete, onReload }) {
   const [modal, setModal]       = useState(null) // null | { cls }
+  const [importing, setImporting] = useState(false)
   const [filterCity, setFilterCity]         = useState('')
   const [filterInstructor, setFilterInstructor] = useState('')
   const [filterMonth, setFilterMonth]       = useState('')
@@ -440,11 +558,23 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
           <h2 style={{ margin:0, fontSize:22, fontWeight:800, color:'#0f172a' }}>🏫 חוגים וקורסים</h2>
           <p style={{ margin:'4px 0 0', fontSize:13, color:'#64748b' }}>{classes.length} חוגים במערכת</p>
         </div>
-        <button
-          onClick={() => setModal({ cls: null })}
-          style={{ padding:'10px 20px', background:'linear-gradient(135deg,#f97316,#ea580c)', color:'#fff', border:'none', borderRadius:10, fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>
-          + הוסף חוג
-        </button>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <button
+            onClick={() => exportClassesCSV(classes)}
+            style={{ padding:'8px 14px', border:'1px solid #e2e8f0', borderRadius:8, background:'#fff', cursor:'pointer', fontFamily:'inherit', fontSize:12, color:'#64748b', fontWeight:600 }}>
+            📥 ייצוא CSV
+          </button>
+          <button
+            onClick={() => setImporting(true)}
+            style={{ padding:'8px 14px', border:'1px solid #e2e8f0', borderRadius:8, background:'#fff', cursor:'pointer', fontFamily:'inherit', fontSize:12, color:'#64748b', fontWeight:600 }}>
+            📤 ייבוא
+          </button>
+          <button
+            onClick={() => setModal({ cls: null })}
+            style={{ padding:'10px 20px', background:'linear-gradient(135deg,#f97316,#ea580c)', color:'#fff', border:'none', borderRadius:10, fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>
+            + הוסף חוג
+          </button>
+        </div>
       </div>
 
       {/* ── KPI Dashboard ── */}
@@ -624,6 +754,14 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
           onSave={handleSave}
           onClose={() => setModal(null)}
           onDel={handleDelete}
+        />
+      )}
+
+      {/* Import Modal */}
+      {importing && (
+        <ClassImportModal
+          onClose={() => setImporting(false)}
+          onAdd={onAdd}
         />
       )}
     </div>
