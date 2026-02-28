@@ -146,7 +146,7 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
               📋 משימות פתוחות ({sortedTasks.length})
             </div>
             {sortedTasks.length === 0 ? (
-              <div style={{ padding: '24px 14px', fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
+              <div style={{ padding: '24px 20px', fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
                 🎉 אין משימות פתוחות!
               </div>
             ) : <>
@@ -174,7 +174,7 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
                 )
               })}
               {sortedTasks.length > 9 && (
-                <button onClick={() => setPage?.('tasks')} style={{ width: '100%', padding: '9px', background: 'none', border: 'none', cursor: 'pointer', color: '#f97316', fontSize: 12, fontWeight: 600, borderTop: '1px solid var(--border)' }}>
+                <button onClick={() => setPage?.('tasks')} style={{ width: '100%', padding: '12px 20px', background: 'none', border: 'none', cursor: 'pointer', color: '#f97316', fontSize: 12, fontWeight: 600, borderTop: '1px solid var(--border)' }}>
                   עוד {sortedTasks.length - 9} משימות ←
                 </button>
               )}
