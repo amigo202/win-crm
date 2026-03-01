@@ -220,19 +220,24 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
 
       {/* ── Modal ─────────────────────────────────────────── */}
       {showModal && (
-        <div className="modal-overlay" onClick={close}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
-            <div className="modal-hd">
-              <h3>{editId ? 'עריכת פעילות' : 'פעילות חדשה'}</h3>
-              <button className="modal-x" onClick={close}>✕</button>
+        <div className="overlay" onClick={e => e.target === e.currentTarget && close()}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 580, direction: 'rtl' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{editId ? 'עריכת פעילות' : 'פעילות חדשה'}</h3>
+              <button onClick={close} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)', padding: '4px 8px', borderRadius: 6 }}>✕</button>
             </div>
-            <div className="modal-body" style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
-              {/* Row 1: Name + Type */}
+
+            {/* Body */}
+            <div style={{ padding: '24px 28px', overflowY: 'auto', maxHeight: 'calc(90vh - 140px)', display: 'grid', gap: 18, gridTemplateColumns: '1fr 1fr' }}>
+              {/* Name */}
               <div style={{ gridColumn: '1/-1' }}>
                 <label style={lbl}>שם הפעילות *</label>
                 <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder='למשל: "אירוע PIXMIX חנוכה"' style={inp} />
               </div>
+
+              {/* Type + Client */}
               <div>
                 <label style={lbl}>סוג</label>
                 <select value={form.activityType} onChange={e => setForm(f => ({ ...f, activityType: e.target.value }))} style={inp}>
@@ -247,12 +252,12 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
                 </select>
               </div>
 
-              {/* Row 2: Date + Period */}
+              {/* Date + Period */}
               <div>
                 <label style={lbl}>תאריך פעילות</label>
                 <input type="date" value={form.activityDate} onChange={e => setForm(f => ({ ...f, activityDate: e.target.value }))} style={inp} />
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 10 }}>
                 <div style={{ flex: 1 }}>
                   <label style={lbl}>חודש</label>
                   <select value={form.month} onChange={e => setForm(f => ({ ...f, month: Number(e.target.value) }))} style={inp}>
@@ -267,7 +272,7 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
                 </div>
               </div>
 
-              {/* Row 3: Financials */}
+              {/* Financials */}
               <div>
                 <label style={lbl}>הכנסה (₪)</label>
                 <input type="number" value={form.income} onChange={e => setForm(f => ({ ...f, income: e.target.value }))}
@@ -279,15 +284,15 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
                   placeholder="0" style={inp} />
               </div>
 
-              {/* Profit display */}
-              <div style={{ gridColumn: '1/-1', background: 'var(--hover)', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>רווח צפוי:</span>
-                <span style={{ fontSize: 18, fontWeight: 800, color: (Number(form.income || 0) - Number(form.expenses || 0)) >= 0 ? '#10b981' : '#ef4444' }}>
+              {/* Profit */}
+              <div style={{ gridColumn: '1/-1', background: (Number(form.income||0) - Number(form.expenses||0)) >= 0 ? '#d1fae522' : '#fee2e222', borderRadius: 10, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>רווח צפוי:</span>
+                <span style={{ fontSize: 22, fontWeight: 800, color: (Number(form.income || 0) - Number(form.expenses || 0)) >= 0 ? '#10b981' : '#ef4444' }}>
                   {fmtShekel(Number(form.income || 0) - Number(form.expenses || 0))}
                 </span>
               </div>
 
-              {/* Row 4: Payment */}
+              {/* Payment */}
               <div>
                 <label style={lbl}>סטטוס תשלום</label>
                 <select value={form.paymentStatus} onChange={e => setForm(f => ({ ...f, paymentStatus: e.target.value }))} style={inp}>
@@ -314,12 +319,14 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
               <div style={{ gridColumn: '1/-1' }}>
                 <label style={lbl}>הערות</label>
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  rows={2} style={{ ...inp, resize: 'vertical' }} />
+                  rows={3} style={{ ...inp, resize: 'vertical' }} />
               </div>
             </div>
-            <div className="modal-foot">
-              <button className="btn" onClick={close}>ביטול</button>
+
+            {/* Footer */}
+            <div style={{ display: 'flex', justifyContent: 'flex-start', gap: 10, padding: '16px 28px', borderTop: '1px solid var(--border)', background: 'var(--bg)' }}>
               <button className="btn btn-primary" onClick={save}>{editId ? 'שמור' : 'הוסף'}</button>
+              <button className="btn" onClick={close}>ביטול</button>
             </div>
           </div>
         </div>
@@ -331,5 +338,5 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const thStyle = { padding: '10px 12px', fontSize: 12, fontWeight: 700, color: 'var(--muted)', whiteSpace: 'nowrap' }
 const tdStyle = { padding: '10px 12px', whiteSpace: 'nowrap' }
-const lbl     = { display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: 'var(--muted)' }
-const inp     = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--fg)', fontSize: 13 }
+const lbl     = { display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--muted)' }
+const inp     = { width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--fg)', fontSize: 13, boxSizing: 'border-box' }
