@@ -507,8 +507,8 @@ export default function FinancePage({ fin, instructors, contacts }) {
                 <div style={{ fontSize: 36, fontWeight: 800, color: profit >= 0 ? '#10b981' : '#ef4444' }}>{fmtShekel(profit)}</div>
                 <div style={{ fontSize: 12, color: profit >= 0 ? '#065f46' : '#991b1b', marginTop: 8 }}>
                   {expenses > 0
-                    ? `יחס הכנסה להוצאה: ${Math.round((income / expenses) * 100)}%`
-                    : income > 0 ? 'אין הוצאות שכר לחודש זה' : 'אין נתונים לחודש זה'}
+                    ? `יחס הכנסה להוצאה: ${Math.round((totalPayments / expenses) * 100)}%`
+                    : totalPayments > 0 ? 'אין הוצאות שכר לחודש זה' : 'אין נתונים לחודש זה'}
                 </div>
               </div>
             </div>

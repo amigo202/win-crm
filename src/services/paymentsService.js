@@ -25,6 +25,7 @@ function toDbPayment(p) {
     month:         Number(p.month),
     year:          Number(p.year),
     status:        p.status || 'pending',
+    program:       p.program || null,
     notes:         p.notes   || null,
   }
 }
@@ -41,8 +42,10 @@ export async function fetchPayments(month, year) {
 }
 
 export async function createPayment(data) {
+  const { data: { user } } = await supabase.auth.getUser()
+  const payload = { ...toDbPayment(data), owner_id: user.id }
   const { data: row, error } = await supabase
-    .from('payments').insert(toDbPayment(data)).select().single()
+    .from('payments').insert(payload).select().single()
   if (error) throw error
   return fromDbPayment(row)
 }

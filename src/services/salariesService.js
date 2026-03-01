@@ -48,8 +48,10 @@ export async function fetchSalaries(month, year) {
 }
 
 export async function createSalary(data) {
+  const { data: { user } } = await supabase.auth.getUser()
+  const payload = { ...toDbSalary(data), owner_id: user.id }
   const { data: row, error } = await supabase
-    .from('salaries').insert(toDbSalary(data)).select().single()
+    .from('salaries').insert(payload).select().single()
   if (error) throw error
   return fromDbSalary(row)
 }
@@ -67,7 +69,9 @@ export async function deleteSalary(id) {
 
 export async function autoGenerateSalaries(instructors, month, year) {
   if (!instructors.length) return []
+  const { data: { user } } = await supabase.auth.getUser()
   const rows = instructors.map(inst => ({
+    owner_id:           user.id,
     instructor_id:      inst.id,
     month:              Number(month),
     year:               Number(year),

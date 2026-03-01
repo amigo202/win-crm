@@ -1,79 +1,197 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useMemo } from 'react'
 import Chart from 'chart.js/auto'
 import { CONTACT_TYPES, STAGES, PROGRAMS, PRIORITIES } from '../../constants'
 import { fmtShekel, fmtDT } from '../../utils/format'
-import { computeAlerts, noSessionDays, studentStatus, monthlyHours, monthlyPay } from '../../utils/alerts'
+import { computeAlerts, noSessionDays, studentStatus } from '../../utils/alerts'
 import { Ico } from '../icons/Ico'
 
-export default function Dashboard({ contacts, deals, tasks, instructors, students, leads, dark, setPage }) {
-  const activePipe = deals.filter(d => ['lead','meeting','proposal'].includes(d.stage))
-  const pipeVal    = activePipe.reduce((s, d) => s + Number(d.value || 0), 0)
-  const thisMonth  = new Date(); thisMonth.setDate(1); thisMonth.setHours(0,0,0,0)
-  const monthRev   = deals.filter(d => {
-    const dd = new Date(d.createdAt)
-    return dd >= thisMonth && ['signed','active'].includes(d.stage)
-  }).reduce((s, d) => s + Number(d.value || 0), 0)
-  const als         = computeAlerts(tasks, instructors, students, deals)
-  const totalAlerts = als.overdue.length + als.instructors.length + als.students.length + als.deals.length
-  const recentActs  = contacts
+// ── Activity-type metadata (matches ActivitiesPage) ──────────────────────────
+const CLASS_TYPE_LABELS = { 'חוג': 'חוגים', 'קורס': 'קורסים', 'סדנה': 'סדנאות', 'מחנה': 'מחנות', 'אירוע': 'אירועים', 'הרצאה': 'הרצאות' }
+const BIZ_TYPE_LABELS   = { pixmix: 'PIXMIX', video: 'סרטונים', content: 'תוכן', lecture: 'הרצאות', consulting: 'ייעוץ', other: 'אחר' }
+const SOURCE_COLORS     = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#ec4899','#06b6d4','#f97316']
+
+export default function Dashboard({ contacts, deals, tasks, instructors, students, leads, classes, activities, dark, setPage }) {
+  // ── Current period ──────────────────────────────────────────
+  const now        = new Date()
+  const curMonth   = now.getMonth() + 1
+  const curYear    = now.getFullYear()
+  const prevMonth  = curMonth === 1 ? 12 : curMonth - 1
+  const prevYear   = curMonth === 1 ? curYear - 1 : curYear
+
+  // ── Calculate income from classes ───────────────────────────
+  const classIncome = useMemo(() => {
+    return (classes || []).reduce((acc, c) => {
+      const m = Number(c.month), y = Number(c.year)
+      const key = `${y}-${m}`
+      const students_n = Number(c.students_count) || 0
+      const pps = Number(c.price_per_student) || 0
+      const agreed = Number(c.agreed_price) || 0
+      const actual = Number(c.actual_income) || 0
+      const income = actual || (students_n * pps) || agreed
+      const instrCost = Number(c.instructor_total_override) || (Number(c.instructor_price_per_session || 0) * Number(c.monthly_hours || 4))
+      const type = c.activity_type || 'חוג'
+      if (!acc[key]) acc[key] = { income: 0, expenses: 0, byType: {} }
+      acc[key].income   += income
+      acc[key].expenses += instrCost
+      if (!acc[key].byType[type]) acc[key].byType[type] = 0
+      acc[key].byType[type] += income
+      return acc
+    }, {})
+  }, [classes])
+
+  // ── Calculate income from activities ────────────────────────
+  const actIncome = useMemo(() => {
+    return (activities || []).reduce((acc, a) => {
+      const key = `${a.year}-${a.month}`
+      if (!acc[key]) acc[key] = { income: 0, expenses: 0, byType: {} }
+      acc[key].income   += a.income
+      acc[key].expenses += a.expenses
+      const type = a.activityType || 'other'
+      if (!acc[key].byType[type]) acc[key].byType[type] = 0
+      acc[key].byType[type] += a.income
+      return acc
+    }, {})
+  }, [activities])
+
+  // ── Current month totals ────────────────────────────────────
+  const curKey  = `${curYear}-${curMonth}`
+  const prevKey = `${prevYear}-${prevMonth}`
+
+  const curClassInc  = classIncome[curKey]?.income   || 0
+  const curClassExp  = classIncome[curKey]?.expenses  || 0
+  const curActInc    = actIncome[curKey]?.income      || 0
+  const curActExp    = actIncome[curKey]?.expenses    || 0
+  const curTotalInc  = curClassInc + curActInc
+  const curTotalExp  = curClassExp + curActExp
+  const curProfit    = curTotalInc - curTotalExp
+
+  const prevClassInc = classIncome[prevKey]?.income  || 0
+  const prevActInc   = actIncome[prevKey]?.income    || 0
+  const prevTotalInc = prevClassInc + prevActInc
+
+  const incDelta  = prevTotalInc > 0 ? Math.round(((curTotalInc - prevTotalInc) / prevTotalInc) * 100) : 0
+
+  // ── Source breakdown (current month) ────────────────────────
+  const sourceBreakdown = useMemo(() => {
+    const map = {}
+    // From classes
+    const ct = classIncome[curKey]?.byType || {}
+    for (const [type, val] of Object.entries(ct)) {
+      const label = CLASS_TYPE_LABELS[type] || type
+      map[label] = (map[label] || 0) + val
+    }
+    // From activities
+    const at = actIncome[curKey]?.byType || {}
+    for (const [type, val] of Object.entries(at)) {
+      const label = BIZ_TYPE_LABELS[type] || type
+      map[label] = (map[label] || 0) + val
+    }
+    return Object.entries(map)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [classIncome, actIncome, curKey])
+
+  // ── Alerts & leads ──────────────────────────────────────────
+  const als          = computeAlerts(tasks, instructors, students, deals)
+  const totalAlerts  = als.overdue.length + als.instructors.length + als.students.length + als.deals.length
+  const todayStr     = new Date().toISOString().split('T')[0]
+  const todayTasks   = tasks.filter(t => !t.completed && t.dueDate === todayStr && (!t.snoozedUntil || t.snoozedUntil <= todayStr))
+  const atRiskLeads  = (leads || []).filter(l => l.atRisk && !['won','lost'].includes(l.leadStage))
+  const activeLeads  = (leads || []).filter(l => !['won','lost'].includes(l.leadStage))
+  const newLeadsToday= (leads || []).filter(l => (l.createdAt || '').startsWith(todayStr))
+
+  // ── Recent activities ───────────────────────────────────────
+  const recentActs = contacts
     .flatMap(c => (c.activities || []).map(a => ({ ...a, cn: c.name })))
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 5)
 
-  const todayStr      = new Date().toISOString().split('T')[0]
-  const todayTasks    = tasks.filter(t => !t.completed && t.dueDate === todayStr && (!t.snoozedUntil || t.snoozedUntil <= todayStr))
-  const atRiskLeads   = (leads || []).filter(l => l.atRisk && !['won','lost'].includes(l.leadStage))
-  const newLeadsToday = (leads || []).filter(l => (l.createdAt || '').startsWith(todayStr))
-  const activeLeads   = (leads || []).filter(l => !['won','lost'].includes(l.leadStage))
-
-  // Tasks sorted by urgency: overdue → today → upcoming → no date → by priority
+  // ── Tasks sorted by urgency ─────────────────────────────────
   const sortedTasks = [...tasks]
     .filter(t => !t.completed)
     .sort((a, b) => {
       const aOv = a.dueDate && a.dueDate < todayStr
       const bOv = b.dueDate && b.dueDate < todayStr
-      if (aOv && !bOv) return -1
-      if (!aOv && bOv) return 1
-      const aTo = a.dueDate === todayStr
-      const bTo = b.dueDate === todayStr
-      if (aTo && !bTo) return -1
-      if (!aTo && bTo) return 1
+      if (aOv && !bOv) return -1; if (!aOv && bOv) return 1
+      const aTo = a.dueDate === todayStr; const bTo = b.dueDate === todayStr
+      if (aTo && !bTo) return -1; if (!aTo && bTo) return 1
       if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate)
-      if (a.dueDate) return -1
-      if (b.dueDate) return 1
+      if (a.dueDate) return -1; if (b.dueDate) return 1
       const pOrd = { high: 0, medium: 1, low: 2 }
       return (pOrd[a.priority] || 1) - (pOrd[b.priority] || 1)
     })
 
-  const rRef = useRef(null), dRef = useRef(null), sRef = useRef(null), pRef = useRef(null)
+  // ── Charts ──────────────────────────────────────────────────
+  const trendRef = useRef(null), sourceRef = useRef(null), dRef = useRef(null), sRef = useRef(null)
   const cRefs = useRef({})
 
   useEffect(() => {
     const tc = dark ? '#94a3b8' : '#64748b', gc = dark ? '#1e293b' : '#e2e8f0'
     Object.values(cRefs.current).forEach(c => c && c.destroy()); cRefs.current = {}
-    if (rRef.current) {
-      const labels = [], data = []
+
+    // ── Trend chart (6 months, classes + activities) ───────────
+    if (trendRef.current) {
+      const labels = [], incData = [], expData = [], profData = []
       for (let i = 5; i >= 0; i--) {
         const m = new Date(); m.setDate(1); m.setMonth(m.getMonth() - i)
+        const mo = m.getMonth() + 1, yr = m.getFullYear()
+        const key = `${yr}-${mo}`
         labels.push(m.toLocaleDateString('he-IL', { month: 'short', year: '2-digit' }))
-        data.push(deals.filter(d => {
-          const dd = new Date(d.createdAt)
-          return dd.getFullYear() === m.getFullYear() && dd.getMonth() === m.getMonth() && ['signed','active'].includes(d.stage)
-        }).reduce((s, d) => s + Number(d.value || 0), 0))
+        const ci = classIncome[key]?.income || 0
+        const ce = classIncome[key]?.expenses || 0
+        const ai = actIncome[key]?.income || 0
+        const ae = actIncome[key]?.expenses || 0
+        const totalI = ci + ai, totalE = ce + ae
+        incData.push(totalI); expData.push(totalE); profData.push(totalI - totalE)
       }
-      cRefs.current.r = new Chart(rRef.current, { type: 'line', data: { labels, datasets: [{ label: '₪', data, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,.1)', fill: true, tension: .4, pointBackgroundColor: '#f97316', pointRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: gc }, ticks: { color: tc, font: { family: 'Rubik' } } }, y: { grid: { color: gc }, ticks: { color: tc, font: { family: 'Rubik' }, callback: v => '₪' + v.toLocaleString() } } } } })
+      cRefs.current.trend = new Chart(trendRef.current, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'הכנסות', data: incData, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,.08)', fill: true, tension: .4, pointRadius: 4, pointBackgroundColor: '#10b981' },
+            { label: 'הוצאות', data: expData, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.08)', fill: true, tension: .4, pointRadius: 3, pointBackgroundColor: '#ef4444', borderDash: [4,4] },
+            { label: 'רווח',   data: profData, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,.08)', fill: true, tension: .4, pointRadius: 3, pointBackgroundColor: '#3b82f6' },
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { color: tc, font: { family: 'Rubik', size: 11 } } } },
+          scales: {
+            x: { grid: { color: gc }, ticks: { color: tc, font: { family: 'Rubik' } } },
+            y: { grid: { color: gc }, ticks: { color: tc, font: { family: 'Rubik' }, callback: v => '₪' + v.toLocaleString() } }
+          }
+        }
+      })
     }
+
+    // ── Source breakdown chart (doughnut) ──────────────────────
+    if (sourceRef.current && sourceBreakdown.length > 0) {
+      cRefs.current.source = new Chart(sourceRef.current, {
+        type: 'doughnut',
+        data: {
+          labels: sourceBreakdown.map(s => s.label),
+          datasets: [{ data: sourceBreakdown.map(s => s.value), backgroundColor: SOURCE_COLORS.slice(0, sourceBreakdown.length), hoverOffset: 6 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '65%',
+          plugins: { legend: { position: 'bottom', labels: { color: tc, font: { family: 'Rubik', size: 11 } } } }
+        }
+      })
+    }
+
+    // ── Contacts by type ──────────────────────────────────────
     if (dRef.current) {
       cRefs.current.d = new Chart(dRef.current, { type: 'doughnut', data: { labels: CONTACT_TYPES.map(t => t.label), datasets: [{ data: CONTACT_TYPES.map(t => contacts.filter(c => c.type === t.id).length), backgroundColor: ['#3b82f6','#f59e0b','#10b981','#8b5cf6','#f97316'], hoverOffset: 6 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: tc, font: { family: 'Rubik', size: 11 } } } } } })
     }
+
+    // ── Deals by stage ────────────────────────────────────────
     if (sRef.current) {
       cRefs.current.s = new Chart(sRef.current, { type: 'bar', data: { labels: STAGES.map(s => s.label), datasets: [{ data: STAGES.map(s => deals.filter(d => d.stage === s.id).length), backgroundColor: STAGES.map(s => s.color), borderRadius: 5 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: gc }, ticks: { color: tc, stepSize: 1, font: { family: 'Rubik' } } }, y: { grid: { display: false }, ticks: { color: tc, font: { family: 'Rubik' } } } } } })
     }
-    if (pRef.current) {
-      cRefs.current.p = new Chart(pRef.current, { type: 'doughnut', data: { labels: PROGRAMS, datasets: [{ data: PROGRAMS.map(p => students.filter(s => s.program === p).length), backgroundColor: ['#3b82f6','#10b981','#8b5cf6','#f97316','#ec4899','#06b6d4'], hoverOffset: 6 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: tc, font: { family: 'Rubik', size: 11 } } } } } })
-    }
+
     return () => Object.values(cRefs.current).forEach(c => c && c.destroy())
-  }, [contacts, deals, students, dark])
+  }, [contacts, deals, students, dark, classIncome, actIncome, sourceBreakdown])
 
   const hoverUp   = e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,.12)' }
   const hoverDown = e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }
@@ -83,64 +201,69 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
       <div className="ph"><h2>דשבורד</h2></div>
       <div className="pb">
 
-        {/* ── Today Focus — clickable ─────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
+        {/* ── KPI Cards (unified income) ────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
           {[
-            { icon: '🔥', label: 'משימות להיום', value: todayTasks.length,  color: '#f97316', bg: '#fff7ed',
-              sub: todayTasks.length ? todayTasks.slice(0,2).map(t=>t.title).join(', ')+'…' : 'כל הכבוד!', page: 'tasks' },
-            { icon: '⚠',  label: 'לידים בסיכון', value: atRiskLeads.length, color: '#ef4444', bg: '#fee2e2',
-              sub: atRiskLeads.length ? atRiskLeads.slice(0,2).map(l=>l.name).join(', ') : '0 לידים בסיכון', page: 'leads' },
-            { icon: '🎯', label: 'לידים פעילים',  value: activeLeads.length, color: '#10b981', bg: '#d1fae5',
-              sub: newLeadsToday.length ? `+${newLeadsToday.length} הצטרפו היום` : 'בפייפליין', page: 'leads' },
+            { icon: '💰', label: 'הכנסה החודש',  value: fmtShekel(curTotalInc),  color: '#10b981', bg: '#d1fae5',
+              sub: incDelta !== 0 ? `${incDelta > 0 ? '↑' : '↓'} ${Math.abs(incDelta)}% מחודש קודם` : 'חוגים + פעילויות', page: 'finance' },
+            { icon: '📉', label: 'הוצאות החודש',  value: fmtShekel(curTotalExp),  color: '#ef4444', bg: '#fee2e2',
+              sub: 'מדריכים + הוצאות', page: 'finance' },
+            { icon: '📊', label: 'רווח נקי',       value: fmtShekel(curProfit),     color: curProfit >= 0 ? '#3b82f6' : '#ef4444', bg: curProfit >= 0 ? '#dbeafe' : '#fee2e2',
+              sub: 'הכנסות - הוצאות', page: 'finance' },
+            { icon: '🎯', label: 'לידים פעילים',   value: activeLeads.length,       color: '#f97316', bg: '#fff7ed',
+              sub: atRiskLeads.length ? `⚠ ${atRiskLeads.length} בסיכון` : newLeadsToday.length ? `+${newLeadsToday.length} היום` : 'בפייפליין', page: 'leads' },
           ].map((f, i) => (
             <div key={i} onClick={() => setPage?.(f.page)} onMouseEnter={hoverUp} onMouseLeave={hoverDown}
               style={{ background: f.bg, borderRadius: 12, padding: '16px 18px', border: `1px solid ${f.color}22`, cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                <span style={{ fontSize: 28 }}>{f.icon}</span>
-                <span style={{ fontSize: 28, fontWeight: 800, color: f.color }}>{f.value}</span>
+                <span style={{ fontSize: 24 }}>{f.icon}</span>
+                <span style={{ fontSize: 22, fontWeight: 800, color: f.color }}>{f.value}</span>
               </div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: f.color, marginTop: 6 }}>{f.label}</div>
-              <div style={{ fontSize: 11, color: f.color, opacity: .7, marginTop: 3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f.sub}</div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: f.color, marginTop: 6 }}>{f.label}</div>
+              <div style={{ fontSize: 11, color: f.color, opacity: .7, marginTop: 3 }}>{f.sub}</div>
             </div>
           ))}
         </div>
 
-        {/* ── Stat cards — clickable ──────────────────────────── */}
-        <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+        {/* ── Quick stats row ──────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
           {[
-            { label: 'לקוחות',       val: contacts.length,    sub: contacts.filter(c=>c.status==='customer').length+' פעילים', bg: '#dbeafe', page: 'contacts',
-              ic: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
-            { label: 'פייפליין',     val: fmtShekel(pipeVal), sub: activePipe.length+' עסקאות', bg: '#d1fae5', page: 'deals',
-              ic: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
-            { label: 'הכנסה חודשית', val: fmtShekel(monthRev), sub: 'עסקאות חתום/פעיל', bg: '#ede9fe', page: 'finance',
-              ic: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> },
-            { label: 'מדריכים',      val: instructors.length, sub: instructors.filter(i=>!noSessionDays(i,14)).length+' פעילים', bg: '#fef3c7', page: 'instructors',
-              ic: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg> },
-            { label: 'תלמידים',      val: students.length,   sub: students.filter(s=>studentStatus(s)==='ok').length+' תקינים', bg: '#ccfbf1', page: 'students',
-              ic: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f766e" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg> },
-            { label: 'התראות',       val: totalAlerts,       sub: 'דרושה תשומת לב', bg: '#fee2e2', page: 'tasks',
-              ic: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
-          ].map((s, i) => (
-            <div key={i} className="stat-card" onClick={() => setPage?.(s.page)} onMouseEnter={hoverUp} onMouseLeave={hoverDown}
-              style={{ cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}>
-              <div className="sh"><span className="sl">{s.label}</span><div className="si" style={{ background: s.bg }}>{s.ic}</div></div>
-              <div className="sv" style={{ fontSize: typeof s.val === 'string' ? 18 : 26 }}>{s.val}</div>
-              <div className="ss">{s.sub}</div>
+            { icon: '🔥', label: 'משימות להיום', value: todayTasks.length, color: '#f97316', bg: '#fff7ed',
+              sub: todayTasks.length ? todayTasks.slice(0,2).map(t=>t.title).join(', ') : 'הכל מסודר!', page: 'tasks' },
+            { icon: '⚠', label: 'לידים בסיכון', value: atRiskLeads.length, color: '#ef4444', bg: '#fee2e2',
+              sub: atRiskLeads.length ? atRiskLeads.slice(0,2).map(l=>l.name).join(', ') : '0 בסיכון', page: 'leads' },
+            { icon: '🔔', label: 'התראות', value: totalAlerts, color: '#8b5cf6', bg: '#ede9fe',
+              sub: 'דרושה תשומת לב', page: 'tasks' },
+          ].map((f, i) => (
+            <div key={i} onClick={() => setPage?.(f.page)} onMouseEnter={hoverUp} onMouseLeave={hoverDown}
+              style={{ background: f.bg, borderRadius: 12, padding: '14px 16px', border: `1px solid ${f.color}22`, cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                <span style={{ fontSize: 22 }}>{f.icon}</span>
+                <span style={{ fontSize: 22, fontWeight: 800, color: f.color }}>{f.value}</span>
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 12, color: f.color, marginTop: 4 }}>{f.label}</div>
+              <div style={{ fontSize: 10, color: f.color, opacity: .7, marginTop: 2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f.sub}</div>
             </div>
           ))}
         </div>
 
+        {/* ── Charts ───────────────────────────────────────── */}
         <div className="db-row">
           <div className="charts-grid">
-            {[{ ref: rRef, title: 'הכנסות – 6 חודשים' }, { ref: dRef, title: 'לקוחות לפי סוג' }, { ref: sRef, title: 'עסקאות לפי שלב' }, { ref: pRef, title: 'תלמידים לפי תוכנית' }].map((c, i) => (
+            {[
+              { ref: trendRef,  title: 'הכנסות / הוצאות / רווח – 6 חודשים' },
+              { ref: sourceRef, title: 'פילוח הכנסות לפי מקור (החודש)' },
+              { ref: dRef,      title: 'לקוחות לפי סוג' },
+              { ref: sRef,      title: 'עסקאות לפי שלב' },
+            ].map((c, i) => (
               <div key={i} className="chart-card">
                 <div className="ct">{c.title}</div>
-                <div style={{ height: 175 }}><canvas ref={c.ref}></canvas></div>
+                <div style={{ height: 195 }}><canvas ref={c.ref}></canvas></div>
               </div>
             ))}
           </div>
 
-          {/* ── Tasks panel (replaces alerts) ────────────────── */}
+          {/* ── Tasks panel ─────────────────────────────────── */}
           <div className="alerts-panel">
             <div className="alerts-hd" style={{ cursor: 'pointer' }} onClick={() => setPage?.('tasks')}>
               📋 משימות פתוחות ({sortedTasks.length})
@@ -156,9 +279,7 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
                 const pr    = PRIORITIES.find(p => p.value === t.priority)
                 const cname = contacts.find(c => c.id === t.contactId)?.name
                 return (
-                  <div key={t.id} className="alert-row"
-                    style={{ cursor: 'pointer', alignItems: 'flex-start' }}
-                    onClick={() => setPage?.('tasks')}>
+                  <div key={t.id} className="alert-row" style={{ cursor: 'pointer', alignItems: 'flex-start' }} onClick={() => setPage?.('tasks')}>
                     <div className="alert-dot" style={{ background: isOv ? '#ef4444' : isTo ? '#f97316' : '#94a3b8', marginTop: 5, flexShrink: 0 }}/>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
@@ -182,6 +303,7 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
           </div>
         </div>
 
+        {/* ── Recent activity ──────────────────────────────── */}
         <div className="card">
           <div className="card-hd"><h3>פעילות אחרונה</h3></div>
           {recentActs.length === 0

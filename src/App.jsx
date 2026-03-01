@@ -8,6 +8,7 @@ import { useStudents }    from './hooks/useStudents'
 import { useLeads }       from './hooks/useLeads'
 import { useFinance }     from './hooks/useFinance'
 import { useClasses }     from './hooks/useClasses'
+import { useActivities }  from './hooks/useActivities'
 import { useAgent }       from './hooks/useAgent'
 import { STAGES }         from './constants'
 import Sidebar, { MobileBottomNav } from './components/Sidebar'
@@ -20,6 +21,7 @@ import StudentsPage         from './components/pages/StudentsPage'
 import LeadsPipelinePage    from './components/pages/LeadsPipelinePage'
 import FinancePage          from './components/pages/FinancePage'
 import ClassesPage          from './components/pages/ClassesPage'
+import ActivitiesPage       from './components/pages/ActivitiesPage'
 import AuthScreen           from './components/AuthScreen'
 import AgentPanel           from './components/agent/AgentPanel'
 import InstructorPortal     from './components/instructor/InstructorPortal'
@@ -56,6 +58,7 @@ export default function App() {
   const le  = useLeads()
   const fin = useFinance()
   const cls = useClasses()
+  const act = useActivities()
   const agent = useAgent()
 
   useEffect(() => {
@@ -83,7 +86,7 @@ export default function App() {
   }, [agent.messages])
 
   const loadAll = () => {
-    c.load(); d.load(); t.load(); i.load(); s.load(); le.load(); fin.load(); cls.load()
+    c.load(); d.load(); t.load(); i.load(); s.load(); le.load(); fin.load(); cls.load(); act.load()
   }
 
   useEffect(() => {
@@ -98,7 +101,7 @@ export default function App() {
       else {
         c.setContacts([]); d.setDeals([]); t.setTasks([])
         i.setInstructors([]); s.setStudents([]); le.setLeads([])
-        fin.setPayments([]); fin.setSalaries([]); cls.setClasses([])
+        fin.setPayments([]); fin.setSalaries([]); cls.setClasses([]); act.setActivities([])
         setLoading(false)
       }
     })
@@ -167,7 +170,7 @@ export default function App() {
   if (!user) return <AuthScreen/>
 
   const pages = {
-    dashboard:   <Dashboard    contacts={c.contacts} deals={d.deals} tasks={t.tasks} instructors={i.instructors} students={s.students} leads={le.leads} dark={dark} setPage={setPage}/>,
+    dashboard:   <Dashboard    contacts={c.contacts} deals={d.deals} tasks={t.tasks} instructors={i.instructors} students={s.students} leads={le.leads} classes={cls.classes} activities={act.activities} dark={dark} setPage={setPage}/>,
     leads:       <LeadsPipelinePage leads={le.leads} onAdd={le.addLead} onUpdate={le.editLead} onMoveStage={le.moveStage} onDelete={le.removeLead} onReload={le.load}/>,
     contacts:    <ContactsPage contacts={c.contacts} deals={d.deals} onAdd={addContact} onUpdate={updateContact} onDelete={deleteContact} onReload={c.load}/>,
     deals:       <DealsPage    deals={d.deals} contacts={c.contacts} onAdd={addDeal} onUpdate={updateDeal} onDelete={deleteDeal}/>,
@@ -176,6 +179,7 @@ export default function App() {
     students:    <StudentsPage students={s.students} contacts={c.contacts} onAdd={addStudent} onUpdate={updateStudent} onDelete={deleteStudent}/>,
     finance:     <FinancePage fin={fin} instructors={i.instructors} contacts={c.contacts}/>,
     classes:     <ClassesPage classes={cls.classes} instructors={i.instructors} contacts={c.contacts} onAdd={cls.addClass} onUpdate={cls.editClass} onDelete={cls.removeClass} onDuplicate={cls.duplicateClass} onReload={cls.load} finance={fin}/>,
+    activities:  <ActivitiesPage activities={act.activities} contacts={c.contacts} onAdd={act.addActivity} onUpdate={act.editActivity} onDelete={act.removeActivity} onReload={act.load}/>,
   }
 
   return (

@@ -1,24 +1,37 @@
-import { useState, useCallback, useEffect } from 'react'
-import { fetchActivities, createActivity } from '../services/activitiesService'
+import { useState, useCallback } from 'react'
+import * as svc from '../services/activitiesService'
 
-export function useActivities(contactId) {
+export function useActivities() {
   const [activities, setActivities] = useState([])
-  const [loading, setLoading]       = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (!contactId) return
+  const load = useCallback(async () => {
     setLoading(true)
-    fetchActivities(contactId)
-      .then(setActivities)
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [contactId])
+    try {
+      const data = await svc.fetchActivities()
+      setActivities(data)
+    } catch (e) {
+      console.error('[useActivities] load:', e.message)
+    }
+    setLoading(false)
+  }, [])
 
-  const add = useCallback(async (data) => {
-    const row = await createActivity({ ...data, contactId })
-    setActivities(p => [row, ...p])
+  const addActivity = async data => {
+    const row = await svc.createActivity(data)
+    if (row) setActivities(p => [row, ...p])
     return row
-  }, [contactId])
+  }
 
-  return { activities, loading, add }
+  const editActivity = async (id, data) => {
+    const row = await svc.updateActivity(id, data)
+    if (row) setActivities(p => p.map(a => a.id === id ? row : a))
+    return row
+  }
+
+  const removeActivity = async id => {
+    await svc.deleteActivity(id)
+    setActivities(p => p.filter(a => a.id !== id))
+  }
+
+  return { activities, setActivities, loading, load, addActivity, editActivity, removeActivity }
 }
