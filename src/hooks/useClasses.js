@@ -1,26 +1,33 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-// Known DB columns – strip anything else before insert/update to avoid 400
-const DB_COLS = new Set([
+// Core columns that 100% exist in DB from original migration
+const CORE_COLS = [
   'class_name','activity_type','location','city',
   'contact_name','contact_phone','contact_id',
-  'coordinator',
   'year','month',
   'day','time_start','subject','grades',
   'groups_count','students_count','sessions_count','session_length',
   'instructor_id','instructor_price_per_session','total_instructor_cost',
-  'overhead_pct','monthly_hours',
   'agreed_price','price_per_student','price_per_session',
   'actual_income','payment_date','payment_method','invoice_number',
   'paid','status','responsible','notes',
   'owner_id',
-])
+]
 
-function clean(data) {
+// Extra columns added later (might not exist if migration not run)
+const EXTRA_COLS = ['coordinator','overhead_pct','monthly_hours']
+
+function pickCols(data, cols) {
   const out = {}
-  for (const [k, v] of Object.entries(data)) {
-    if (DB_COLS.has(k) && v !== '' && v !== undefined) out[k] = v
+  for (const k of cols) {
+    if (k in data && data[k] !== undefined && data[k] !== null) {
+      out[k] = data[k]
+    }
+  }
+  // Remove empty strings for text fields, keep 0 for numbers and false for booleans
+  for (const [k, v] of Object.entries(out)) {
+    if (v === '' && k !== 'notes') delete out[k]
   }
   return out
 }
@@ -42,19 +49,20 @@ export function useClasses() {
 
   const addClass = async data => {
     const { data: { user } } = await supabase.auth.getUser()
-    const payload = clean({ ...data, owner_id: user.id })
+    const raw = { ...data, owner_id: user.id }
 
+    // Try with all columns first (core + extra)
+    let payload = pickCols(raw, [...CORE_COLS, ...EXTRA_COLS])
     let { data: row, error } = await supabase
       .from('classes')
       .insert(payload)
       .select('*, instructors(name)')
       .single()
 
-    // If new columns don't exist yet, retry without them
-    if (error && error.code === 'PGRST204' || (error && error.message?.includes('column'))) {
-      delete payload.coordinator
-      delete payload.overhead_pct
-      delete payload.monthly_hours
+    // If failed (400 = unknown columns), retry with core columns only
+    if (error) {
+      console.warn('[useClasses] insert failed, retrying with core cols:', error.message)
+      payload = pickCols(raw, CORE_COLS)
       const res = await supabase
         .from('classes')
         .insert(payload)
@@ -70,13 +78,28 @@ export function useClasses() {
   }
 
   const editClass = async (id, data) => {
-    const payload = clean(data)
-    const { data: row, error } = await supabase
+    let payload = pickCols(data, [...CORE_COLS, ...EXTRA_COLS])
+    delete payload.owner_id
+    let { data: row, error } = await supabase
       .from('classes')
       .update(payload)
       .eq('id', id)
       .select('*, instructors(name)')
       .single()
+
+    if (error) {
+      payload = pickCols(data, CORE_COLS)
+      delete payload.owner_id
+      const res = await supabase
+        .from('classes')
+        .update(payload)
+        .eq('id', id)
+        .select('*, instructors(name)')
+        .single()
+      row = res.data
+      error = res.error
+    }
+
     if (error) throw new Error(error.message)
     if (row) setClasses(p => p.map(c => c.id === id ? row : c))
   }
