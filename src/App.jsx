@@ -175,7 +175,7 @@ export default function App() {
     instructors: <InstructorsPage instructors={i.instructors} contacts={c.contacts} onAdd={addInstructor} onUpdate={updateInstructor} onDelete={deleteInstructor}/>,
     students:    <StudentsPage students={s.students} contacts={c.contacts} onAdd={addStudent} onUpdate={updateStudent} onDelete={deleteStudent}/>,
     finance:     <FinancePage fin={fin} instructors={i.instructors} contacts={c.contacts}/>,
-    classes:     <ClassesPage classes={cls.classes} instructors={i.instructors} contacts={c.contacts} onAdd={cls.addClass} onUpdate={cls.editClass} onDelete={cls.removeClass} onReload={cls.load}/>,
+    classes:     <ClassesPage classes={cls.classes} instructors={i.instructors} contacts={c.contacts} onAdd={cls.addClass} onUpdate={cls.editClass} onDelete={cls.removeClass} onDuplicate={cls.duplicateClass} onReload={cls.load} finance={fin}/>,
   }
 
   return (

@@ -49,7 +49,7 @@ export function exportClassesCSV(classes) {
     'לקוח משלם','יישוב','רכזת','מתנ"ס/בי"ס','מיקום','יום','שעה',
     'נושא','כיתה','מדריך','מנות ילדים','תשלום פר ילד חודשי',
     'תשלום החודש','תקורה%','סה"כ רווח','עלות מדריך לשעה',
-    'עלות מדריך לחודש','רווחיות חוג'
+    'עלות מדריך קבועה','עלות מדריך לחודש','רווחיות חוג'
   ]
   const rows = classes.map(c => {
     const students      = Number(c.students_count) || 0
@@ -58,15 +58,17 @@ export function exportClassesCSV(classes) {
     const overheadPct   = Number(c.overhead_pct) ?? 70
     const totalProfit   = overheadPct > 0 ? Math.round(monthlyPay * (overheadPct / 100)) : monthlyPay
     const instrHourly   = Number(c.instructor_price_per_session) || 0
+    const hasOverride   = c.instructor_total_override != null && c.instructor_total_override !== '' && c.instructor_total_override !== 0
     const monthlyHrs    = Number(c.monthly_hours) || 4
-    const instrMonthly  = instrHourly * monthlyHrs
+    const instrMonthly  = hasOverride ? Number(c.instructor_total_override) : instrHourly * monthlyHrs
     const profitability = totalProfit - instrMonthly
     return [
       c.contact_name || '', c.city || '', c.coordinator || '',
       c.location || '', c.class_name || '', c.day || '', c.time_start || '',
       c.subject || '', c.grades || '', c.instructors?.name || '',
       students, pricePerChild, monthlyPay, overheadPct + '%',
-      totalProfit, instrHourly, instrMonthly, profitability,
+      totalProfit, instrHourly, hasOverride ? Number(c.instructor_total_override) : '',
+      instrMonthly, profitability,
     ]
   })
   dlCSV('win-crm-classes.csv', hd, rows)

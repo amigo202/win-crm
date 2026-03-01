@@ -41,9 +41,11 @@ function calcRow(cls) {
   const totalProfit    = overheadPct > 0 ? Math.round(monthlyPayment * (overheadPct / 100)) : monthlyPayment
   const instrHourly    = Number(cls.instructor_price_per_session) || 0
   const monthlyHours   = Number(cls.monthly_hours) || 4
-  const instrMonthly   = instrHourly * monthlyHours
+  // instructor_total_override: fixed instructor cost overrides hourly calc
+  const hasOverride    = cls.instructor_total_override != null && cls.instructor_total_override !== '' && cls.instructor_total_override !== 0
+  const instrMonthly   = hasOverride ? Number(cls.instructor_total_override) : instrHourly * monthlyHours
   const profitability  = totalProfit - instrMonthly
-  return { students, pricePerChild, monthlyPayment, overheadPct, totalProfit, instrHourly, monthlyHours, instrMonthly, profitability }
+  return { students, pricePerChild, monthlyPayment, overheadPct, totalProfit, instrHourly, monthlyHours, instrMonthly, profitability, hasOverride }
 }
 
 // ── Empty class form ────────────────────────────────────────────────────────
@@ -56,6 +58,7 @@ function emptyClass() {
     day: 'ראשון', time_start: '', subject: '', grades: '',
     groups_count: 1, students_count: '', sessions_count: '', session_length: 60,
     instructor_id: '', instructor_price_per_session: '', total_instructor_cost: '',
+    instructor_total_override: '',
     overhead_pct: 70, monthly_hours: 4,
     agreed_price: '', price_per_student: '', price_per_session: '',
     actual_income: '', payment_date: '', payment_method: '', invoice_number: '',
@@ -64,7 +67,7 @@ function emptyClass() {
   }
 }
 
-// ── 5) Grouping helper ─────────────────────────────────────────────────────
+// ── Grouping helper ─────────────────────────────────────────────────────────
 function groupKey(cls) {
   return `${cls.contact_name || ''}|${cls.location || ''}|${cls.subject || ''}`
 }
@@ -99,7 +102,61 @@ function TruncCell({ children, style, width, align, bold, color, className }) {
   return <td style={baseStyle} title={text} className={className}>{children}</td>
 }
 
-// ── ClassModal ──────────────────────────────────────────────────────────────
+// ── Inline edit cell ────────────────────────────────────────────────────────
+function EditCell({ value, onChange, type, width, options, placeholder, min, max, step }) {
+  const st = {
+    width: '100%', padding: '4px 6px', fontSize: 12, fontFamily: 'inherit',
+    border: '1px solid var(--accent)', borderRadius: 4, background: 'var(--bg)',
+    color: 'var(--text)', direction: 'rtl', outline: 'none', boxSizing: 'border-box',
+  }
+  if (options) {
+    return (
+      <td style={{ padding: '4px', width }}>
+        <select value={value || ''} onChange={e => onChange(e.target.value)} style={st}>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </td>
+    )
+  }
+  return (
+    <td style={{ padding: '4px', width }}>
+      <input type={type || 'text'} value={value ?? ''} onChange={e => onChange(type === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
+        placeholder={placeholder} min={min} max={max} step={step} style={st} />
+    </td>
+  )
+}
+
+// ── Group subtotal row ──────────────────────────────────────────────────────
+function GroupSubtotalRow({ items, label }) {
+  let totStudents = 0, totMonthly = 0, totProfit = 0, totInstrCost = 0, totProfitability = 0, totHours = 0
+  for (const c of items) {
+    const r = calcRow(c)
+    totStudents      += r.students
+    totMonthly       += r.monthlyPayment
+    totProfit        += r.totalProfit
+    totInstrCost     += r.instrMonthly
+    totProfitability += r.profitability
+    totHours         += r.monthlyHours
+  }
+  return (
+    <tr className="cls-subtotal-row">
+      <td className="cls-sticky-col"></td>
+      <td colSpan={10} style={{ textAlign: 'right', fontWeight: 700, fontSize: 11, color: 'var(--accent)' }}>
+        סיכום: {label} ({items.length} חוגים, {totHours} שעות)
+      </td>
+      <td style={{ textAlign: 'center', fontWeight: 700 }}>{totStudents}</td>
+      <td></td>
+      <td style={{ textAlign: 'center', fontWeight: 700, color: '#0ea5e9' }}>₪{fmt(totMonthly)}</td>
+      <td></td>
+      <td style={{ textAlign: 'center', fontWeight: 700, color: '#10b981' }}>₪{fmt(totProfit)}</td>
+      <td></td>
+      <td style={{ textAlign: 'center', fontWeight: 700, color: '#8b5cf6' }}>₪{fmt(totInstrCost)}</td>
+      <td style={{ textAlign: 'center', fontWeight: 700, color: totProfitability >= 0 ? '#10b981' : '#ef4444' }}>₪{fmt(totProfitability)}</td>
+    </tr>
+  )
+}
+
+// ── ClassModal (kept for "new class" — inline edit used for existing) ──────
 function ClassModal({ cls, instructors, contacts, onSave, onClose, onDel }) {
   const [form, setForm]   = useState(() => cls ? { ...emptyClass(), ...cls } : emptyClass())
   const [saving, setSaving] = useState(false)
@@ -203,7 +260,12 @@ function ClassModal({ cls, instructors, contacts, onSave, onClose, onDel }) {
               <div style={GRP3}>
                 <div><label style={LBL}>עלות מדריך לשעה (₪)</label><input type="number" min="0" value={form.instructor_price_per_session} onChange={fn('instructor_price_per_session')} placeholder="0" style={INP}/></div>
                 <div><label style={LBL}>שעות חודשיות</label><input type="number" min="0" value={form.monthly_hours ?? 4} onChange={fn('monthly_hours')} placeholder="4" style={INP}/></div>
-                <div><label style={LBL}>עלות מדריך לחודש</label><div style={{ ...INP, background:'var(--bg)', fontWeight:700, color:'#8b5cf6', display:'flex', alignItems:'center' }}>₪{fmt(calc.instrMonthly)}</div></div>
+                <div><label style={LBL}>עלות מדריך קבועה (₪)</label><input type="number" min="0" value={form.instructor_total_override ?? ''} onChange={fn('instructor_total_override')} placeholder="עוקף חישוב" style={INP}/></div>
+              </div>
+              <div style={{ background:'var(--bg)', borderRadius:10, padding:'8px 16px', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                <span style={{ fontSize:11, color:'var(--muted)' }}>עלות מדריך לחודש:</span>
+                <span style={{ fontSize:16, fontWeight:700, color:'#8b5cf6' }}>₪{fmt(calc.instrMonthly)}</span>
+                {calc.hasOverride && <span style={{ fontSize:10, color:'#f59e0b', fontWeight:600 }}>(סכום קבוע)</span>}
               </div>
               <div style={{ background:'#f0f9ff', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#0c4a6e', fontWeight:600 }}>🏦 תשלום בפועל</div>
               <div style={GRP}>
@@ -279,6 +341,7 @@ function ClassImportModal({ onClose, onAdd, onReload }) {
           agreed_price:                Number(r['תשלום החודש'] || r['סוכם'] || r['agreed_price'] || 0),
           overhead_pct:                Number(r['תקורה'] || r['תקורה%'] || 70),
           instructor_price_per_session:Number(r['עלות מדריך לשעה'] || 0),
+          instructor_total_override:   r['עלות מדריך קבועה'] ? Number(r['עלות מדריך קבועה']) : '',
           monthly_hours:               Number(r['שעות חודשיות'] || 4),
           actual_income:               Number(r['בפועל'] || r['actual_income'] || 0),
           status:                      r['סטטוס']   || r['status'] || 'פעיל',
@@ -363,46 +426,81 @@ function ClassImportModal({ onClose, onAdd, onReload }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ── Main ClassesPage ─────────────────────────────────────────────────────────
+// ── Main ClassesPage — Monthly Report ────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
-export default function ClassesPage({ classes, instructors, contacts, onAdd, onUpdate, onDelete, onReload }) {
+export default function ClassesPage({ classes, instructors, contacts, onAdd, onUpdate, onDelete, onDuplicate, onReload, finance }) {
   const [modal, setModal]         = useState(null)
   const [importing, setImporting] = useState(false)
   const [search, setSearch]       = useState('')
   const [filterCity, setFilterCity]         = useState('')
   const [filterStatus, setFilterStatus]     = useState('')
   const [filterPaid, setFilterPaid]         = useState('')
-  // 2) Multi-select
+  const [filterInstructor, setFilterInstructor] = useState('')
+  const [filterSubject, setFilterSubject]   = useState('')
+  // Month/Year — mandatory monthly report
+  const [filterMonth, setFilterMonth]       = useState(CUR_MONTH)
+  const [filterYear, setFilterYear]         = useState(CUR_YEAR)
+  // Multi-select
   const [selected, setSelected]   = useState(new Set())
   const [deleting, setDeleting]   = useState(false)
+  // Inline editing
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm]   = useState({})
+  const [saving, setSaving]       = useState(false)
 
   const cities = useMemo(() => [...new Set(classes.map(c => c.city).filter(Boolean))].sort(), [classes])
+  const subjects = useMemo(() => [...new Set(classes.map(c => c.subject).filter(Boolean))].sort(), [classes])
+  const instrList = useMemo(() => [...new Set(classes.map(c => c.instructors?.name || '').filter(Boolean))].sort(), [classes])
 
+  // Filter by month/year first (mandatory), then other filters
   const filtered = useMemo(() => {
-    let arr = [...classes]
-    if (search)       arr = arr.filter(c => [c.class_name, c.location, c.city, c.contact_name, c.subject, c.coordinator].some(v => v?.toLowerCase().includes(search.toLowerCase())))
-    if (filterCity)   arr = arr.filter(c => c.city === filterCity)
-    if (filterStatus) arr = arr.filter(c => c.status === filterStatus)
+    let arr = classes.filter(c => Number(c.month) === filterMonth && Number(c.year) === filterYear)
+    if (search)           arr = arr.filter(c => [c.class_name, c.location, c.city, c.contact_name, c.subject, c.coordinator].some(v => v?.toLowerCase().includes(search.toLowerCase())))
+    if (filterCity)       arr = arr.filter(c => c.city === filterCity)
+    if (filterStatus)     arr = arr.filter(c => c.status === filterStatus)
+    if (filterInstructor) arr = arr.filter(c => (c.instructors?.name || '') === filterInstructor)
+    if (filterSubject)    arr = arr.filter(c => c.subject === filterSubject)
     if (filterPaid === 'paid')    arr = arr.filter(c => c.paid)
     if (filterPaid === 'partial') arr = arr.filter(c => !c.paid && (c.actual_income || 0) > 0)
     if (filterPaid === 'unpaid')  arr = arr.filter(c => !c.paid && !(c.actual_income > 0) && (c.agreed_price > 0))
     return sortAndGroup(arr)
-  }, [classes, search, filterCity, filterStatus, filterPaid])
+  }, [classes, search, filterCity, filterStatus, filterPaid, filterInstructor, filterSubject, filterMonth, filterYear])
 
+  // Build grouped items for subtotals
+  const groupedItems = useMemo(() => {
+    const groups = []
+    let currentKey = null
+    let currentGroup = []
+    for (const cls of filtered) {
+      const key = groupKey(cls)
+      if (key !== currentKey) {
+        if (currentGroup.length > 0) groups.push({ key: currentKey, items: currentGroup })
+        currentKey = key
+        currentGroup = [cls]
+      } else {
+        currentGroup.push(cls)
+      }
+    }
+    if (currentGroup.length > 0) groups.push({ key: currentKey, items: currentGroup })
+    return groups
+  }, [filtered])
+
+  // Stats for KPI cards — uses filtered (monthly) data
   const stats = useMemo(() => {
-    let totalMonthly = 0, totalProfit = 0, totalInstrCost = 0
-    for (const c of classes) {
+    let totalMonthly = 0, totalProfit = 0, totalInstrCost = 0, totalProfitability = 0
+    for (const c of filtered) {
       const r = calcRow(c)
-      totalMonthly   += r.monthlyPayment
-      totalProfit    += r.profitability
-      totalInstrCost += r.instrMonthly
+      totalMonthly       += r.monthlyPayment
+      totalProfit        += r.totalProfit
+      totalInstrCost     += r.instrMonthly
+      totalProfitability += r.profitability
     }
     return {
-      count: classes.length,
-      totalMonthly, totalProfit, totalInstrCost,
-      totalStudents: classes.reduce((s, c) => s + (Number(c.students_count) || 0), 0),
+      count: filtered.length,
+      totalMonthly, totalProfit, totalInstrCost, totalProfitability,
+      totalStudents: filtered.reduce((s, c) => s + (Number(c.students_count) || 0), 0),
     }
-  }, [classes])
+  }, [filtered])
 
   const handleSave = async form => {
     if (modal?.cls) await onUpdate(modal.cls.id, form)
@@ -410,7 +508,33 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
   }
   const handleDelete = async id => { await onDelete(id); setModal(null) }
 
-  // 2) Selection handlers
+  // Inline edit handlers
+  const startEdit = useCallback((cls) => {
+    setEditingId(cls.id)
+    setEditForm({ ...cls })
+  }, [])
+  const cancelEdit = useCallback(() => {
+    setEditingId(null)
+    setEditForm({})
+  }, [])
+  const updateField = useCallback((key, val) => {
+    setEditForm(prev => ({ ...prev, [key]: val }))
+  }, [])
+  const saveInlineEdit = useCallback(async () => {
+    if (!editingId) return
+    setSaving(true)
+    try {
+      await onUpdate(editingId, editForm)
+      setEditingId(null)
+      setEditForm({})
+    } catch (e) {
+      alert('שגיאה בשמירה: ' + (e?.message || ''))
+    } finally {
+      setSaving(false)
+    }
+  }, [editingId, editForm, onUpdate])
+
+  // Selection handlers
   const toggleSelect = useCallback((id) => {
     setSelected(prev => {
       const next = new Set(prev)
@@ -429,30 +553,71 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
     setSelected(new Set())
     setDeleting(false)
   }
+  // Duplicate selected classes
+  const bulkDuplicate = async () => {
+    if (!onDuplicate) return
+    const toDup = filtered.filter(c => selected.has(c.id))
+    if (!window.confirm(`לשכפל ${toDup.length} חוגים?`)) return
+    setSaving(true)
+    for (const cls of toDup) {
+      try { await onDuplicate(cls) } catch (e) { console.error('dup error', e) }
+    }
+    setSelected(new Set())
+    setSaving(false)
+    if (onReload) await onReload()
+  }
 
-  const clearFilters = () => { setFilterCity(''); setFilterStatus(''); setFilterPaid(''); setSearch('') }
-  const hasFilters = filterCity || filterStatus || filterPaid || search
+  const clearFilters = () => { setFilterCity(''); setFilterStatus(''); setFilterPaid(''); setSearch(''); setFilterInstructor(''); setFilterSubject('') }
+  const hasFilters = filterCity || filterStatus || filterPaid || search || filterInstructor || filterSubject
+
+  // Navigate months
+  const prevMonth = () => {
+    if (filterMonth === 1) { setFilterMonth(12); setFilterYear(y => y - 1) }
+    else setFilterMonth(m => m - 1)
+  }
+  const nextMonth = () => {
+    if (filterMonth === 12) { setFilterMonth(1); setFilterYear(y => y + 1) }
+    else setFilterMonth(m => m + 1)
+  }
 
   return (
     <>
       <div className="ph">
-        <h2>🏫 חוגים וקורסים</h2>
+        <h2>📊 דוח חוגים חודשי</h2>
         <div style={{ display:'flex', gap:8 }}>
-          <button className="btn btn-o btn-sm" onClick={() => exportClassesCSV(classes)}>📥 ייצוא CSV</button>
+          <button className="btn btn-o btn-sm" onClick={() => exportClassesCSV(filtered)}>📥 ייצוא CSV</button>
           <button className="btn btn-o btn-sm" onClick={() => setImporting(true)}>📤 ייבוא</button>
           <button className="btn btn-p btn-sm" onClick={() => setModal({ cls: null })}>+ הוסף חוג</button>
         </div>
       </div>
 
       <div className="pb">
-        {/* KPI Cards */}
+        {/* Month/Year Navigation */}
+        <div className="card" style={{ padding:'12px 18px', marginBottom:14, display:'flex', alignItems:'center', justifyContent:'center', gap:16 }}>
+          <button className="btn btn-o btn-sm" onClick={prevMonth} style={{ fontSize:18, padding:'4px 12px' }}>‹</button>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))}
+              style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:14, fontWeight:700, fontFamily:'inherit', direction:'rtl', background:'var(--bg)', color:'var(--text)' }}>
+              {MONTHS_HE.map((m,i) => <option key={i+1} value={i+1}>{m}</option>)}
+            </select>
+            <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))}
+              style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:14, fontWeight:700, fontFamily:'inherit', background:'var(--bg)', color:'var(--text)' }}>
+              {[CUR_YEAR-2, CUR_YEAR-1, CUR_YEAR, CUR_YEAR+1].map(y => <option key={y}>{y}</option>)}
+            </select>
+          </div>
+          <button className="btn btn-o btn-sm" onClick={nextMonth} style={{ fontSize:18, padding:'4px 12px' }}>›</button>
+          <button className="btn btn-o btn-sm" onClick={() => { setFilterMonth(CUR_MONTH); setFilterYear(CUR_YEAR) }}
+            style={{ marginRight:8, fontSize:11 }}>החודש</button>
+        </div>
+
+        {/* KPI Cards — monthly */}
         <div className="stats-grid" style={{ gridTemplateColumns:'repeat(5,1fr)', marginBottom:16 }}>
           {[
             { label:'חוגים',          val: stats.count,                   color:'#0ea5e9', icon:'🏫' },
             { label:'תלמידים',        val: stats.totalStudents,            color:'#8b5cf6', icon:'👨‍🎓' },
             { label:'הכנסות חודשיות',  val: `₪${fmt(stats.totalMonthly)}`,  color:'#10b981', icon:'💰' },
             { label:'עלות מדריכים',    val: `₪${fmt(stats.totalInstrCost)}`, color:'#f59e0b', icon:'👨‍🏫' },
-            { label:'רווחיות כוללת',   val: `₪${fmt(stats.totalProfit)}`,    color: stats.totalProfit >= 0 ? '#10b981' : '#ef4444', icon:'📊' },
+            { label:'רווחיות כוללת',   val: `₪${fmt(stats.totalProfitability)}`, color: stats.totalProfitability >= 0 ? '#10b981' : '#ef4444', icon:'📊' },
           ].map((k, i) => (
             <div key={i} className="stat-card" style={{ textAlign:'center', padding:'14px 10px' }}>
               <div style={{ fontSize:22, marginBottom:4 }}>{k.icon}</div>
@@ -462,25 +627,37 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
           ))}
         </div>
 
-        {/* 2) Bulk actions toolbar */}
+        {/* Bulk actions toolbar */}
         {selected.size > 0 && (
           <div className="cls-bulk-bar">
             <span>נבחרו {selected.size} חוגים</span>
+            <button className="btn btn-sm" onClick={bulkDuplicate} disabled={saving}
+              style={{ background:'#0ea5e9', color:'#fff', border:'none' }}>
+              {saving ? '...משכפל' : '📋 שכפל'}
+            </button>
             <button className="btn btn-sm" onClick={bulkDelete} disabled={deleting}
               style={{ background:'#ef4444', color:'#fff', border:'none' }}>
-              {deleting ? '...מוחק' : '🗑️ מחיקה מרובה'}
+              {deleting ? '...מוחק' : '🗑️ מחיקה'}
             </button>
-            <button className="btn btn-o btn-sm" onClick={() => setSelected(new Set())}>✕ בטל בחירה</button>
+            <button className="btn btn-o btn-sm" onClick={() => setSelected(new Set())}>✕ בטל</button>
           </div>
         )}
 
         {/* Filters */}
         <div className="card" style={{ padding:'10px 14px', marginBottom:14, display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 חיפוש..."
-            style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:12, fontFamily:'inherit', direction:'rtl', background:'var(--bg)', color:'var(--text)', minWidth:160, flex:1 }}/>
+            style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:12, fontFamily:'inherit', direction:'rtl', background:'var(--bg)', color:'var(--text)', minWidth:140, flex:1 }}/>
           <select value={filterCity} onChange={e => setFilterCity(e.target.value)}
             style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:12, fontFamily:'inherit', direction:'rtl', background:'var(--bg)', color:'var(--text)' }}>
             <option value="">כל הערים</option>{cities.map(c => <option key={c}>{c}</option>)}
+          </select>
+          <select value={filterInstructor} onChange={e => setFilterInstructor(e.target.value)}
+            style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:12, fontFamily:'inherit', direction:'rtl', background:'var(--bg)', color:'var(--text)' }}>
+            <option value="">כל המדריכים</option>{instrList.map(n => <option key={n}>{n}</option>)}
+          </select>
+          <select value={filterSubject} onChange={e => setFilterSubject(e.target.value)}
+            style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:12, fontFamily:'inherit', direction:'rtl', background:'var(--bg)', color:'var(--text)' }}>
+            <option value="">כל הנושאים</option>{subjects.map(s => <option key={s}>{s}</option>)}
           </select>
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
             style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:12, fontFamily:'inherit', background:'var(--bg)', color:'var(--text)' }}>
@@ -492,7 +669,7 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
             <option value="paid">שולם</option><option value="partial">חלקי</option><option value="unpaid">ממתין</option>
           </select>
           {hasFilters && <button className="btn btn-o btn-sm" onClick={clearFilters} style={{ color:'var(--danger)' }}>× נקה</button>}
-          <span style={{ fontSize:12, color:'var(--muted)', marginRight:'auto' }}>{filtered.length} / {classes.length}</span>
+          <span style={{ fontSize:12, color:'var(--muted)', marginRight:'auto' }}>{filtered.length} חוגים</span>
         </div>
 
         {/* Main Table */}
@@ -500,8 +677,8 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
           <div className="card" style={{ padding:'60px 20px', textAlign:'center' }}>
             <div className="empty">
               <div className="empty-ico">🏫</div>
-              <p>{classes.length === 0 ? 'אין חוגים במערכת עדיין' : 'לא נמצאו חוגים לפי הסינון'}</p>
-              {classes.length === 0 && <button className="btn btn-p" onClick={() => setModal({ cls: null })} style={{ marginTop:12 }}>+ הוסף חוג ראשון</button>}
+              <p>אין חוגים ב{MONTHS_HE[filterMonth - 1]} {filterYear}</p>
+              <button className="btn btn-p" onClick={() => setModal({ cls: null })} style={{ marginTop:12 }}>+ הוסף חוג</button>
             </div>
           </div>
         ) : (
@@ -535,69 +712,135 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((cls, idx) => {
-                    const r   = calcRow(cls)
-                    const instrName = cls.instructors?.name || (instructors.find(x => x.id === cls.instructor_id)?.name) || '—'
-                    const clientClr = getClientColor(cls.contact_name)
-                    const prevKey = idx > 0 ? groupKey(filtered[idx - 1]) : null
-                    const curKey  = groupKey(cls)
-                    const isNewGroup = idx === 0 || curKey !== prevKey
+                  {groupedItems.map((group) => {
+                    const groupLabel = group.items[0]?.contact_name || group.items[0]?.location || '—'
+                    const rows = []
 
-                    return (
-                      <tr key={cls.id}
-                        className={`cls-row ${isNewGroup ? 'cls-group-start' : ''} ${selected.has(cls.id) ? 'cls-selected' : ''}`}
-                        style={{ borderRight: `5px solid ${clientClr}` }}>
-                        {/* Actions col */}
-                        <td className="cls-col-actions cls-sticky-col" onClick={e => e.stopPropagation()}>
-                          <div className="cls-actions-cell">
-                            <input type="checkbox" checked={selected.has(cls.id)}
-                              onChange={() => toggleSelect(cls.id)} style={{ cursor:'pointer' }}/>
-                            <button className="cls-action-btn" onClick={() => setModal({ cls })} title="עריכה">✏️</button>
-                            <button className="cls-action-btn cls-action-del" onClick={() => {
-                              if(window.confirm('למחוק חוג זה?')) handleDelete(cls.id)
-                            }} title="מחיקה">🗑️</button>
-                          </div>
-                        </td>
-                        <TruncCell width={130} bold color={clientClr}>{cls.contact_name || '—'}</TruncCell>
-                        <TruncCell width={80}>{cls.city || '—'}</TruncCell>
-                        <TruncCell width={80}>{cls.coordinator || '—'}</TruncCell>
-                        <TruncCell width={130}>{cls.location || '—'}</TruncCell>
-                        <TruncCell width={120}>
-                          {cls.class_name || '—'}
-                          {cls.activity_type && <span style={{ fontSize:9, color:'var(--muted)', marginRight:4 }}>({cls.activity_type})</span>}
-                        </TruncCell>
-                        <TruncCell width={55} align="center">{cls.day || '—'}</TruncCell>
-                        <TruncCell width={55} align="center">{cls.time_start || '—'}</TruncCell>
-                        <TruncCell width={80}>{cls.subject || '—'}</TruncCell>
-                        <TruncCell width={55} align="center">{cls.grades || '—'}</TruncCell>
-                        <TruncCell width={90}>{instrName}</TruncCell>
-                        <TruncCell width={55} align="center" bold>{r.students || '—'}</TruncCell>
-                        <TruncCell width={70} align="center">{r.pricePerChild ? `₪${fmt(r.pricePerChild)}` : '—'}</TruncCell>
-                        <TruncCell width={80} align="center" bold color="#0ea5e9">{r.monthlyPayment ? `₪${fmt(r.monthlyPayment)}` : '—'}</TruncCell>
-                        <TruncCell width={55} align="center">{r.overheadPct ? `${r.overheadPct}%` : '—'}</TruncCell>
-                        <TruncCell width={80} align="center" bold color="#10b981">{r.totalProfit ? `₪${fmt(r.totalProfit)}` : '—'}</TruncCell>
-                        <TruncCell width={70} align="center">{r.instrHourly ? `₪${fmt(r.instrHourly)}` : '—'}</TruncCell>
-                        <TruncCell width={80} align="center" color="#8b5cf6" bold>{r.instrMonthly ? `₪${fmt(r.instrMonthly)}` : '—'}</TruncCell>
-                        <TruncCell width={80} align="center" bold
-                          color={r.profitability >= 0 ? '#10b981' : '#ef4444'}>
-                          {(r.monthlyPayment || r.instrMonthly) ? `₪${fmt(r.profitability)}` : '—'}
-                        </TruncCell>
-                      </tr>
-                    )
+                    group.items.forEach((cls, idxInGroup) => {
+                      const isEditing = editingId === cls.id
+                      const r   = isEditing ? calcRow(editForm) : calcRow(cls)
+                      const instrName = cls.instructors?.name || (instructors.find(x => x.id === cls.instructor_id)?.name) || '—'
+                      const clientClr = getClientColor(cls.contact_name)
+                      const isNewGroup = idxInGroup === 0
+
+                      if (isEditing) {
+                        // ── Inline edit row ──
+                        rows.push(
+                          <tr key={cls.id} className={`cls-row cls-editing ${isNewGroup ? 'cls-group-start' : ''}`}
+                            style={{ borderRight: `5px solid ${clientClr}` }}>
+                            <td className="cls-col-actions cls-sticky-col" onClick={e => e.stopPropagation()}>
+                              <div className="cls-actions-cell">
+                                <button className="cls-action-btn" onClick={saveInlineEdit} disabled={saving} title="שמור"
+                                  style={{ color:'#10b981', opacity:1, fontWeight:700 }}>✓</button>
+                                <button className="cls-action-btn" onClick={cancelEdit} title="ביטול"
+                                  style={{ color:'#ef4444', opacity:1 }}>✕</button>
+                              </div>
+                            </td>
+                            <EditCell value={editForm.contact_name} onChange={v => updateField('contact_name', v)} width={130} placeholder="לקוח" />
+                            <EditCell value={editForm.city} onChange={v => updateField('city', v)} width={80} placeholder="עיר" />
+                            <EditCell value={editForm.coordinator} onChange={v => updateField('coordinator', v)} width={80} placeholder="רכזת" />
+                            <EditCell value={editForm.location} onChange={v => updateField('location', v)} width={130} placeholder="מוסד" />
+                            <EditCell value={editForm.class_name} onChange={v => updateField('class_name', v)} width={120} placeholder="מיקום" />
+                            <EditCell value={editForm.day} onChange={v => updateField('day', v)} width={55} options={DAYS_HE} />
+                            <EditCell value={editForm.time_start} onChange={v => updateField('time_start', v)} width={55} type="time" />
+                            <EditCell value={editForm.subject} onChange={v => updateField('subject', v)} width={80} placeholder="נושא" />
+                            <EditCell value={editForm.grades} onChange={v => updateField('grades', v)} width={55} placeholder="כיתה" />
+                            <td style={{ padding:4, width:90 }}>
+                              <select value={editForm.instructor_id || ''} onChange={e => updateField('instructor_id', e.target.value)}
+                                style={{ width:'100%', padding:'4px 4px', fontSize:11, fontFamily:'inherit', border:'1px solid var(--accent)', borderRadius:4, background:'var(--bg)', color:'var(--text)', direction:'rtl' }}>
+                                <option value="">ללא</option>
+                                {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                              </select>
+                            </td>
+                            <EditCell value={editForm.students_count} onChange={v => updateField('students_count', v)} width={55} type="number" min={0} />
+                            <EditCell value={editForm.price_per_student} onChange={v => updateField('price_per_student', v)} width={70} type="number" min={0} />
+                            <TruncCell width={80} align="center" bold color="#0ea5e9">{r.monthlyPayment ? `₪${fmt(r.monthlyPayment)}` : '—'}</TruncCell>
+                            <EditCell value={editForm.overhead_pct ?? 70} onChange={v => updateField('overhead_pct', v)} width={55} type="number" min={0} max={100} />
+                            <TruncCell width={80} align="center" bold color="#10b981">{r.totalProfit ? `₪${fmt(r.totalProfit)}` : '—'}</TruncCell>
+                            <EditCell value={editForm.instructor_price_per_session} onChange={v => updateField('instructor_price_per_session', v)} width={70} type="number" min={0} />
+                            <TruncCell width={80} align="center" color="#8b5cf6" bold>
+                              {r.instrMonthly ? `₪${fmt(r.instrMonthly)}` : '—'}
+                              {r.hasOverride && <span style={{ fontSize:8, color:'#f59e0b' }}> *</span>}
+                            </TruncCell>
+                            <TruncCell width={80} align="center" bold
+                              color={r.profitability >= 0 ? '#10b981' : '#ef4444'}>
+                              {(r.monthlyPayment || r.instrMonthly) ? `₪${fmt(r.profitability)}` : '—'}
+                            </TruncCell>
+                          </tr>
+                        )
+                      } else {
+                        // ── Normal display row ──
+                        rows.push(
+                          <tr key={cls.id}
+                            className={`cls-row ${isNewGroup ? 'cls-group-start' : ''} ${selected.has(cls.id) ? 'cls-selected' : ''}`}
+                            style={{ borderRight: `5px solid ${clientClr}` }}
+                            onDoubleClick={() => startEdit(cls)}>
+                            <td className="cls-col-actions cls-sticky-col" onClick={e => e.stopPropagation()}>
+                              <div className="cls-actions-cell">
+                                <input type="checkbox" checked={selected.has(cls.id)}
+                                  onChange={() => toggleSelect(cls.id)} style={{ cursor:'pointer' }}/>
+                                <button className="cls-action-btn" onClick={() => startEdit(cls)} title="עריכה">✏️</button>
+                                <button className="cls-action-btn cls-action-del" onClick={() => {
+                                  if(window.confirm('למחוק חוג זה?')) handleDelete(cls.id)
+                                }} title="מחיקה">🗑️</button>
+                              </div>
+                            </td>
+                            <TruncCell width={130} bold color={clientClr}>{cls.contact_name || '—'}</TruncCell>
+                            <TruncCell width={80}>{cls.city || '—'}</TruncCell>
+                            <TruncCell width={80}>{cls.coordinator || '—'}</TruncCell>
+                            <TruncCell width={130}>{cls.location || '—'}</TruncCell>
+                            <TruncCell width={120}>
+                              {cls.class_name || '—'}
+                              {cls.activity_type && <span style={{ fontSize:9, color:'var(--muted)', marginRight:4 }}>({cls.activity_type})</span>}
+                            </TruncCell>
+                            <TruncCell width={55} align="center">{cls.day || '—'}</TruncCell>
+                            <TruncCell width={55} align="center">{cls.time_start || '—'}</TruncCell>
+                            <TruncCell width={80}>{cls.subject || '—'}</TruncCell>
+                            <TruncCell width={55} align="center">{cls.grades || '—'}</TruncCell>
+                            <TruncCell width={90}>{instrName}</TruncCell>
+                            <TruncCell width={55} align="center" bold>{r.students || '—'}</TruncCell>
+                            <TruncCell width={70} align="center">{r.pricePerChild ? `₪${fmt(r.pricePerChild)}` : '—'}</TruncCell>
+                            <TruncCell width={80} align="center" bold color="#0ea5e9">{r.monthlyPayment ? `₪${fmt(r.monthlyPayment)}` : '—'}</TruncCell>
+                            <TruncCell width={55} align="center">{r.overheadPct ? `${r.overheadPct}%` : '—'}</TruncCell>
+                            <TruncCell width={80} align="center" bold color="#10b981">{r.totalProfit ? `₪${fmt(r.totalProfit)}` : '—'}</TruncCell>
+                            <TruncCell width={70} align="center">{r.instrHourly ? `₪${fmt(r.instrHourly)}` : '—'}</TruncCell>
+                            <TruncCell width={80} align="center" color="#8b5cf6" bold>
+                              {r.instrMonthly ? `₪${fmt(r.instrMonthly)}` : '—'}
+                              {r.hasOverride && <span style={{ fontSize:8, color:'#f59e0b' }}> *</span>}
+                            </TruncCell>
+                            <TruncCell width={80} align="center" bold
+                              color={r.profitability >= 0 ? '#10b981' : '#ef4444'}>
+                              {(r.monthlyPayment || r.instrMonthly) ? `₪${fmt(r.profitability)}` : '—'}
+                            </TruncCell>
+                          </tr>
+                        )
+                      }
+                    })
+
+                    // Add group subtotal after each group (only if more than 1 group)
+                    if (groupedItems.length > 1 && group.items.length >= 1) {
+                      rows.push(
+                        <GroupSubtotalRow key={`sub-${group.key}`} items={group.items} label={groupLabel} />
+                      )
+                    }
+
+                    return rows
                   })}
                 </tbody>
                 <tfoot>
                   <tr className="cls-totals-row">
                     <td className="cls-sticky-col"></td>
-                    <td colSpan={10} style={{ textAlign:'right', fontWeight:700 }}>סה"כ</td>
+                    <td colSpan={10} style={{ textAlign:'right', fontWeight:700 }}>
+                      סה"כ — {MONTHS_HE[filterMonth - 1]} {filterYear}
+                    </td>
                     <td style={{ textAlign:'center', fontWeight:700 }}>{stats.totalStudents}</td>
                     <td></td>
                     <td style={{ textAlign:'center', fontWeight:700, color:'#0ea5e9' }}>₪{fmt(stats.totalMonthly)}</td>
                     <td></td>
-                    <td style={{ textAlign:'center', fontWeight:700, color:'#10b981' }}>₪{fmt(filtered.reduce((s, c) => s + calcRow(c).totalProfit, 0))}</td>
+                    <td style={{ textAlign:'center', fontWeight:700, color:'#10b981' }}>₪{fmt(stats.totalProfit)}</td>
                     <td></td>
                     <td style={{ textAlign:'center', fontWeight:700, color:'#8b5cf6' }}>₪{fmt(stats.totalInstrCost)}</td>
-                    <td style={{ textAlign:'center', fontWeight:800, color: stats.totalProfit >= 0 ? '#10b981' : '#ef4444' }}>₪{fmt(stats.totalProfit)}</td>
+                    <td style={{ textAlign:'center', fontWeight:800, color: stats.totalProfitability >= 0 ? '#10b981' : '#ef4444' }}>₪{fmt(stats.totalProfitability)}</td>
                   </tr>
                 </tfoot>
               </table>

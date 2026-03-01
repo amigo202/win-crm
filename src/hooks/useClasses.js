@@ -16,7 +16,7 @@ const CORE_COLS = [
 ]
 
 // Extra columns added later (might not exist if migration not run)
-const EXTRA_COLS = ['coordinator','overhead_pct','monthly_hours']
+const EXTRA_COLS = ['coordinator','overhead_pct','monthly_hours','instructor_total_override','linked_payment_id']
 
 function pickCols(data, cols) {
   const out = {}
@@ -110,5 +110,17 @@ export function useClasses() {
     setClasses(p => p.filter(c => c.id !== id))
   }
 
-  return { classes, setClasses, loading, load, addClass, editClass, removeClass }
+  // Duplicate a class — copies all fields except id/created_at
+  const duplicateClass = async (cls) => {
+    const copy = { ...cls }
+    delete copy.id
+    delete copy.created_at
+    delete copy.updated_at
+    delete copy.instructors // joined table
+    delete copy.linked_payment_id // don't copy finance link
+    delete copy.owner_id // will be set by addClass
+    return await addClass(copy)
+  }
+
+  return { classes, setClasses, loading, load, addClass, editClass, removeClass, duplicateClass }
 }
