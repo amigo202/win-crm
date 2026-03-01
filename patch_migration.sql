@@ -129,6 +129,10 @@ ALTER TABLE classes ADD COLUMN IF NOT EXISTS instructor_price_per_session NUMERI
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS total_instructor_cost       NUMERIC;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS status                      TEXT DEFAULT 'פעיל';
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS responsible                 TEXT;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS coordinator                 TEXT;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS overhead_pct                NUMERIC DEFAULT 70;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS monthly_hours               SMALLINT DEFAULT 4;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS subject                     TEXT;
 
 -- ── 4. class_attendance ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS class_attendance (
