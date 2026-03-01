@@ -26,16 +26,16 @@ function SnoozeMenu({ onSnooze, onClose }) {
   return (
     <div ref={ref} style={{
       position: 'absolute', left: 0, top: '100%', zIndex: 200,
-      background: 'var(--card)', border: '1px solid var(--border)',
+      background: 'var(--surface)', border: '1px solid var(--border)',
       borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)',
       padding: 6, minWidth: 130,
     }}>
       {opts.map(o => (
         <button key={o.value} onClick={() => { onSnooze(o.value); onClose() }}
           style={{ display:'block', width:'100%', textAlign:'right', padding:'7px 12px',
-            border:'none', background:'none', cursor:'pointer', color:'var(--fg)', fontSize:13,
+            border:'none', background:'none', cursor:'pointer', color:'var(--text)', fontSize:13,
             borderRadius:6 }}
-          onMouseEnter={e => e.target.style.background='var(--bg2)'}
+          onMouseEnter={e => e.target.style.background='var(--bg)'}
           onMouseLeave={e => e.target.style.background='none'}
         >⏰ {o.label}</button>
       ))}

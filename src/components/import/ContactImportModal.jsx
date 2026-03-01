@@ -183,7 +183,7 @@ export default function ContactImportModal({ onClose, onDone }) {
               return (
                 <div key={s} style={{
                   padding: '10px 16px', borderBottom: active ? '2px solid #f97316' : '2px solid transparent',
-                  color: active ? '#f97316' : done ? 'var(--fg)' : 'var(--muted)',
+                  color: active ? '#f97316' : done ? 'var(--text)' : 'var(--muted)',
                   fontWeight: active ? 600 : 400,
                 }}>
                   {i + 1}. {lbl}
@@ -204,7 +204,7 @@ export default function ContactImportModal({ onClose, onDone }) {
               style={{
                 border: `2px dashed ${dragOver ? '#f97316' : 'var(--border)'}`,
                 borderRadius: 10, padding: '44px 20px', textAlign: 'center',
-                background: dragOver ? 'rgba(249,115,22,.06)' : 'var(--bg2)',
+                background: dragOver ? 'rgba(249,115,22,.06)' : 'var(--bg)',
                 cursor: 'pointer', transition: 'border-color .15s, background .15s',
               }}
             >
@@ -235,8 +235,8 @@ export default function ContactImportModal({ onClose, onDone }) {
         {step === 'map' && (
           <div className="modal-bd">
             <p style={{ marginBottom: 16, fontSize: 13, color: 'var(--muted)' }}>
-              <strong style={{ color: 'var(--fg)' }}>{csvRows.length} שורות</strong> זוהו בקובץ{' '}
-              <code style={{ background: 'var(--bg2)', padding: '1px 6px', borderRadius: 4 }}>{fileName}</code>.
+              <strong style={{ color: 'var(--text)' }}>{csvRows.length} שורות</strong> זוהו בקובץ{' '}
+              <code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>{fileName}</code>.
               {' '}מפה כל עמודה לשדה CRM הנכון:
             </p>
 
@@ -256,7 +256,7 @@ export default function ContactImportModal({ onClose, onDone }) {
                 <Fragment key={h}>
                   <div style={{
                     padding: '5px 10px', borderRadius: 6,
-                    background: 'var(--bg2)', border: '1px solid var(--border)',
+                    background: 'var(--bg)', border: '1px solid var(--border)',
                     fontSize: 13, fontFamily: 'monospace', overflow: 'hidden',
                     textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
@@ -319,7 +319,7 @@ export default function ContactImportModal({ onClose, onDone }) {
             </div>
 
             <div style={{
-              background: 'var(--bg2)', borderRadius: 8,
+              background: 'var(--bg)', borderRadius: 8,
               padding: '10px 14px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.6,
             }}>
               כפילויות יזוהו לפי <strong>אימייל</strong> (עדיפות ראשונה) → <strong>טלפון</strong>. שורות ללא שם יידלגו.
@@ -357,7 +357,7 @@ export default function ContactImportModal({ onClose, onDone }) {
                   פרטי שגיאות ({result.errors.length})
                 </summary>
                 <div style={{
-                  background: 'var(--bg2)', borderRadius: 6,
+                  background: 'var(--bg)', borderRadius: 6,
                   padding: '10px 12px', maxHeight: 140, overflowY: 'auto',
                   lineHeight: 1.7,
                 }}>

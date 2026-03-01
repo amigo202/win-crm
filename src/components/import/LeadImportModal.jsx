@@ -177,7 +177,7 @@ export default function LeadImportModal({ onClose, onDone }) {
               const steps = ['upload','map','preview']
               const active = s === step, done = steps.indexOf(s) < steps.indexOf(step)
               return (
-                <div key={s} style={{ padding: '10px 16px', borderBottom: active ? '2px solid #f97316' : '2px solid transparent', color: active ? '#f97316' : done ? 'var(--fg)' : 'var(--muted)', fontWeight: active ? 600 : 400 }}>
+                <div key={s} style={{ padding: '10px 16px', borderBottom: active ? '2px solid #f97316' : '2px solid transparent', color: active ? '#f97316' : done ? 'var(--text)' : 'var(--muted)', fontWeight: active ? 600 : 400 }}>
                   {i + 1}. {lbl}
                 </div>
               )
@@ -196,7 +196,7 @@ export default function LeadImportModal({ onClose, onDone }) {
               style={{
                 border: `2px dashed ${dragOver ? '#f97316' : 'var(--border)'}`,
                 borderRadius: 10, padding: '44px 20px', textAlign: 'center',
-                background: dragOver ? 'rgba(249,115,22,.06)' : 'var(--bg2)',
+                background: dragOver ? 'rgba(249,115,22,.06)' : 'var(--bg)',
                 cursor: 'pointer', transition: 'border-color .15s, background .15s',
               }}
             >
@@ -217,8 +217,8 @@ export default function LeadImportModal({ onClose, onDone }) {
         {step === 'map' && (
           <div className="modal-bd">
             <p style={{ marginBottom: 16, fontSize: 13, color: 'var(--muted)' }}>
-              <strong style={{ color: 'var(--fg)' }}>{rows.length} שורות</strong> זוהו בקובץ{' '}
-              <code style={{ background: 'var(--bg2)', padding: '1px 6px', borderRadius: 4 }}>{fileName}</code>.
+              <strong style={{ color: 'var(--text)' }}>{rows.length} שורות</strong> זוהו בקובץ{' '}
+              <code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>{fileName}</code>.
               {' '}מפה כל עמודה לשדה CRM:
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 24px 1fr', gap: '8px 10px', alignItems: 'center', marginBottom: 16 }}>
@@ -227,7 +227,7 @@ export default function LeadImportModal({ onClose, onDone }) {
               <div style={{ fontWeight: 600, fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase' }}>שדה CRM</div>
               {headers.map(h => (
                 <Fragment key={h}>
-                  <div style={{ padding: '5px 10px', borderRadius: 6, background: 'var(--bg2)', border: '1px solid var(--border)', fontSize: 13, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h}</div>
+                  <div style={{ padding: '5px 10px', borderRadius: 6, background: 'var(--bg)', border: '1px solid var(--border)', fontSize: 13, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h}</div>
                   <div style={{ color: 'var(--muted)', textAlign: 'center', fontSize: 14 }}>→</div>
                   <select className="si-input" style={{ fontSize: 13, height: 34 }} value={mapping[h] || ''} onChange={e => setFieldMapping(h, e.target.value)}>
                     {DB_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
@@ -253,7 +253,7 @@ export default function LeadImportModal({ onClose, onDone }) {
                 </tbody>
               </table>
             </div>
-            <div style={{ background: 'var(--bg2)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--muted)' }}>
+            <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--muted)' }}>
               כפילויות יזוהו לפי <strong>טלפון</strong>. שורות ללא שם יידלגו. כל הלידים נכנסים לשלב <strong>חדש</strong>.
             </div>
           </div>
@@ -279,7 +279,7 @@ export default function LeadImportModal({ onClose, onDone }) {
             {result.errors.length > 0 && (
               <details style={{ fontSize: 12 }}>
                 <summary style={{ cursor: 'pointer', color: 'var(--danger)', marginBottom: 8 }}>פרטי שגיאות ({result.errors.length})</summary>
-                <div style={{ background: 'var(--bg2)', borderRadius: 6, padding: '10px 12px', maxHeight: 140, overflowY: 'auto' }}>
+                <div style={{ background: 'var(--bg)', borderRadius: 6, padding: '10px 12px', maxHeight: 140, overflowY: 'auto' }}>
                   {result.errors.map((e, i) => <div key={i}><span style={{ color: 'var(--muted)' }}>{e.name}:</span> {e.error}</div>)}
                 </div>
               </details>

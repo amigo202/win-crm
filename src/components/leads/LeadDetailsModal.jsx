@@ -42,7 +42,7 @@ function Timeline({ activities, loading, onAdd }) {
                 padding:      '4px 10px',
                 borderRadius: 6,
                 border:       `1px solid ${type === t.id ? '#f97316' : 'var(--border)'}`,
-                background:   type === t.id ? '#fff7ed' : 'var(--bg2)',
+                background:   type === t.id ? '#fff7ed' : 'var(--bg)',
                 color:        type === t.id ? '#f97316' : 'var(--muted)',
                 cursor:       'pointer',
                 fontSize:     13,
@@ -58,7 +58,7 @@ function Timeline({ activities, loading, onAdd }) {
             style={{
               flex: 1, padding: '8px 12px',
               borderRadius: 8, border: '1px solid var(--border)',
-              background: 'var(--bg2)', color: 'var(--fg)', fontSize: 13,
+              background: 'var(--bg)', color: 'var(--text)', fontSize: 13,
             }}
           />
           <button
@@ -95,7 +95,7 @@ function Timeline({ activities, loading, onAdd }) {
               {/* Icon bubble */}
               <div style={{
                 width: 30, height: 30, borderRadius: '50%',
-                background: 'var(--bg2)', border: '1px solid var(--border)',
+                background: 'var(--bg)', border: '1px solid var(--border)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 14, flexShrink: 0, zIndex: 1,
               }}>{ti.icon}</div>
@@ -212,7 +212,7 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate, onMoveStage,
                     value={form[k]}
                     onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))}
                     placeholder={{ name:'שם', phone:'טלפון', email:'אימייל', city:'עיר' }[k]}
-                    style={{ display: 'block', width: '100%', marginBottom: 8, padding: '7px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--fg)', fontSize: 13, boxSizing: 'border-box' }}
+                    style={{ display: 'block', width: '100%', marginBottom: 8, padding: '7px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' }}
                   />
                 ))}
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -234,13 +234,13 @@ export default function LeadDetailsModal({ lead, onClose, onUpdate, onMoveStage,
                 )}
                 {lead.phone && (
                   <a href={`tel:${lead.phone}`}
-                    style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:8, background:'var(--bg2)', color:'var(--fg)', textDecoration:'none', fontSize:13, border:'1px solid var(--border)' }}>
+                    style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:8, background:'var(--bg)', color:'var(--text)', textDecoration:'none', fontSize:13, border:'1px solid var(--border)' }}>
                     📞 חייג
                   </a>
                 )}
                 {lead.email && (
                   <a href={`mailto:${lead.email}`}
-                    style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:8, background:'var(--bg2)', color:'var(--fg)', textDecoration:'none', fontSize:13, border:'1px solid var(--border)' }}>
+                    style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:8, background:'var(--bg)', color:'var(--text)', textDecoration:'none', fontSize:13, border:'1px solid var(--border)' }}>
                     ✉️ שלח מייל
                   </a>
                 )}

@@ -29,7 +29,7 @@ function LeadCard({ lead, onClick }) {
       onDragStart={e => e.dataTransfer.setData('leadId', lead.id)}
       onClick={onClick}
       style={{
-        background:   'var(--card)',
+        background:   'var(--surface)',
         border:       `1px solid ${risk ? '#fca5a5' : 'var(--border)'}`,
         borderRadius: 10,
         padding:      '11px 13px',
@@ -111,7 +111,7 @@ function KanbanCol({ stage, leads, onDrop, onCardClick }) {
         minWidth:     240,
         maxWidth:     260,
         flexShrink:   0,
-        background:   over ? 'rgba(249,115,22,.05)' : 'var(--bg2)',
+        background:   over ? 'rgba(249,115,22,.05)' : 'var(--bg)',
         border:       `1px solid ${over ? '#f97316' : 'var(--border)'}`,
         borderTop:    `3px solid ${stage.color}`,
         borderRadius: 12,
