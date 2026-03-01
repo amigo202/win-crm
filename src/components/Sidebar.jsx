@@ -104,7 +104,7 @@ export default function Sidebar({ page, setPage, tasks, instructors, students, d
       </nav>
 
       <div className="sidebar-foot">
-        {user && <div style={{ fontSize: '11px', color: '#475569', padding: '0 4px 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>}
+        {user && <div style={{ fontSize: '11px', color: 'var(--muted)', padding: '0 4px 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>}
         <button className="dark-btn" onClick={() => setDark(d => !d)} style={{ marginBottom: '6px' }}>
           {dark ? <Ico.sun/> : <Ico.moon/>}{dark ? 'מצב בהיר' : 'מצב כהה'}
         </button>

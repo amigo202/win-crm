@@ -17,13 +17,19 @@ function HoursModal({ inst, onClose }) {
   const now = new Date()
   const [ps, setPs] = useState({ month: now.getMonth() + 1, year: now.getFullYear(), amount: '', notes: '' })
   const [psSt, setPsSt] = useState('idle')
+  const [editId, setEditId] = useState(null)
+  const [editForm, setEditForm] = useState({})
+  const [filterMonth, setFilterMonth] = useState('')
 
-  useEffect(() => {
+  const loadReports = () => {
+    setFetching(true)
     supabase.from('hour_reports').select('*')
       .eq('instructor_id', inst.id)
       .order('report_date', { ascending: false })
       .then(({ data }) => { setReports(data || []); setFetching(false) })
-  }, [inst.id])
+  }
+
+  useEffect(() => { loadReports() }, [inst.id])
 
   const copy = () => {
     navigator.clipboard.writeText(url)
@@ -45,11 +51,66 @@ function HoursModal({ inst, onClose }) {
     } catch { setPsSt('error'); setTimeout(() => setPsSt('idle'), 3000) }
   }
 
+  // ── Admin actions on reports ──
+  const approveReport = async (id) => {
+    await supabase.from('hour_reports').update({ status: 'approved' }).eq('id', id)
+    loadReports()
+  }
+  const rejectReport = async (id) => {
+    await supabase.from('hour_reports').update({ status: 'rejected' }).eq('id', id)
+    loadReports()
+  }
+  const deleteReport = async (id) => {
+    if (!window.confirm('למחוק דיווח זה?')) return
+    await supabase.from('hour_reports').delete().eq('id', id)
+    loadReports()
+  }
+  const startEdit = (r) => {
+    setEditId(r.id)
+    setEditForm({ hours: r.hours, location: r.location || '', subject: r.subject || '', notes: r.notes || '', report_date: r.report_date })
+  }
+  const saveEdit = async () => {
+    await supabase.from('hour_reports').update({
+      hours: Number(editForm.hours),
+      location: editForm.location,
+      subject: editForm.subject,
+      notes: editForm.notes,
+      report_date: editForm.report_date,
+    }).eq('id', editId)
+    setEditId(null)
+    loadReports()
+  }
+  const approveAll = async () => {
+    const pending = filteredReports.filter(r => (r.status || 'pending') === 'pending')
+    if (!pending.length) return
+    const ids = pending.map(r => r.id)
+    await supabase.from('hour_reports').update({ status: 'approved' }).in('id', ids)
+    loadReports()
+  }
+
   const totalHours = reports.reduce((s, r) => s + Number(r.hours || 0), 0)
+  const approvedHours = reports.filter(r => r.status === 'approved').reduce((s, r) => s + Number(r.hours || 0), 0)
+  const pendingCount = reports.filter(r => (r.status || 'pending') === 'pending').length
+
+  // Filter reports by month
+  const filteredReports = filterMonth
+    ? reports.filter(r => r.report_date && r.report_date.startsWith(filterMonth))
+    : reports
+
+  const statusBadge = (status) => {
+    const s = status || 'pending'
+    const map = {
+      pending:  { bg: '#fef3c7', color: '#92400e', label: 'ממתין' },
+      approved: { bg: '#d1fae5', color: '#065f46', label: 'אושר' },
+      rejected: { bg: '#fee2e2', color: '#dc2626', label: 'נדחה' },
+    }
+    const st = map[s] || map.pending
+    return <span style={{ background: st.bg, color: st.color, padding: '1px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600 }}>{st.label}</span>
+  }
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+      <div className="modal modal-lg">
         <div className="mh"><h3>דוח שעות — {inst.name}</h3><button className="mx" onClick={onClose}>×</button></div>
         <div className="mb">
           <div style={{ marginBottom: 16 }}>
@@ -68,30 +129,113 @@ function HoursModal({ inst, onClose }) {
             </div>
           </div>
 
-          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, direction: 'rtl' }}>
-            דיווחים שהתקבלו {reports.length > 0 && <span style={{ color: 'var(--muted)', fontWeight: 400 }}>({totalHours} שעות סה"כ)</span>}
+          {/* Summary stats */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12, direction: 'rtl' }}>
+            <div style={{ flex: 1, background: 'var(--bg)', borderRadius: 8, padding: '8px 12px', textAlign: 'center', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>{totalHours}</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)' }}>שעות סה"כ</div>
+            </div>
+            <div style={{ flex: 1, background: '#d1fae5', borderRadius: 8, padding: '8px 12px', textAlign: 'center', border: '1px solid #a7f3d0' }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#065f46' }}>{approvedHours}</div>
+              <div style={{ fontSize: 10, color: '#065f46' }}>שעות מאושרות</div>
+            </div>
+            <div style={{ flex: 1, background: pendingCount > 0 ? '#fef3c7' : 'var(--bg)', borderRadius: 8, padding: '8px 12px', textAlign: 'center', border: `1px solid ${pendingCount > 0 ? '#fcd34d' : 'var(--border)'}` }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: pendingCount > 0 ? '#92400e' : 'var(--muted)' }}>{pendingCount}</div>
+              <div style={{ fontSize: 10, color: pendingCount > 0 ? '#92400e' : 'var(--muted)' }}>ממתינים לאישור</div>
+            </div>
+          </div>
+
+          {/* Filter + bulk actions */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, direction: 'rtl', alignItems: 'center' }}>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>דיווחים</span>
+            <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
+              style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', direction: 'ltr' }}/>
+            {filterMonth && <button style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 12 }} onClick={() => setFilterMonth('')}>הצג הכל</button>}
+            <div style={{ marginRight: 'auto' }}>
+              {pendingCount > 0 && (
+                <button className="btn btn-p btn-sm" onClick={approveAll} style={{ fontSize: 11, padding: '3px 10px' }}>
+                  ✅ אשר הכל ({pendingCount})
+                </button>
+              )}
+              <button className="btn btn-o btn-sm" onClick={loadReports} style={{ fontSize: 11, padding: '3px 10px', marginRight: 6 }} title="רענן">
+                🔄
+              </button>
+            </div>
           </div>
 
           {fetching ? (
             <div style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>טוען...</div>
-          ) : !reports.length ? (
-            <div className="empty"><p>אין דיווחים עדיין. שלח את הקישור למדריך.</p></div>
+          ) : !filteredReports.length ? (
+            <div className="empty"><p>{filterMonth ? 'אין דיווחים בחודש זה' : 'אין דיווחים עדיין. שלח את הקישור למדריך.'}</p></div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto' }}>
-              {reports.map(r => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 350, overflowY: 'auto' }}>
+              {filteredReports.map(r => (
                 <div key={r.id} style={{
-                  display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
-                  padding: '8px 12px', background: 'var(--bg)',
-                  borderRadius: 8, border: '1px solid var(--border)', fontSize: 13, direction: 'rtl',
+                  padding: '10px 12px', background: editId === r.id ? '#fffbeb' : 'var(--bg)',
+                  borderRadius: 8, border: `1px solid ${editId === r.id ? '#fcd34d' : 'var(--border)'}`, fontSize: 13, direction: 'rtl',
                 }}>
-                  <span style={{ color: 'var(--muted)', minWidth: 85, flexShrink: 0 }}>{r.report_date}</span>
-                  <strong style={{ flexShrink: 0 }}>{r.hours}ש׳</strong>
-                  {r.program  && <span className="badge b-teal" style={{ fontSize: 11 }}>{r.program}</span>}
-                  {r.location && <span style={{ color: 'var(--muted)', fontSize: 12 }}>{r.location}</span>}
-                  {r.notes    && <span style={{ color: 'var(--muted)', fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.notes}</span>}
-                  <span style={{ fontSize: 10, color: 'var(--muted)', marginRight: 'auto', flexShrink: 0 }}>
-                    {new Date(r.submitted_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                  {editId === r.id ? (
+                    /* ── Edit mode ── */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                        <div>
+                          <label style={{ fontSize: 10, color: 'var(--muted)', display: 'block' }}>תאריך</label>
+                          <input type="date" value={editForm.report_date} onChange={e => setEditForm(p => ({ ...p, report_date: e.target.value }))}
+                            style={{ width: '100%', fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border)' }}/>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 10, color: 'var(--muted)', display: 'block' }}>שעות</label>
+                          <input type="number" value={editForm.hours} min=".5" step=".5" onChange={e => setEditForm(p => ({ ...p, hours: e.target.value }))}
+                            style={{ width: '100%', fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border)', textAlign: 'center' }}/>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 10, color: 'var(--muted)', display: 'block' }}>מיקום</label>
+                          <input value={editForm.location} onChange={e => setEditForm(p => ({ ...p, location: e.target.value }))}
+                            style={{ width: '100%', fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border)' }}/>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div>
+                          <label style={{ fontSize: 10, color: 'var(--muted)', display: 'block' }}>נושא</label>
+                          <input value={editForm.subject} onChange={e => setEditForm(p => ({ ...p, subject: e.target.value }))}
+                            style={{ width: '100%', fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border)' }}/>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 10, color: 'var(--muted)', display: 'block' }}>הערות</label>
+                          <input value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
+                            style={{ width: '100%', fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border)' }}/>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button className="btn btn-p btn-sm" onClick={saveEdit} style={{ fontSize: 11, padding: '3px 12px' }}>💾 שמור</button>
+                        <button className="btn btn-o btn-sm" onClick={() => setEditId(null)} style={{ fontSize: 11, padding: '3px 12px' }}>ביטול</button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* ── View mode ── */
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {statusBadge(r.status)}
+                      <span style={{ color: 'var(--muted)', minWidth: 85, flexShrink: 0 }}>{r.report_date}</span>
+                      <strong style={{ flexShrink: 0 }}>{r.hours}ש׳</strong>
+                      {r.location && <span style={{ color: 'var(--muted)', fontSize: 12 }}>{r.location}</span>}
+                      {r.subject && <span style={{ color: 'var(--muted)', fontSize: 12 }}>{r.subject}</span>}
+                      {r.notes && <span style={{ color: 'var(--muted)', fontSize: 11, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📝 {r.notes}</span>}
+                      <div style={{ marginRight: 'auto', display: 'flex', gap: 4, flexShrink: 0 }}>
+                        {(r.status || 'pending') === 'pending' && (
+                          <button onClick={() => approveReport(r.id)} title="אשר"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '0 3px' }}>✅</button>
+                        )}
+                        {(r.status || 'pending') === 'pending' && (
+                          <button onClick={() => rejectReport(r.id)} title="דחה"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '0 3px' }}>❌</button>
+                        )}
+                        <button onClick={() => startEdit(r)} title="ערוך"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '0 3px' }}>✏️</button>
+                        <button onClick={() => deleteReport(r.id)} title="מחק"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '0 3px', color: '#ef4444' }}>🗑️</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

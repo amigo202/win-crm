@@ -5,9 +5,13 @@
 
 BEGIN;
 
--- ── 1. payments: add instructor_id if missing ─────────────────────────────
+-- ── 1. payments: add missing columns ─────────────────────────────────────
 ALTER TABLE payments
   ADD COLUMN IF NOT EXISTS instructor_id UUID REFERENCES instructors(id) ON DELETE SET NULL;
+ALTER TABLE payments
+  ADD COLUMN IF NOT EXISTS program TEXT;
+ALTER TABLE payments
+  ADD COLUMN IF NOT EXISTS notes   TEXT;
 
 -- ── 2. hour_reports ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS hour_reports (

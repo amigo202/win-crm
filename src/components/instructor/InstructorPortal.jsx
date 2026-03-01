@@ -235,7 +235,15 @@ function HistoryTab({ instructorId }) {
             </div>
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, direction:'rtl' }}>
               <tbody>
-                {g.rows.map(r => (
+                {g.rows.map(r => {
+                  const st = r.status || 'pending'
+                  const stMap = {
+                    pending:  { bg:'#fef3c7', color:'#92400e', label:'ממתין לאישור' },
+                    approved: { bg:'#d1fae5', color:'#065f46', label:'אושר ✓' },
+                    rejected: { bg:'#fee2e2', color:'#dc2626', label:'נדחה' },
+                  }
+                  const stInfo = stMap[st] || stMap.pending
+                  return (
                   <tr key={r.id} style={{ borderBottom:'1px solid #f8fafc' }}>
                     <td style={{ padding:'8px 14px', color:'#64748b', minWidth:95 }}>
                       <div>{fmtDate(r.report_date)}</div>
@@ -245,10 +253,14 @@ function HistoryTab({ instructorId }) {
                     <td style={{ padding:'8px 14px', color:'#64748b', fontSize:12 }}>
                       {r.subject && <div>{r.subject}</div>}
                       {r.notes && <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>📝 {r.notes}</div>}
+                      <div style={{ marginTop:3 }}>
+                        <span style={{ background:stInfo.bg, color:stInfo.color, padding:'1px 8px', borderRadius:10, fontSize:10, fontWeight:600 }}>{stInfo.label}</span>
+                      </div>
                     </td>
                     <td style={{ padding:'8px 14px', fontWeight:600, textAlign:'center', width:55, color:'#f97316' }}>{r.hours}ש׳</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

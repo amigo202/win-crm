@@ -41,13 +41,13 @@ export function useFinance() {
   }, [])
 
   const editPayment = useCallback(async (id, data) => {
-    setPayments(p => p.map(x => x.id === id ? { ...x, ...data } : x))
     await updatePayment(id, data)
+    setPayments(p => p.map(x => x.id === id ? { ...x, ...data } : x))
   }, [])
 
   const removePayment = useCallback(async id => {
-    setPayments(p => p.filter(x => x.id !== id))
     await deletePayment(id)
+    setPayments(p => p.filter(x => x.id !== id))
   }, [])
 
   // Salaries CRUD
@@ -61,13 +61,13 @@ export function useFinance() {
     const net = (Number(data.baseSalary) || 0) + (Number(data.additions) || 0)
               - (Number(data.deductions) || 0) - (Number(data.tax) || 0)
               - (Number(data.nationalInsurance) || 0) - (Number(data.healthInsurance) || 0)
-    setSalaries(p => p.map(x => x.id === id ? { ...x, ...data, netSalary: net } : x))
     await updateSalary(id, data)
+    setSalaries(p => p.map(x => x.id === id ? { ...x, ...data, netSalary: net } : x))
   }, [])
 
   const removeSalary = useCallback(async id => {
-    setSalaries(p => p.filter(x => x.id !== id))
     await deleteSalary(id)
+    setSalaries(p => p.filter(x => x.id !== id))
   }, [])
 
   const autoGenerate = useCallback(async (instructors, m, y) => {

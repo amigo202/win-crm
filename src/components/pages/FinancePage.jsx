@@ -289,9 +289,12 @@ export default function FinancePage({ fin, instructors, contacts }) {
     fin.load(fin.month, fin.year)
   }, [fin.month, fin.year]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const income   = fin.payments.filter(p => p.status === 'paid').reduce((s, p) => s + p.amount, 0)
-  const expenses = fin.salaries.reduce((s, x) => s + x.netSalary, 0)
-  const profit   = income - expenses
+  const totalPayments = fin.payments.reduce((s, p) => s + p.amount, 0)
+  const paidPayments  = fin.payments.filter(p => p.status === 'paid').reduce((s, p) => s + p.amount, 0)
+  const pendingCount  = fin.payments.filter(p => p.status !== 'paid').length
+  const paidCount     = fin.payments.filter(p => p.status === 'paid').length
+  const expenses      = fin.salaries.reduce((s, x) => s + x.netSalary, 0)
+  const profit        = totalPayments - expenses
 
   const instName = id => instructors.find(i => i.id === id)?.name || '–'
   const contName = id => contacts.find(c => c.id === id)?.name || '–'
@@ -322,20 +325,22 @@ export default function FinancePage({ fin, instructors, contacts }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, padding: '18px 30px 0' }}>
         <div className="stat-card">
           <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500, marginBottom: 8 }}>הכנסות חודש</div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--success)', lineHeight: 1 }}>{fmtShekel(income)}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
-            {fin.payments.filter(p => p.status === 'paid').length} תשלומים שולמו
+          <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--success)', lineHeight: 1 }}>{fmtShekel(totalPayments)}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, display: 'flex', gap: 8 }}>
+            {paidCount > 0 && <span style={{ color: 'var(--success)' }}>✓ {paidCount} שולמו ({fmtShekel(paidPayments)})</span>}
+            {pendingCount > 0 && <span style={{ color: '#f59e0b' }}>⏳ {pendingCount} ממתינים</span>}
+            {fin.payments.length === 0 && <span>0 תשלומים</span>}
           </div>
         </div>
         <div className="stat-card">
           <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500, marginBottom: 8 }}>הוצאות שכר</div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--danger)', lineHeight: 1 }}>{fmtShekel(expenses)}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>{fin.salaries.length} מדריכים</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: expenses > 0 ? 'var(--danger)' : 'var(--muted)', lineHeight: 1 }}>{fmtShekel(expenses)}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>{fin.salaries.length} מדריכים</div>
         </div>
         <div className="stat-card">
           <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500, marginBottom: 8 }}>רווח גולמי</div>
           <div style={{ fontSize: 26, fontWeight: 700, color: profit >= 0 ? 'var(--success)' : 'var(--danger)', lineHeight: 1 }}>{fmtShekel(profit)}</div>
-          <div style={{ fontSize: 12, marginTop: 6, color: profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+          <div style={{ fontSize: 11, marginTop: 6, color: profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
             {profit >= 0 ? '✓ חיובי' : '✗ שלילי'}
           </div>
         </div>
