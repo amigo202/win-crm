@@ -35,6 +35,11 @@ function emptyActivity() {
   }
 }
 
+// ── Inline styles (matching ClassesPage) ────────────────────────────────────
+const INP = { padding:'8px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:13, outline:'none', fontFamily:'inherit', direction:'rtl', width:'100%', boxSizing:'border-box', background:'var(--bg)', color:'var(--text)' }
+const LBL = { display:'block', fontSize:11, fontWeight:600, color:'var(--muted)', marginBottom:4 }
+const GRP = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }
+
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, onDelete, onReload }) {
   const [showModal, setShowModal] = useState(false)
@@ -212,111 +217,49 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
       {/* ── Modal ─────────────────────────────────────────── */}
       {showModal && (
         <div className="overlay" onClick={e => e.target === e.currentTarget && close()}>
-          <div className="modal" style={{ maxWidth: 580 }} onClick={e => e.stopPropagation()}>
-            {/* Header */}
+          <div className="modal modal-lg" style={{ direction:'rtl' }}>
             <div className="mh">
               <h3>{editId ? 'עריכת פעילות' : 'פעילות חדשה'}</h3>
-              <button className="mx" onClick={close}>✕</button>
+              <button className="mx" onClick={close}>×</button>
             </div>
-
-            {/* Body */}
-            <div className="mb">
-              <div className="fg">
-                {/* Name - full width */}
-                <div className="frow full">
-                  <label>שם הפעילות *</label>
-                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder='למשל: "אירוע PIXMIX חנוכה"' />
-                </div>
-
-                {/* Type + Client */}
-                <div className="frow">
-                  <label>סוג</label>
-                  <select value={form.activityType} onChange={e => setForm(f => ({ ...f, activityType: e.target.value }))}>
-                    {BIZ_ACT_TYPES.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
-                  </select>
-                </div>
-                <div className="frow">
-                  <label>לקוח</label>
-                  <select value={form.contactId} onChange={handleContactChange}>
-                    <option value="">— ללא —</option>
-                    {(contacts || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-
-                {/* Date + Period */}
-                <div className="frow">
-                  <label>תאריך פעילות</label>
-                  <input type="date" value={form.activityDate} onChange={e => setForm(f => ({ ...f, activityDate: e.target.value }))} />
-                </div>
-                <div className="frow" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div>
-                    <label>חודש</label>
-                    <select value={form.month} onChange={e => setForm(f => ({ ...f, month: Number(e.target.value) }))}>
-                      {MONTHS_HE.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label>שנה</label>
-                    <select value={form.year} onChange={e => setForm(f => ({ ...f, year: Number(e.target.value) }))}>
-                      {[CUR_YEAR, CUR_YEAR - 1, CUR_YEAR - 2].map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Financials */}
-                <div className="frow">
-                  <label>הכנסה (₪)</label>
-                  <input type="number" value={form.income} onChange={e => setForm(f => ({ ...f, income: e.target.value }))} placeholder="0" />
-                </div>
-                <div className="frow">
-                  <label>הוצאות (₪)</label>
-                  <input type="number" value={form.expenses} onChange={e => setForm(f => ({ ...f, expenses: e.target.value }))} placeholder="0" />
-                </div>
-
-                {/* Profit display */}
-                <div className="frow full" style={{ background: profitCalc >= 0 ? '#d1fae520' : '#fee2e220', borderRadius: 10, padding: '14px 18px', display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--border)' }}>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>רווח צפוי:</span>
-                  <span style={{ fontSize: 22, fontWeight: 800, color: profitCalc >= 0 ? '#10b981' : '#ef4444' }}>
-                    {fmtShekel(profitCalc)}
-                  </span>
-                </div>
-
-                {/* Payment */}
-                <div className="frow">
-                  <label>סטטוס תשלום</label>
-                  <select value={form.paymentStatus} onChange={e => setForm(f => ({ ...f, paymentStatus: e.target.value }))}>
-                    {PAY_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                  </select>
-                </div>
-                <div className="frow">
-                  <label>אמצעי תשלום</label>
-                  <select value={form.paymentMethod} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))}>
-                    <option value="">—</option>
-                    {PAY_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div className="frow">
-                  <label>תאריך תשלום</label>
-                  <input type="date" value={form.paymentDate} onChange={e => setForm(f => ({ ...f, paymentDate: e.target.value }))} />
-                </div>
-                <div className="frow">
-                  <label>מס׳ חשבונית</label>
-                  <input value={form.invoiceNumber} onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))} />
-                </div>
-
-                {/* Notes */}
-                <div className="frow full">
-                  <label>הערות</label>
-                  <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
+            <div className="mb" style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={GRP}>
+                <div style={{ gridColumn:'1/-1' }}><label style={LBL}>שם הפעילות *</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder='למשל: "אירוע PIXMIX חנוכה"' style={INP}/></div>
+              </div>
+              <div style={GRP}>
+                <div><label style={LBL}>סוג</label><select value={form.activityType} onChange={e => setForm(f => ({ ...f, activityType: e.target.value }))} style={INP}>{BIZ_ACT_TYPES.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}</select></div>
+                <div><label style={LBL}>לקוח</label><select value={form.contactId} onChange={handleContactChange} style={INP}><option value="">— ללא —</option>{(contacts || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              </div>
+              <div style={GRP}>
+                <div><label style={LBL}>תאריך פעילות</label><input type="date" value={form.activityDate} onChange={e => setForm(f => ({ ...f, activityDate: e.target.value }))} style={INP}/></div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                  <div><label style={LBL}>חודש</label><select value={form.month} onChange={e => setForm(f => ({ ...f, month: Number(e.target.value) }))} style={INP}>{MONTHS_HE.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}</select></div>
+                  <div><label style={LBL}>שנה</label><select value={form.year} onChange={e => setForm(f => ({ ...f, year: Number(e.target.value) }))} style={INP}>{[CUR_YEAR, CUR_YEAR - 1, CUR_YEAR - 2].map(y => <option key={y} value={y}>{y}</option>)}</select></div>
                 </div>
               </div>
-            </div>
-
-            {/* Footer */}
-            <div className="mf">
-              <button className="btn btn-p" onClick={save}>{editId ? 'שמור' : 'הוסף'}</button>
-              <button className="btn btn-o" onClick={close}>ביטול</button>
+              <div style={{ background:'#fff7ed', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#92400e', fontWeight:600 }}>💰 הכנסות והוצאות</div>
+              <div style={GRP}>
+                <div><label style={LBL}>הכנסה (₪)</label><input type="number" value={form.income} onChange={e => setForm(f => ({ ...f, income: e.target.value }))} placeholder="0" style={INP}/></div>
+                <div><label style={LBL}>הוצאות (₪)</label><input type="number" value={form.expenses} onChange={e => setForm(f => ({ ...f, expenses: e.target.value }))} placeholder="0" style={INP}/></div>
+              </div>
+              <div style={{ background:'var(--bg)', borderRadius:10, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'center', gap:12 }}>
+                <span style={{ fontSize:12, color:'var(--muted)', fontWeight:600 }}>רווח צפוי:</span>
+                <span style={{ fontSize:20, fontWeight:800, color: profitCalc >= 0 ? '#10b981' : '#ef4444' }}>{fmtShekel(profitCalc)}</span>
+              </div>
+              <div style={{ background:'#f0f9ff', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#0c4a6e', fontWeight:600 }}>🏦 פרטי תשלום</div>
+              <div style={GRP}>
+                <div><label style={LBL}>סטטוס תשלום</label><select value={form.paymentStatus} onChange={e => setForm(f => ({ ...f, paymentStatus: e.target.value }))} style={INP}>{PAY_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+                <div><label style={LBL}>אמצעי תשלום</label><select value={form.paymentMethod} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))} style={INP}><option value="">—</option>{PAY_METHODS.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+              </div>
+              <div style={GRP}>
+                <div><label style={LBL}>תאריך תשלום</label><input type="date" value={form.paymentDate} onChange={e => setForm(f => ({ ...f, paymentDate: e.target.value }))} style={INP}/></div>
+                <div><label style={LBL}>מס׳ חשבונית</label><input value={form.invoiceNumber} onChange={e => setForm(f => ({ ...f, invoiceNumber: e.target.value }))} style={INP}/></div>
+              </div>
+              <div><label style={LBL}>הערות</label><textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} style={{ ...INP, resize:'vertical' }}/></div>
+              <div className="mf">
+                <button className="btn btn-p" onClick={save}>{editId ? 'שמור' : 'הוסף'}</button>
+                <button className="btn btn-o" onClick={close}>ביטול</button>
+              </div>
             </div>
           </div>
         </div>
