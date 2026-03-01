@@ -45,14 +45,30 @@ export function exportStudentsCSV(students, contacts) {
 }
 
 export function exportClassesCSV(classes) {
-  const hd = ['שם חוג','סוג','מוסד','עיר','מדריך','יום','שעה','תלמידים','מפגשים','סוכם','בפועל','סטטוס','תשלום']
-  const rows = classes.map(c => [
-    c.class_name || '', c.activity_type || '', c.location || '', c.city || '',
-    c.instructors?.name || '', c.day || '', c.time_start || '',
-    c.students_count || '', c.sessions_count || '',
-    c.agreed_price || '', c.actual_income || '',
-    c.status || '', c.paid ? 'שולם' : 'ממתין',
-  ])
+  const hd = [
+    'לקוח משלם','יישוב','רכזת','מתנ"ס/בי"ס','מיקום','יום','שעה',
+    'נושא','כיתה','מדריך','מנות ילדים','תשלום פר ילד חודשי',
+    'תשלום החודש','תקורה%','סה"כ רווח','עלות מדריך לשעה',
+    'עלות מדריך לחודש','רווחיות חוג'
+  ]
+  const rows = classes.map(c => {
+    const students      = Number(c.students_count) || 0
+    const pricePerChild = Number(c.price_per_student) || 0
+    const monthlyPay    = students * pricePerChild || Number(c.agreed_price) || 0
+    const overheadPct   = Number(c.overhead_pct) ?? 70
+    const totalProfit   = overheadPct > 0 ? Math.round(monthlyPay * (overheadPct / 100)) : monthlyPay
+    const instrHourly   = Number(c.instructor_price_per_session) || 0
+    const monthlyHrs    = Number(c.monthly_hours) || 4
+    const instrMonthly  = instrHourly * monthlyHrs
+    const profitability = totalProfit - instrMonthly
+    return [
+      c.contact_name || '', c.city || '', c.coordinator || '',
+      c.location || '', c.class_name || '', c.day || '', c.time_start || '',
+      c.subject || '', c.grades || '', c.instructors?.name || '',
+      students, pricePerChild, monthlyPay, overheadPct + '%',
+      totalProfit, instrHourly, instrMonthly, profitability,
+    ]
+  })
   dlCSV('win-crm-classes.csv', hd, rows)
 }
 
