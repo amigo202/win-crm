@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import { exportClassesCSV } from '../../utils/csv'
 import Papa from 'papaparse'
 
@@ -15,17 +15,21 @@ const CUR_MONTH = now.getMonth() + 1
 
 function fmt(n)  { return Number(n || 0).toLocaleString('he-IL') }
 
-function payColor(cls) {
-  if (!cls.agreed_price && !cls.actual_income) return '#94a3b8'
-  if (cls.paid) return '#10b981'
-  if ((cls.actual_income || 0) > 0) return '#f59e0b'
-  return '#ef4444'
+// ── 1) Client color system ─────────────────────────────────────────────────
+const CLIENT_PALETTE = [
+  '#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6',
+  '#ec4899','#06b6d4','#84cc16','#f97316','#6366f1',
+  '#14b8a6','#e11d48','#a855f7','#0ea5e9','#d946ef',
+  '#22c55e','#eab308','#64748b','#be185d','#7c3aed',
+]
+function hashStr(s) {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0
+  return Math.abs(h)
 }
-function payLabel(cls) {
-  if (cls.paid) return '✓ שולם'
-  if ((cls.actual_income || 0) > 0) return '⏳ חלקי'
-  if (cls.agreed_price) return '⚠ ממתין'
-  return '—'
+function getClientColor(name) {
+  if (!name) return '#94a3b8'
+  return CLIENT_PALETTE[hashStr(name) % CLIENT_PALETTE.length]
 }
 
 // ── Calculated fields for a class row ────────────────────────────────────────
@@ -60,6 +64,41 @@ function emptyClass() {
   }
 }
 
+// ── 5) Grouping helper ─────────────────────────────────────────────────────
+function groupKey(cls) {
+  return `${cls.contact_name || ''}|${cls.location || ''}|${cls.subject || ''}`
+}
+
+function sortAndGroup(arr) {
+  const sorted = [...arr].sort((a, b) => {
+    const cmp = (x, y) => (x || '').localeCompare(y || '', 'he')
+    return cmp(a.contact_name, b.contact_name)
+      || cmp(a.location, b.location)
+      || cmp(a.subject, b.subject)
+      || cmp(a.day, b.day)
+      || cmp(a.time_start, b.time_start)
+  })
+  return sorted
+}
+
+// ── TruncCell — cell with ellipsis + tooltip ────────────────────────────────
+function TruncCell({ children, style, width, align, bold, color, className }) {
+  const baseStyle = {
+    maxWidth: width || 'auto',
+    minWidth: width ? Math.min(width, 60) : 'auto',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    textAlign: align || 'right',
+    fontWeight: bold ? 700 : 'normal',
+    color: color || 'inherit',
+    padding: '8px 8px',
+    ...style,
+  }
+  const text = typeof children === 'string' || typeof children === 'number' ? String(children) : ''
+  return <td style={baseStyle} title={text} className={className}>{children}</td>
+}
+
 // ── ClassModal ──────────────────────────────────────────────────────────────
 function ClassModal({ cls, instructors, contacts, onSave, onClose, onDel }) {
   const [form, setForm]   = useState(() => cls ? { ...emptyClass(), ...cls } : emptyClass())
@@ -90,7 +129,6 @@ function ClassModal({ cls, instructors, contacts, onSave, onClose, onDel }) {
     { id:'manage',  label:'⚙️ ניהול' },
   ]
 
-  // Live calculation preview
   const calc = calcRow(form)
 
   return (
@@ -100,8 +138,6 @@ function ClassModal({ cls, instructors, contacts, onSave, onClose, onDel }) {
           <h3>{cls ? 'עריכת חוג' : 'חוג / קורס חדש'}</h3>
           <button className="mx" onClick={onClose}>×</button>
         </div>
-
-        {/* Tabs */}
         <div style={{ display:'flex', borderBottom:'1px solid var(--border)' }}>
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -112,233 +148,95 @@ function ClassModal({ cls, instructors, contacts, onSave, onClose, onDel }) {
             }}>{t.label}</button>
           ))}
         </div>
-
         <form onSubmit={sub} className="mb" style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:12 }}>
-          {/* ── BASIC TAB ── */}
           {tab === 'basic' && (
             <>
               <div style={GRP}>
-                <div>
-                  <label style={LBL}>לקוח משלם</label>
-                  <input value={form.contact_name} onChange={f('contact_name')} placeholder="שם הלקוח / רשת" style={INP}/>
-                </div>
-                <div>
-                  <label style={LBL}>יישוב</label>
-                  <input value={form.city} onChange={f('city')} placeholder="עיר / יישוב" style={INP}/>
-                </div>
+                <div><label style={LBL}>לקוח משלם</label><input value={form.contact_name} onChange={f('contact_name')} placeholder="שם הלקוח / רשת" style={INP}/></div>
+                <div><label style={LBL}>יישוב</label><input value={form.city} onChange={f('city')} placeholder="עיר / יישוב" style={INP}/></div>
               </div>
-
               <div style={GRP}>
-                <div>
-                  <label style={LBL}>רכזת</label>
-                  <input value={form.coordinator || ''} onChange={f('coordinator')} placeholder="שם רכזת" style={INP}/>
-                </div>
-                <div>
-                  <label style={LBL}>מתנ"ס / בי"ס</label>
-                  <input value={form.location} onChange={f('location')} placeholder="שם המוסד" style={INP}/>
-                </div>
+                <div><label style={LBL}>רכזת</label><input value={form.coordinator || ''} onChange={f('coordinator')} placeholder="שם רכזת" style={INP}/></div>
+                <div><label style={LBL}>מתנ"ס / בי"ס</label><input value={form.location} onChange={f('location')} placeholder="שם המוסד" style={INP}/></div>
               </div>
-
               <div style={GRP}>
-                <div>
-                  <label style={LBL}>מיקום (תת-מיקום)</label>
-                  <input value={form.class_name} onChange={f('class_name')} placeholder="פירוט מיקום / שם חוג" style={INP}/>
-                </div>
-                <div>
-                  <label style={LBL}>סוג פעילות</label>
-                  <select value={form.activity_type} onChange={f('activity_type')} style={INP}>
-                    {ACT_TYPES.map(t => <option key={t}>{t}</option>)}
-                  </select>
+                <div><label style={LBL}>מיקום (תת-מיקום)</label><input value={form.class_name} onChange={f('class_name')} placeholder="פירוט מיקום / שם חוג" style={INP}/></div>
+                <div><label style={LBL}>סוג פעילות</label>
+                  <select value={form.activity_type} onChange={f('activity_type')} style={INP}>{ACT_TYPES.map(t => <option key={t}>{t}</option>)}</select>
                 </div>
               </div>
-
               <div style={GRP3}>
-                <div>
-                  <label style={LBL}>יום</label>
-                  <select value={form.day} onChange={f('day')} style={INP}>
-                    {DAYS_HE.map(d => <option key={d}>{d}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={LBL}>שעה</label>
-                  <input type="time" value={form.time_start} onChange={f('time_start')} style={INP}/>
-                </div>
-                <div>
-                  <label style={LBL}>נושא</label>
-                  <input value={form.subject || ''} onChange={f('subject')} placeholder="נושא הפעילות" style={INP}/>
-                </div>
+                <div><label style={LBL}>יום</label><select value={form.day} onChange={f('day')} style={INP}>{DAYS_HE.map(d => <option key={d}>{d}</option>)}</select></div>
+                <div><label style={LBL}>שעה</label><input type="time" value={form.time_start} onChange={f('time_start')} style={INP}/></div>
+                <div><label style={LBL}>נושא</label><input value={form.subject || ''} onChange={f('subject')} placeholder="נושא הפעילות" style={INP}/></div>
               </div>
-
               <div style={GRP3}>
-                <div>
-                  <label style={LBL}>כיתה / שכבה</label>
-                  <input value={form.grades} onChange={f('grades')} placeholder="א-ב, ג..." style={INP}/>
-                </div>
-                <div>
-                  <label style={LBL}>מדריך</label>
+                <div><label style={LBL}>כיתה / שכבה</label><input value={form.grades} onChange={f('grades')} placeholder="א-ב, ג..." style={INP}/></div>
+                <div><label style={LBL}>מדריך</label>
                   <select value={form.instructor_id} onChange={f('instructor_id')} style={INP}>
                     <option value="">ללא</option>
                     {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label style={LBL}>מנות ילדים</label>
-                  <input type="number" min="0" value={form.students_count} onChange={fn('students_count')} style={INP}/>
-                </div>
+                <div><label style={LBL}>מנות ילדים</label><input type="number" min="0" value={form.students_count} onChange={fn('students_count')} style={INP}/></div>
               </div>
-
               <div style={GRP}>
-                <div>
-                  <label style={LBL}>שנה</label>
-                  <select value={form.year} onChange={fn('year')} style={INP}>
-                    {[CUR_YEAR-1, CUR_YEAR, CUR_YEAR+1].map(y => <option key={y}>{y}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={LBL}>חודש</label>
-                  <select value={form.month} onChange={fn('month')} style={INP}>
-                    {MONTHS_HE.map((m,i) => <option key={i+1} value={i+1}>{m}</option>)}
-                  </select>
-                </div>
+                <div><label style={LBL}>שנה</label><select value={form.year} onChange={fn('year')} style={INP}>{[CUR_YEAR-1, CUR_YEAR, CUR_YEAR+1].map(y => <option key={y}>{y}</option>)}</select></div>
+                <div><label style={LBL}>חודש</label><select value={form.month} onChange={fn('month')} style={INP}>{MONTHS_HE.map((m,i) => <option key={i+1} value={i+1}>{m}</option>)}</select></div>
               </div>
             </>
           )}
-
-          {/* ── FINANCE TAB ── */}
           {tab === 'finance' && (
             <>
-              <div style={{ background:'#fff7ed', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#92400e', fontWeight:600 }}>
-                💰 תמחור והכנסות
-              </div>
-
+              <div style={{ background:'#fff7ed', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#92400e', fontWeight:600 }}>💰 תמחור והכנסות</div>
               <div style={GRP3}>
-                <div>
-                  <label style={LBL}>תשלום פר ילד חודשי (₪)</label>
-                  <input type="number" min="0" value={form.price_per_student} onChange={fn('price_per_student')} placeholder="0" style={INP}/>
-                </div>
-                <div>
-                  <label style={LBL}>אחוז תקורה (%)</label>
-                  <input type="number" min="0" max="100" value={form.overhead_pct ?? 70} onChange={fn('overhead_pct')} placeholder="70" style={INP}/>
-                </div>
-                <div>
-                  <label style={LBL}>מחיר סוכם (₪)</label>
-                  <input type="number" min="0" value={form.agreed_price} onChange={fn('agreed_price')} placeholder="0" style={INP}/>
-                </div>
+                <div><label style={LBL}>תשלום פר ילד חודשי (₪)</label><input type="number" min="0" value={form.price_per_student} onChange={fn('price_per_student')} placeholder="0" style={INP}/></div>
+                <div><label style={LBL}>אחוז תקורה (%)</label><input type="number" min="0" max="100" value={form.overhead_pct ?? 70} onChange={fn('overhead_pct')} placeholder="70" style={INP}/></div>
+                <div><label style={LBL}>מחיר סוכם (₪)</label><input type="number" min="0" value={form.agreed_price} onChange={fn('agreed_price')} placeholder="0" style={INP}/></div>
               </div>
-
-              {/* Live calc preview */}
               <div style={{ background:'var(--bg)', borderRadius:10, padding:'12px 16px', display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, textAlign:'center' }}>
-                <div>
-                  <div style={{ fontSize:16, fontWeight:800, color:'#0ea5e9' }}>₪{fmt(calc.monthlyPayment)}</div>
-                  <div style={{ fontSize:10, color:'var(--muted)' }}>תשלום החודש</div>
-                </div>
-                <div>
-                  <div style={{ fontSize:16, fontWeight:800, color:'#10b981' }}>₪{fmt(calc.totalProfit)}</div>
-                  <div style={{ fontSize:10, color:'var(--muted)' }}>סה"כ רווח</div>
-                </div>
-                <div>
-                  <div style={{ fontSize:16, fontWeight:800, color: calc.profitability >= 0 ? '#10b981' : '#ef4444' }}>₪{fmt(calc.profitability)}</div>
-                  <div style={{ fontSize:10, color:'var(--muted)' }}>רווחיות חוג</div>
-                </div>
+                <div><div style={{ fontSize:16, fontWeight:800, color:'#0ea5e9' }}>₪{fmt(calc.monthlyPayment)}</div><div style={{ fontSize:10, color:'var(--muted)' }}>תשלום החודש</div></div>
+                <div><div style={{ fontSize:16, fontWeight:800, color:'#10b981' }}>₪{fmt(calc.totalProfit)}</div><div style={{ fontSize:10, color:'var(--muted)' }}>סה"כ רווח</div></div>
+                <div><div style={{ fontSize:16, fontWeight:800, color: calc.profitability >= 0 ? '#10b981' : '#ef4444' }}>₪{fmt(calc.profitability)}</div><div style={{ fontSize:10, color:'var(--muted)' }}>רווחיות חוג</div></div>
               </div>
-
-              <div style={{ background:'#fdf4ff', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#6b21a8', fontWeight:600 }}>
-                👨‍🏫 עלות מדריך
-              </div>
-
+              <div style={{ background:'#fdf4ff', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#6b21a8', fontWeight:600 }}>👨‍🏫 עלות מדריך</div>
               <div style={GRP3}>
-                <div>
-                  <label style={LBL}>עלות מדריך לשעה (₪)</label>
-                  <input type="number" min="0" value={form.instructor_price_per_session} onChange={fn('instructor_price_per_session')} placeholder="0" style={INP}/>
-                </div>
-                <div>
-                  <label style={LBL}>שעות חודשיות</label>
-                  <input type="number" min="0" value={form.monthly_hours ?? 4} onChange={fn('monthly_hours')} placeholder="4" style={INP}/>
-                </div>
-                <div>
-                  <label style={LBL}>עלות מדריך לחודש</label>
-                  <div style={{ ...INP, background:'var(--bg)', fontWeight:700, color:'#8b5cf6', display:'flex', alignItems:'center' }}>
-                    ₪{fmt(calc.instrMonthly)}
-                  </div>
-                </div>
+                <div><label style={LBL}>עלות מדריך לשעה (₪)</label><input type="number" min="0" value={form.instructor_price_per_session} onChange={fn('instructor_price_per_session')} placeholder="0" style={INP}/></div>
+                <div><label style={LBL}>שעות חודשיות</label><input type="number" min="0" value={form.monthly_hours ?? 4} onChange={fn('monthly_hours')} placeholder="4" style={INP}/></div>
+                <div><label style={LBL}>עלות מדריך לחודש</label><div style={{ ...INP, background:'var(--bg)', fontWeight:700, color:'#8b5cf6', display:'flex', alignItems:'center' }}>₪{fmt(calc.instrMonthly)}</div></div>
               </div>
-
-              <div style={{ background:'#f0f9ff', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#0c4a6e', fontWeight:600 }}>
-                🏦 תשלום בפועל
-              </div>
-
+              <div style={{ background:'#f0f9ff', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#0c4a6e', fontWeight:600 }}>🏦 תשלום בפועל</div>
               <div style={GRP}>
-                <div>
-                  <label style={LBL}>הכנסה בפועל (₪)</label>
-                  <input type="number" min="0" value={form.actual_income} onChange={fn('actual_income')} placeholder="0" style={INP}/>
-                </div>
-                <div>
-                  <label style={LBL}>אמצעי תשלום</label>
-                  <select value={form.payment_method} onChange={f('payment_method')} style={INP}>
-                    <option value="">בחר...</option>
-                    {PAY_METHOD.map(m => <option key={m}>{m}</option>)}
-                  </select>
-                </div>
+                <div><label style={LBL}>הכנסה בפועל (₪)</label><input type="number" min="0" value={form.actual_income} onChange={fn('actual_income')} placeholder="0" style={INP}/></div>
+                <div><label style={LBL}>אמצעי תשלום</label><select value={form.payment_method} onChange={f('payment_method')} style={INP}><option value="">בחר...</option>{PAY_METHOD.map(m => <option key={m}>{m}</option>)}</select></div>
               </div>
-
               <div style={GRP}>
-                <div>
-                  <label style={LBL}>חשבונית</label>
-                  <input value={form.invoice_number} onChange={f('invoice_number')} placeholder="מספר חשבונית" style={INP}/>
-                </div>
+                <div><label style={LBL}>חשבונית</label><input value={form.invoice_number} onChange={f('invoice_number')} placeholder="מספר חשבונית" style={INP}/></div>
                 <div style={{ display:'flex', alignItems:'center', gap:10, paddingTop:20 }}>
                   <input type="checkbox" id="paid_cb" checked={!!form.paid} onChange={fb('paid')} style={{ width:18, height:18, cursor:'pointer' }}/>
-                  <label htmlFor="paid_cb" style={{ fontSize:14, fontWeight:600, color: form.paid ? '#10b981' : 'var(--muted)', cursor:'pointer' }}>
-                    {form.paid ? '✓ שולם במלואו' : 'סמן כשולם'}
-                  </label>
+                  <label htmlFor="paid_cb" style={{ fontSize:14, fontWeight:600, color: form.paid ? '#10b981' : 'var(--muted)', cursor:'pointer' }}>{form.paid ? '✓ שולם במלואו' : 'סמן כשולם'}</label>
                 </div>
               </div>
             </>
           )}
-
-          {/* ── MANAGE TAB ── */}
           {tab === 'manage' && (
             <>
               <div style={GRP}>
-                <div>
-                  <label style={LBL}>סטטוס</label>
-                  <select value={form.status} onChange={f('status')} style={INP}>
-                    {STATUS_OPT.map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={LBL}>אחראי</label>
-                  <input value={form.responsible} onChange={f('responsible')} placeholder="שם אחראי" style={INP}/>
-                </div>
+                <div><label style={LBL}>סטטוס</label><select value={form.status} onChange={f('status')} style={INP}>{STATUS_OPT.map(s => <option key={s}>{s}</option>)}</select></div>
+                <div><label style={LBL}>אחראי</label><input value={form.responsible} onChange={f('responsible')} placeholder="שם אחראי" style={INP}/></div>
               </div>
-
               <div style={GRP}>
-                <div>
-                  <label style={LBL}>טלפון איש קשר</label>
-                  <input value={form.contact_phone} onChange={f('contact_phone')} placeholder="050-..." style={INP}/>
-                </div>
-                <div>
-                  <label style={LBL}>קישור CRM</label>
-                  <select value={form.contact_id} onChange={f('contact_id')} style={INP}>
-                    <option value="">ללא קישור</option>
-                    {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                <div><label style={LBL}>טלפון איש קשר</label><input value={form.contact_phone} onChange={f('contact_phone')} placeholder="050-..." style={INP}/></div>
+                <div><label style={LBL}>קישור CRM</label>
+                  <select value={form.contact_id} onChange={f('contact_id')} style={INP}><option value="">ללא קישור</option>{contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
                 </div>
               </div>
-
-              <div>
-                <label style={LBL}>הערות</label>
-                <textarea value={form.notes} onChange={f('notes')} placeholder="הערות נוספות..." rows={3} style={{ ...INP, resize:'vertical' }}/>
-              </div>
+              <div><label style={LBL}>הערות</label><textarea value={form.notes} onChange={f('notes')} placeholder="הערות נוספות..." rows={3} style={{ ...INP, resize:'vertical' }}/></div>
             </>
           )}
-
           {err && <div style={{ background:'#fee2e2', color:'#dc2626', borderRadius:8, padding:'8px 12px', fontSize:13 }}>⚠️ {err}</div>}
-
           <div className="mf">
-            <button type="submit" className="btn btn-p" disabled={saving}>
-              {saving ? '...' : (cls ? 'שמור' : 'הוסף חוג')}
-            </button>
+            <button type="submit" className="btn btn-p" disabled={saving}>{saving ? '...' : (cls ? 'שמור' : 'הוסף חוג')}</button>
             <button type="button" className="btn btn-o" onClick={onClose}>ביטול</button>
             {cls && <button type="button" className="del-link" onClick={() => { if(window.confirm('למחוק חוג זה?')) onDel(cls.id) }}>מחק</button>}
           </div>
@@ -349,10 +247,11 @@ function ClassModal({ cls, instructors, contacts, onSave, onClose, onDel }) {
 }
 
 // ── Class Import Modal ───────────────────────────────────────────────────────
-function ClassImportModal({ onClose, onAdd }) {
+function ClassImportModal({ onClose, onAdd, onReload }) {
   const [step, setStep]   = useState('upload')
   const [rows, setRows]   = useState([])
   const [error, setError] = useState(null)
+  const [progress, setProgress] = useState(0)
   const fileRef           = useRef()
 
   const handleFile = e => {
@@ -360,15 +259,14 @@ function ClassImportModal({ onClose, onAdd }) {
     if (!file) return
     setError(null)
     Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
+      header: true, skipEmptyLines: true,
       complete: result => {
         if (!result.data?.length) { setError('הקובץ ריק'); return }
         const mapped = result.data.map(r => ({
           ...emptyClass(),
           class_name:                  r['מיקום']   || r['שם חוג'] || r['name'] || r['class_name'] || '',
           activity_type:               r['סוג']     || r['activity_type'] || 'חוג',
-          location:                    r['מתנס/בי"ס'] || r['מוסד'] || r['location'] || '',
+          location:                    r['מתנס/בי"ס'] || r['מתנ"ס/בי"ס'] || r['מוסד'] || r['location'] || '',
           city:                        r['יישוב']   || r['עיר'] || r['city'] || '',
           contact_name:                r['לקוח משלם'] || r['contact_name'] || '',
           coordinator:                 r['רכזת']    || '',
@@ -379,7 +277,7 @@ function ClassImportModal({ onClose, onAdd }) {
           students_count:              Number(r['מנות ילדים'] || r['תלמידים'] || r['students_count'] || 0),
           price_per_student:           Number(r['תשלום פר ילד חודשי'] || r['price_per_student'] || 0),
           agreed_price:                Number(r['תשלום החודש'] || r['סוכם'] || r['agreed_price'] || 0),
-          overhead_pct:                Number(r['תקורה'] || 70),
+          overhead_pct:                Number(r['תקורה'] || r['תקורה%'] || 70),
           instructor_price_per_session:Number(r['עלות מדריך לשעה'] || 0),
           monthly_hours:               Number(r['שעות חודשיות'] || 4),
           actual_income:               Number(r['בפועל'] || r['actual_income'] || 0),
@@ -394,27 +292,32 @@ function ClassImportModal({ onClose, onAdd }) {
   }
 
   const doImport = async () => {
+    setStep('importing')
+    setError(null)
+    let success = 0
     try {
-      for (const r of rows) await onAdd(r)
+      for (let i = 0; i < rows.length; i++) {
+        await onAdd(rows[i])
+        success++
+        setProgress(Math.round(((i + 1) / rows.length) * 100))
+      }
+      if (onReload) await onReload()
       setStep('done')
     } catch (e) {
-      setError(e?.message || 'שגיאה בייבוא')
+      setError(`יובאו ${success} מתוך ${rows.length}. שגיאה: ${e?.message || 'לא ידוע'}`)
+      if (success > 0 && onReload) await onReload()
+      setStep('preview')
     }
   }
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ direction:'rtl' }}>
-        <div className="mh">
-          <h3>ייבוא חוגים מ-CSV</h3>
-          <button className="mx" onClick={onClose}>×</button>
-        </div>
+        <div className="mh"><h3>ייבוא חוגים מ-CSV</h3><button className="mx" onClick={onClose}>×</button></div>
         <div className="mb">
           {step === 'upload' && (
             <div style={{ textAlign:'center', padding:24 }}>
-              <p style={{ color:'var(--muted)', marginBottom:16, fontSize:13 }}>
-                העלה קובץ CSV עם עמודות לפי טבלת האקסל
-              </p>
+              <p style={{ color:'var(--muted)', marginBottom:16, fontSize:13 }}>העלה קובץ CSV עם עמודות לפי טבלת האקסל</p>
               <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} style={{ display:'none' }}/>
               <button className="btn btn-p" onClick={() => fileRef.current?.click()}>📁 בחר קובץ</button>
               {error && <p style={{ color:'var(--danger)', marginTop:12 }}>{error}</p>}
@@ -424,17 +327,9 @@ function ClassImportModal({ onClose, onAdd }) {
             <>
               <p style={{ marginBottom:12, fontSize:13, color:'var(--muted)' }}>נמצאו {rows.length} חוגים:</p>
               <div className="tbl-wrap" style={{ maxHeight:300 }}>
-                <table>
-                  <thead><tr>
-                    <th>שם / מיקום</th><th>מוסד</th><th>עיר</th><th>סכום</th>
-                  </tr></thead>
+                <table><thead><tr><th>שם / מיקום</th><th>מוסד</th><th>עיר</th><th>סכום</th></tr></thead>
                   <tbody>{rows.slice(0,50).map((r,i) => (
-                    <tr key={i}>
-                      <td>{r.class_name || r.subject}</td>
-                      <td>{r.location}</td>
-                      <td>{r.city}</td>
-                      <td>{r.agreed_price ? `₪${fmt(r.agreed_price)}` : '–'}</td>
-                    </tr>
+                    <tr key={i}><td>{r.class_name || r.subject}</td><td>{r.location}</td><td>{r.city}</td><td>{r.agreed_price ? `₪${fmt(r.agreed_price)}` : '–'}</td></tr>
                   ))}</tbody>
                 </table>
               </div>
@@ -444,6 +339,15 @@ function ClassImportModal({ onClose, onAdd }) {
                 <button className="btn btn-o" onClick={onClose}>ביטול</button>
               </div>
             </>
+          )}
+          {step === 'importing' && (
+            <div style={{ textAlign:'center', padding:32 }}>
+              <div style={{ fontSize:32, marginBottom:12 }}>⏳</div>
+              <p style={{ fontWeight:600, marginBottom:12 }}>מייבא חוגים... {progress}%</p>
+              <div style={{ background:'var(--border)', borderRadius:8, height:8, overflow:'hidden' }}>
+                <div style={{ background:'#f97316', height:'100%', width:`${progress}%`, transition:'width 0.3s' }}/>
+              </div>
+            </div>
           )}
           {step === 'done' && (
             <div style={{ textAlign:'center', padding:32 }}>
@@ -468,8 +372,10 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
   const [filterCity, setFilterCity]         = useState('')
   const [filterStatus, setFilterStatus]     = useState('')
   const [filterPaid, setFilterPaid]         = useState('')
+  // 2) Multi-select
+  const [selected, setSelected]   = useState(new Set())
+  const [deleting, setDeleting]   = useState(false)
 
-  // ── Filtered ──────────────────────────────────────────────────────────────
   const cities = useMemo(() => [...new Set(classes.map(c => c.city).filter(Boolean))].sort(), [classes])
 
   const filtered = useMemo(() => {
@@ -480,10 +386,9 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
     if (filterPaid === 'paid')    arr = arr.filter(c => c.paid)
     if (filterPaid === 'partial') arr = arr.filter(c => !c.paid && (c.actual_income || 0) > 0)
     if (filterPaid === 'unpaid')  arr = arr.filter(c => !c.paid && !(c.actual_income > 0) && (c.agreed_price > 0))
-    return arr
+    return sortAndGroup(arr)
   }, [classes, search, filterCity, filterStatus, filterPaid])
 
-  // ── KPI stats ─────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     let totalMonthly = 0, totalProfit = 0, totalInstrCost = 0
     for (const c of classes) {
@@ -494,9 +399,7 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
     }
     return {
       count: classes.length,
-      totalMonthly,
-      totalProfit,
-      totalInstrCost,
+      totalMonthly, totalProfit, totalInstrCost,
       totalStudents: classes.reduce((s, c) => s + (Number(c.students_count) || 0), 0),
     }
   }, [classes])
@@ -505,42 +408,51 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
     if (modal?.cls) await onUpdate(modal.cls.id, form)
     else            await onAdd(form)
   }
+  const handleDelete = async id => { await onDelete(id); setModal(null) }
 
-  const handleDelete = async id => {
-    await onDelete(id)
-    setModal(null)
+  // 2) Selection handlers
+  const toggleSelect = useCallback((id) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }, [])
+  const toggleAll = useCallback(() => {
+    if (selected.size === filtered.length) setSelected(new Set())
+    else setSelected(new Set(filtered.map(c => c.id)))
+  }, [filtered, selected.size])
+  const bulkDelete = async () => {
+    if (!window.confirm(`למחוק ${selected.size} חוגים?`)) return
+    setDeleting(true)
+    for (const id of selected) { try { await onDelete(id) } catch {} }
+    setSelected(new Set())
+    setDeleting(false)
   }
 
   const clearFilters = () => { setFilterCity(''); setFilterStatus(''); setFilterPaid(''); setSearch('') }
   const hasFilters = filterCity || filterStatus || filterPaid || search
-
-  // ── Table column headers matching spreadsheet ─────────────────────────────
-  const COLS = [
-    'לקוח משלם','יישוב','רכזת','מתנ"ס / בי"ס','מיקום','יום','שעה','נושא','כיתה','מדריך',
-    'מנות ילדים','תשלום\nפר ילד','תשלום\nהחודש','תקורה','סה"כ רווח',
-    'עלות מדריך\nלשעה','עלות מדריך\nלחודש','רווחיות\nחוג','',
-  ]
 
   return (
     <>
       <div className="ph">
         <h2>🏫 חוגים וקורסים</h2>
         <div style={{ display:'flex', gap:8 }}>
-          <button className="btn btn-o btn-sm" onClick={() => exportClassesCSV(classes)}>📥 ייצוא</button>
+          <button className="btn btn-o btn-sm" onClick={() => exportClassesCSV(classes)}>📥 ייצוא CSV</button>
           <button className="btn btn-o btn-sm" onClick={() => setImporting(true)}>📤 ייבוא</button>
           <button className="btn btn-p btn-sm" onClick={() => setModal({ cls: null })}>+ הוסף חוג</button>
         </div>
       </div>
 
       <div className="pb">
-        {/* ── KPI Cards ── */}
+        {/* KPI Cards */}
         <div className="stats-grid" style={{ gridTemplateColumns:'repeat(5,1fr)', marginBottom:16 }}>
           {[
-            { label:'חוגים',          val: stats.count,                           color:'#0ea5e9', bg:'#e0f2fe', icon:'🏫' },
-            { label:'תלמידים',        val: stats.totalStudents,                    color:'#8b5cf6', bg:'#ede9fe', icon:'👨‍🎓' },
-            { label:'הכנסות חודשיות',  val: `₪${fmt(stats.totalMonthly)}`,          color:'#10b981', bg:'#d1fae5', icon:'💰' },
-            { label:'עלות מדריכים',    val: `₪${fmt(stats.totalInstrCost)}`,         color:'#f59e0b', bg:'#fef3c7', icon:'👨‍🏫' },
-            { label:'רווחיות כוללת',   val: `₪${fmt(stats.totalProfit)}`,            color: stats.totalProfit >= 0 ? '#10b981' : '#ef4444', bg: stats.totalProfit >= 0 ? '#d1fae5' : '#fee2e2', icon:'📊' },
+            { label:'חוגים',          val: stats.count,                   color:'#0ea5e9', icon:'🏫' },
+            { label:'תלמידים',        val: stats.totalStudents,            color:'#8b5cf6', icon:'👨‍🎓' },
+            { label:'הכנסות חודשיות',  val: `₪${fmt(stats.totalMonthly)}`,  color:'#10b981', icon:'💰' },
+            { label:'עלות מדריכים',    val: `₪${fmt(stats.totalInstrCost)}`, color:'#f59e0b', icon:'👨‍🏫' },
+            { label:'רווחיות כוללת',   val: `₪${fmt(stats.totalProfit)}`,    color: stats.totalProfit >= 0 ? '#10b981' : '#ef4444', icon:'📊' },
           ].map((k, i) => (
             <div key={i} className="stat-card" style={{ textAlign:'center', padding:'14px 10px' }}>
               <div style={{ fontSize:22, marginBottom:4 }}>{k.icon}</div>
@@ -550,120 +462,142 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
           ))}
         </div>
 
-        {/* ── Filters ── */}
+        {/* 2) Bulk actions toolbar */}
+        {selected.size > 0 && (
+          <div className="cls-bulk-bar">
+            <span>נבחרו {selected.size} חוגים</span>
+            <button className="btn btn-sm" onClick={bulkDelete} disabled={deleting}
+              style={{ background:'#ef4444', color:'#fff', border:'none' }}>
+              {deleting ? '...מוחק' : '🗑️ מחיקה מרובה'}
+            </button>
+            <button className="btn btn-o btn-sm" onClick={() => setSelected(new Set())}>✕ בטל בחירה</button>
+          </div>
+        )}
+
+        {/* Filters */}
         <div className="card" style={{ padding:'10px 14px', marginBottom:14, display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 חיפוש..."
             style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:12, fontFamily:'inherit', direction:'rtl', background:'var(--bg)', color:'var(--text)', minWidth:160, flex:1 }}/>
           <select value={filterCity} onChange={e => setFilterCity(e.target.value)}
             style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:12, fontFamily:'inherit', direction:'rtl', background:'var(--bg)', color:'var(--text)' }}>
-            <option value="">כל הערים</option>
-            {cities.map(c => <option key={c}>{c}</option>)}
+            <option value="">כל הערים</option>{cities.map(c => <option key={c}>{c}</option>)}
           </select>
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
             style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:12, fontFamily:'inherit', background:'var(--bg)', color:'var(--text)' }}>
-            <option value="">כל הסטטוסים</option>
-            {STATUS_OPT.map(s => <option key={s}>{s}</option>)}
+            <option value="">כל הסטטוסים</option>{STATUS_OPT.map(s => <option key={s}>{s}</option>)}
           </select>
           <select value={filterPaid} onChange={e => setFilterPaid(e.target.value)}
             style={{ padding:'7px 10px', border:'1px solid var(--border)', borderRadius:8, fontSize:12, fontFamily:'inherit', background:'var(--bg)', color:'var(--text)' }}>
             <option value="">כל התשלומים</option>
-            <option value="paid">שולם</option>
-            <option value="partial">חלקי</option>
-            <option value="unpaid">ממתין</option>
+            <option value="paid">שולם</option><option value="partial">חלקי</option><option value="unpaid">ממתין</option>
           </select>
           {hasFilters && <button className="btn btn-o btn-sm" onClick={clearFilters} style={{ color:'var(--danger)' }}>× נקה</button>}
           <span style={{ fontSize:12, color:'var(--muted)', marginRight:'auto' }}>{filtered.length} / {classes.length}</span>
         </div>
 
-        {/* ── Main Table ── */}
+        {/* Main Table */}
         {filtered.length === 0 ? (
           <div className="card" style={{ padding:'60px 20px', textAlign:'center' }}>
             <div className="empty">
               <div className="empty-ico">🏫</div>
               <p>{classes.length === 0 ? 'אין חוגים במערכת עדיין' : 'לא נמצאו חוגים לפי הסינון'}</p>
-              {classes.length === 0 && (
-                <button className="btn btn-p" onClick={() => setModal({ cls: null })} style={{ marginTop:12 }}>+ הוסף חוג ראשון</button>
-              )}
+              {classes.length === 0 && <button className="btn btn-p" onClick={() => setModal({ cls: null })} style={{ marginTop:12 }}>+ הוסף חוג ראשון</button>}
             </div>
           </div>
         ) : (
-          <div className="card" style={{ overflow:'hidden' }}>
-            <div className="tbl-wrap">
-              <table style={{ minWidth: 1500 }}>
+          <div className="card cls-table-card">
+            <div className="cls-table-scroll">
+              <table className="cls-table">
                 <thead>
                   <tr>
-                    {COLS.map((h, i) => (
-                      <th key={i} style={{ whiteSpace:'pre-line', textAlign:'center', padding:'10px 8px', fontSize:10 }}>{h}</th>
-                    ))}
+                    <th className="cls-col-actions cls-sticky-col">
+                      <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
+                        onChange={toggleAll} style={{ cursor:'pointer' }}/>
+                    </th>
+                    <th className="cls-col-client">לקוח משלם</th>
+                    <th className="cls-col-sm">יישוב</th>
+                    <th className="cls-col-sm">רכזת</th>
+                    <th className="cls-col-md">מתנ"ס / בי"ס</th>
+                    <th className="cls-col-md">מיקום</th>
+                    <th className="cls-col-xs">יום</th>
+                    <th className="cls-col-xs">שעה</th>
+                    <th className="cls-col-sm">נושא</th>
+                    <th className="cls-col-xs">כיתה</th>
+                    <th className="cls-col-sm">מדריך</th>
+                    <th className="cls-col-num">מנות<br/>ילדים</th>
+                    <th className="cls-col-num">תשלום<br/>פר ילד</th>
+                    <th className="cls-col-num">תשלום<br/>החודש</th>
+                    <th className="cls-col-num">תקורה</th>
+                    <th className="cls-col-num">סה"כ<br/>רווח</th>
+                    <th className="cls-col-num">עלות מדריך<br/>לשעה</th>
+                    <th className="cls-col-num">עלות מדריך<br/>לחודש</th>
+                    <th className="cls-col-num">רווחיות<br/>חוג</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((cls) => {
+                  {filtered.map((cls, idx) => {
                     const r   = calcRow(cls)
-                    const pc  = payColor(cls)
                     const instrName = cls.instructors?.name || (instructors.find(x => x.id === cls.instructor_id)?.name) || '—'
+                    const clientClr = getClientColor(cls.contact_name)
+                    const prevKey = idx > 0 ? groupKey(filtered[idx - 1]) : null
+                    const curKey  = groupKey(cls)
+                    const isNewGroup = idx === 0 || curKey !== prevKey
 
                     return (
-                      <tr key={cls.id} onClick={() => setModal({ cls })} style={{ cursor:'pointer' }}>
-                        <td style={{ fontWeight:600, minWidth:100 }}>{cls.contact_name || '—'}</td>
-                        <td>{cls.city || '—'}</td>
-                        <td>{cls.coordinator || '—'}</td>
-                        <td style={{ minWidth:120 }}>{cls.location || '—'}</td>
-                        <td style={{ minWidth:110 }}>
+                      <tr key={cls.id}
+                        className={`cls-row ${isNewGroup ? 'cls-group-start' : ''} ${selected.has(cls.id) ? 'cls-selected' : ''}`}
+                        style={{ borderRight: `5px solid ${clientClr}` }}>
+                        {/* Actions col */}
+                        <td className="cls-col-actions cls-sticky-col" onClick={e => e.stopPropagation()}>
+                          <div className="cls-actions-cell">
+                            <input type="checkbox" checked={selected.has(cls.id)}
+                              onChange={() => toggleSelect(cls.id)} style={{ cursor:'pointer' }}/>
+                            <button className="cls-action-btn" onClick={() => setModal({ cls })} title="עריכה">✏️</button>
+                            <button className="cls-action-btn cls-action-del" onClick={() => {
+                              if(window.confirm('למחוק חוג זה?')) handleDelete(cls.id)
+                            }} title="מחיקה">🗑️</button>
+                          </div>
+                        </td>
+                        <TruncCell width={130} bold color={clientClr}>{cls.contact_name || '—'}</TruncCell>
+                        <TruncCell width={80}>{cls.city || '—'}</TruncCell>
+                        <TruncCell width={80}>{cls.coordinator || '—'}</TruncCell>
+                        <TruncCell width={130}>{cls.location || '—'}</TruncCell>
+                        <TruncCell width={120}>
                           {cls.class_name || '—'}
-                          {cls.activity_type && <div style={{ fontSize:10, color:'var(--muted)' }}>{cls.activity_type}</div>}
-                        </td>
-                        <td style={{ textAlign:'center' }}>{cls.day || '—'}</td>
-                        <td style={{ textAlign:'center' }}>{cls.time_start || '—'}</td>
-                        <td>{cls.subject || '—'}</td>
-                        <td style={{ textAlign:'center' }}>{cls.grades || '—'}</td>
-                        <td>{instrName}</td>
-                        <td style={{ textAlign:'center', fontWeight:600 }}>{r.students || '—'}</td>
-                        <td style={{ textAlign:'center' }}>{r.pricePerChild ? `₪${fmt(r.pricePerChild)}` : '—'}</td>
-                        <td style={{ textAlign:'center', fontWeight:700, color:'#0ea5e9' }}>
-                          {r.monthlyPayment ? `₪${fmt(r.monthlyPayment)}` : '—'}
-                        </td>
-                        <td style={{ textAlign:'center' }}>
-                          {r.overheadPct ? `${r.overheadPct}%` : '—'}
-                        </td>
-                        <td style={{ textAlign:'center', fontWeight:700, color:'#10b981' }}>
-                          {r.totalProfit ? `₪${fmt(r.totalProfit)}` : '—'}
-                        </td>
-                        <td style={{ textAlign:'center' }}>
-                          {r.instrHourly ? `₪${fmt(r.instrHourly)}` : '—'}
-                        </td>
-                        <td style={{ textAlign:'center', color:'#8b5cf6', fontWeight:600 }}>
-                          {r.instrMonthly ? `₪${fmt(r.instrMonthly)}` : '—'}
-                        </td>
-                        <td style={{ textAlign:'center', fontWeight:800, color: r.profitability >= 0 ? '#10b981' : '#ef4444' }}>
+                          {cls.activity_type && <span style={{ fontSize:9, color:'var(--muted)', marginRight:4 }}>({cls.activity_type})</span>}
+                        </TruncCell>
+                        <TruncCell width={55} align="center">{cls.day || '—'}</TruncCell>
+                        <TruncCell width={55} align="center">{cls.time_start || '—'}</TruncCell>
+                        <TruncCell width={80}>{cls.subject || '—'}</TruncCell>
+                        <TruncCell width={55} align="center">{cls.grades || '—'}</TruncCell>
+                        <TruncCell width={90}>{instrName}</TruncCell>
+                        <TruncCell width={55} align="center" bold>{r.students || '—'}</TruncCell>
+                        <TruncCell width={70} align="center">{r.pricePerChild ? `₪${fmt(r.pricePerChild)}` : '—'}</TruncCell>
+                        <TruncCell width={80} align="center" bold color="#0ea5e9">{r.monthlyPayment ? `₪${fmt(r.monthlyPayment)}` : '—'}</TruncCell>
+                        <TruncCell width={55} align="center">{r.overheadPct ? `${r.overheadPct}%` : '—'}</TruncCell>
+                        <TruncCell width={80} align="center" bold color="#10b981">{r.totalProfit ? `₪${fmt(r.totalProfit)}` : '—'}</TruncCell>
+                        <TruncCell width={70} align="center">{r.instrHourly ? `₪${fmt(r.instrHourly)}` : '—'}</TruncCell>
+                        <TruncCell width={80} align="center" color="#8b5cf6" bold>{r.instrMonthly ? `₪${fmt(r.instrMonthly)}` : '—'}</TruncCell>
+                        <TruncCell width={80} align="center" bold
+                          color={r.profitability >= 0 ? '#10b981' : '#ef4444'}>
                           {(r.monthlyPayment || r.instrMonthly) ? `₪${fmt(r.profitability)}` : '—'}
-                        </td>
-                        <td style={{ padding:'8px 6px' }}>
-                          <span style={{ background: pc + '20', color: pc, borderRadius:20, padding:'3px 8px', fontSize:11, fontWeight:700, whiteSpace:'nowrap' }}>
-                            {payLabel(cls)}
-                          </span>
-                        </td>
+                        </TruncCell>
                       </tr>
                     )
                   })}
                 </tbody>
-                {/* Totals footer */}
                 <tfoot>
-                  <tr style={{ background:'var(--bg)', fontWeight:700 }}>
-                    <td colSpan={10} style={{ textAlign:'right', padding:'10px 12px' }}>סה"כ</td>
-                    <td style={{ textAlign:'center' }}>{stats.totalStudents}</td>
+                  <tr className="cls-totals-row">
+                    <td className="cls-sticky-col"></td>
+                    <td colSpan={10} style={{ textAlign:'right', fontWeight:700 }}>סה"כ</td>
+                    <td style={{ textAlign:'center', fontWeight:700 }}>{stats.totalStudents}</td>
                     <td></td>
-                    <td style={{ textAlign:'center', color:'#0ea5e9' }}>₪{fmt(stats.totalMonthly)}</td>
+                    <td style={{ textAlign:'center', fontWeight:700, color:'#0ea5e9' }}>₪{fmt(stats.totalMonthly)}</td>
                     <td></td>
-                    <td style={{ textAlign:'center', color:'#10b981' }}>
-                      ₪{fmt(filtered.reduce((s, c) => s + calcRow(c).totalProfit, 0))}
-                    </td>
+                    <td style={{ textAlign:'center', fontWeight:700, color:'#10b981' }}>₪{fmt(filtered.reduce((s, c) => s + calcRow(c).totalProfit, 0))}</td>
                     <td></td>
-                    <td style={{ textAlign:'center', color:'#8b5cf6' }}>₪{fmt(stats.totalInstrCost)}</td>
-                    <td style={{ textAlign:'center', color: stats.totalProfit >= 0 ? '#10b981' : '#ef4444' }}>
-                      ₪{fmt(stats.totalProfit)}
-                    </td>
-                    <td></td>
+                    <td style={{ textAlign:'center', fontWeight:700, color:'#8b5cf6' }}>₪{fmt(stats.totalInstrCost)}</td>
+                    <td style={{ textAlign:'center', fontWeight:800, color: stats.totalProfit >= 0 ? '#10b981' : '#ef4444' }}>₪{fmt(stats.totalProfit)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -672,13 +606,12 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
         )}
       </div>
 
-      {/* Modals */}
       {modal && (
         <ClassModal cls={modal.cls} instructors={instructors} contacts={contacts}
           onSave={handleSave} onClose={() => setModal(null)} onDel={handleDelete}/>
       )}
       {importing && (
-        <ClassImportModal onClose={() => setImporting(false)} onAdd={onAdd}/>
+        <ClassImportModal onClose={() => setImporting(false)} onAdd={onAdd} onReload={onReload}/>
       )}
     </>
   )
