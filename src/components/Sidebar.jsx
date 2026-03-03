@@ -15,10 +15,11 @@ const NAV = [
   { id: 'finance',     label: 'פיננסים ₪',    ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> },
 ]
 
-// Bottom nav items (5 most used for mobile)
-const MOB_NAV = ['dashboard', 'leads', 'contacts', 'tasks', 'more']
+// Pages not shown in bottom nav - appear in "more" popup
+const MORE_PAGES = NAV.filter(n => !['dashboard','leads','contacts','tasks'].includes(n.id))
 
 export function MobileBottomNav({ page, setPage, tasks, leads, onMore }) {
+  const [moreOpen, setMoreOpen] = useState(false)
   const todayStr = new Date().toISOString().split('T')[0]
   const todayTasks = tasks.filter(t => !t.completed && t.dueDate === todayStr && (!t.snoozedUntil || t.snoozedUntil <= todayStr)).length
   const atRiskLeads = (leads || []).filter(l => l.atRisk && !['won','lost'].includes(l.leadStage)).length
@@ -27,7 +28,7 @@ export function MobileBottomNav({ page, setPage, tasks, leads, onMore }) {
 
   const items = [
     { id: 'dashboard', label: 'דשבורד', badge: 0,         ico: NAV[0].ico },
-    { id: 'leads',     label: 'לידים נכנסים',  badge: leadBadge,  ico: NAV[1].ico },
+    { id: 'leads',     label: 'לידים',  badge: leadBadge,  ico: NAV[1].ico },
     { id: 'contacts',  label: 'לקוחות', badge: 0,         ico: NAV[2].ico },
     { id: 'tasks',     label: 'משימות', badge: todayTasks, ico: NAV[4].ico },
     { id: 'more',      label: 'עוד',    badge: 0,
@@ -35,21 +36,49 @@ export function MobileBottomNav({ page, setPage, tasks, leads, onMore }) {
   ]
 
   return (
-    <nav className="mob-nav">
-      {items.map(item => (
-        <button
-          key={item.id}
-          className={`mob-nav-btn ${page === item.id || (item.id === 'more' && !['dashboard','leads','contacts','tasks'].includes(page)) ? 'active' : ''}`}
-          onClick={() => item.id === 'more' ? onMore() : setPage(item.id)}
-        >
-          <span className="mob-nav-ico">
-            {item.ico}
-            {item.badge > 0 && <span className="mob-badge">{item.badge}</span>}
-          </span>
-          {item.label}
-        </button>
-      ))}
-    </nav>
+    <>
+      {/* ── More popup menu ── */}
+      {moreOpen && (
+        <div style={{ position:'fixed', inset:0, zIndex:399 }} onClick={() => setMoreOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            position:'fixed', bottom:62, left:8, right:8, zIndex:401,
+            background:'#0f172a', borderRadius:14, padding:'8px 0',
+            boxShadow:'0 -4px 24px rgba(0,0,0,.4)', animation:'slideUp .2s ease',
+          }}>
+            {MORE_PAGES.map(n => (
+              <button key={n.id} onClick={() => { setPage(n.id); setMoreOpen(false) }}
+                aria-label={n.label}
+                style={{
+                  display:'flex', alignItems:'center', gap:10, width:'100%',
+                  padding:'12px 18px', border:'none', background: page === n.id ? '#f97316' : 'transparent',
+                  color: page === n.id ? '#fff' : '#94a3b8', cursor:'pointer',
+                  fontSize:13, fontWeight:500, fontFamily:'inherit', textAlign:'right',
+                }}>
+                <span style={{ width:18, height:18, display:'inline-flex' }}>{n.ico}</span>
+                {n.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <nav className="mob-nav" role="navigation" aria-label="ניווט ראשי">
+        {items.map(item => (
+          <button
+            key={item.id}
+            className={`mob-nav-btn ${page === item.id || (item.id === 'more' && !['dashboard','leads','contacts','tasks'].includes(page)) ? 'active' : ''}`}
+            onClick={() => item.id === 'more' ? setMoreOpen(v => !v) : (setMoreOpen(false), setPage(item.id))}
+            aria-label={item.label}
+            aria-current={page === item.id ? 'page' : undefined}
+          >
+            <span className="mob-nav-ico">
+              {item.ico}
+              {item.badge > 0 && <span className="mob-badge" aria-label={`${item.badge} התראות`}>{item.badge}</span>}
+            </span>
+            {item.label}
+          </button>
+        ))}
+      </nav>
+    </>
   )
 }
 

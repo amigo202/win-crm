@@ -25,7 +25,7 @@ function SnoozeMenu({ onSnooze, onClose }) {
 
   return (
     <div ref={ref} style={{
-      position: 'absolute', left: 0, top: '100%', zIndex: 200,
+      position: 'absolute', right: 0, top: '100%', zIndex: 200,
       background: 'var(--surface)', border: '1px solid var(--border)',
       borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)',
       padding: 6, minWidth: 130,

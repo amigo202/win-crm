@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { fmtShekel } from '../../utils/format'
+import { toast_ok, toast_err } from '../Toast'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const BIZ_ACT_TYPES = [
@@ -87,7 +88,7 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
     })
     setShowModal(true)
   }
-  const close = () => { setShowModal(false); setEditId(null) }
+  const close = () => { setShowModal(false); setEditId(null); setForm(emptyActivity()); setFormError('') }
 
   const handleContactChange = e => {
     const cid = e.target.value
@@ -95,18 +96,21 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
     setForm(f => ({ ...f, contactId: cid, contactName: c?.name || '' }))
   }
 
+  const [formError, setFormError] = useState('')
+
   const save = async () => {
-    if (!form.name.trim()) return alert('נא למלא שם פעילות')
+    if (!form.name.trim()) { setFormError('נא למלא שם פעילות'); return }
+    setFormError('')
     try {
-      if (editId) await onUpdate(editId, form)
-      else        await onAdd(form)
+      if (editId) { await onUpdate(editId, form); toast_ok('הפעילות עודכנה') }
+      else        { await onAdd(form); toast_ok('פעילות נוספה') }
       close()
-    } catch (e) { alert('שגיאה: ' + e.message) }
+    } catch (e) { toast_err('שגיאה: ' + e.message) }
   }
 
   const handleDelete = async id => {
-    if (!confirm('למחוק פעילות?')) return
-    try { await onDelete(id) } catch (e) { alert('שגיאה: ' + e.message) }
+    if (!window.confirm('למחוק פעילות?')) return
+    try { await onDelete(id); toast_ok('הפעילות נמחקה') } catch (e) { toast_err('שגיאה: ' + e.message) }
   }
 
   const getTypeMeta = id => BIZ_ACT_TYPES.find(t => t.id === id) || BIZ_ACT_TYPES[5]
@@ -120,7 +124,7 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
       <div className="ph">
         <h2>פעילויות</h2>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-p" onClick={openNew}>+ פעילות חדשה</button>
+          <button className="btn btn-p" onClick={openNew} aria-label="הוסף פעילות חדשה">+ פעילות חדשה</button>
         </div>
       </div>
 
@@ -145,7 +149,7 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
 
         {/* ── Filters ──────────────────────────────────────── */}
         <div className="filter-bar" style={{ border: 'none', padding: '0 0 16px' }}>
-          <input className="si-input" placeholder="🔍 חיפוש..." value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 200 }} />
+          <input className="si-input" placeholder="🔍 חיפוש..." value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 200 }} aria-label="חיפוש פעילויות" />
           <select value={filterType} onChange={e => setFilterType(e.target.value)} style={{ fontSize: 13 }}>
             <option value="all">כל הסוגים</option>
             {BIZ_ACT_TYPES.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
@@ -203,7 +207,7 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
                         </span>
                       </td>
                       <td onClick={e => e.stopPropagation()}>
-                        <button className="icon-btn" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(a.id)} title="מחק">✕</button>
+                        <button className="icon-btn" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(a.id)} title="מחק" aria-label={`מחק ${a.name}`}>✕</button>
                       </td>
                     </tr>
                   )
@@ -220,11 +224,14 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
           <div className="modal modal-lg" style={{ direction:'rtl' }}>
             <div className="mh">
               <h3>{editId ? 'עריכת פעילות' : 'פעילות חדשה'}</h3>
-              <button className="mx" onClick={close}>×</button>
+              <button className="mx" onClick={close} aria-label="סגור">×</button>
             </div>
             <div className="mb" style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:12 }}>
+              {formError && <div role="alert" style={{ background:'#fee2e2', color:'#dc2626', padding:'8px 14px', borderRadius:8, fontSize:13, fontWeight:600 }}>✕ {formError}</div>}
+              {/* ── Section: פרטי פעילות ── */}
+              <div style={{ borderBottom:'2px solid var(--accent)', paddingBottom:6, fontSize:13, fontWeight:700, color:'var(--accent)' }}>📋 פרטי פעילות</div>
               <div style={GRP}>
-                <div style={{ gridColumn:'1/-1' }}><label style={LBL}>שם הפעילות *</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder='למשל: "אירוע PIXMIX חנוכה"' style={INP}/></div>
+                <div style={{ gridColumn:'1/-1' }}><label style={LBL}>שם הפעילות *</label><input aria-required="true" value={form.name} onChange={e => { setForm(f => ({ ...f, name: e.target.value })); setFormError('') }} placeholder='למשל: "אירוע PIXMIX חנוכה"' style={{ ...INP, borderColor: formError && !form.name.trim() ? '#ef4444' : undefined }}/></div>
               </div>
               <div style={GRP}>
                 <div><label style={LBL}>סוג</label><select value={form.activityType} onChange={e => setForm(f => ({ ...f, activityType: e.target.value }))} style={INP}>{BIZ_ACT_TYPES.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}</select></div>
@@ -237,16 +244,18 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
                   <div><label style={LBL}>שנה</label><select value={form.year} onChange={e => setForm(f => ({ ...f, year: Number(e.target.value) }))} style={INP}>{[CUR_YEAR, CUR_YEAR - 1, CUR_YEAR - 2].map(y => <option key={y} value={y}>{y}</option>)}</select></div>
                 </div>
               </div>
-              <div style={{ background:'#fff7ed', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#92400e', fontWeight:600 }}>💰 הכנסות והוצאות</div>
+              {/* ── Section: הכנסות והוצאות ── */}
+              <div style={{ borderBottom:'2px solid #f97316', paddingBottom:6, fontSize:13, fontWeight:700, color:'#f97316' }}>💰 הכנסות והוצאות</div>
               <div style={GRP}>
                 <div><label style={LBL}>הכנסה (₪)</label><input type="number" value={form.income} onChange={e => setForm(f => ({ ...f, income: e.target.value }))} placeholder="0" style={INP}/></div>
                 <div><label style={LBL}>הוצאות (₪)</label><input type="number" value={form.expenses} onChange={e => setForm(f => ({ ...f, expenses: e.target.value }))} placeholder="0" style={INP}/></div>
               </div>
-              <div style={{ background:'var(--bg)', borderRadius:10, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'center', gap:12 }}>
+              <div style={{ background:'var(--bg)', borderRadius:10, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'center', gap:12, border:'1px solid var(--border)' }}>
                 <span style={{ fontSize:12, color:'var(--muted)', fontWeight:600 }}>רווח צפוי:</span>
                 <span style={{ fontSize:20, fontWeight:800, color: profitCalc >= 0 ? '#10b981' : '#ef4444' }}>{fmtShekel(profitCalc)}</span>
               </div>
-              <div style={{ background:'#f0f9ff', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#0c4a6e', fontWeight:600 }}>🏦 פרטי תשלום</div>
+              {/* ── Section: פרטי תשלום ── */}
+              <div style={{ borderBottom:'2px solid #3b82f6', paddingBottom:6, fontSize:13, fontWeight:700, color:'#3b82f6' }}>🏦 פרטי תשלום</div>
               <div style={GRP}>
                 <div><label style={LBL}>סטטוס תשלום</label><select value={form.paymentStatus} onChange={e => setForm(f => ({ ...f, paymentStatus: e.target.value }))} style={INP}>{PAY_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
                 <div><label style={LBL}>אמצעי תשלום</label><select value={form.paymentMethod} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))} style={INP}><option value="">—</option>{PAY_METHODS.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
@@ -257,8 +266,8 @@ export default function ActivitiesPage({ activities, contacts, onAdd, onUpdate, 
               </div>
               <div><label style={LBL}>הערות</label><textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} style={{ ...INP, resize:'vertical' }}/></div>
               <div className="mf">
-                <button className="btn btn-p" onClick={save}>{editId ? 'שמור' : 'הוסף'}</button>
-                <button className="btn btn-o" onClick={close}>ביטול</button>
+                <button className="btn btn-p" onClick={save} aria-label={editId ? 'שמור שינויים' : 'הוסף פעילות'}>{editId ? 'שמור' : 'הוסף'}</button>
+                <button className="btn btn-o" onClick={close} aria-label="ביטול">ביטול</button>
               </div>
             </div>
           </div>

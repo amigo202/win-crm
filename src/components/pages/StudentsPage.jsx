@@ -144,7 +144,7 @@ export default function StudentsPage({ students, contacts, onAdd, onUpdate, onDe
           {isE && tab === 'att' && (
             <div className="mb">
               {pct !== null && <div className="sumbox"><div>נוכחות: <span>{pct}%</span></div><div>סה"כ שיעורים: <span>{(form.attendance || []).length}</span></div><div>נעדר: <span>{(form.attendance || []).filter(a => !a.present).length}</span></div></div>}
-              {st === 'risk' && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '8px 12px', borderRadius: 7, marginBottom: 12, fontSize: 13, fontWeight: 600 }}>⚠️ תלמיד זה פספס 2 שיעורים ברצף – מומלץ לפנות להורים</div>}
+              {st === 'risk' && <div role="alert" style={{ background: '#fee2e2', color: '#991b1b', padding: '8px 12px', borderRadius: 7, marginBottom: 12, fontSize: 13, fontWeight: 600 }}>⚠️ תלמיד זה פספס 2 שיעורים ברצף – מומלץ לפנות להורים</div>}
               <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'flex-end' }}>
                 <div className="frow" style={{ flex: 1 }}><label>תאריך</label><input type="date" value={af.date} onChange={e => setAf(p => ({ ...p, date: e.target.value }))}/></div>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 1 }}>
@@ -183,7 +183,7 @@ export default function StudentsPage({ students, contacts, onAdd, onUpdate, onDe
           <button className="btn btn-o btn-sm" onClick={() => setImporting(true)}>
             <Ico.ul/>ייבוא
           </button>
-          <button className="btn btn-p" onClick={() => setModal({ student: null })}><Ico.plus/>הוסף תלמיד</button>
+          <button className="btn btn-p" onClick={() => setModal({ student: null })} aria-label="הוסף תלמיד חדש"><Ico.plus/>הוסף תלמיד</button>
         </div>
       </div>
       <div className="pb"><div className="card">
@@ -205,7 +205,7 @@ export default function StudentsPage({ students, contacts, onAdd, onUpdate, onDe
                   <td style={{ fontSize: 12, color: 'var(--muted)' }}>{cname(s.contactId) || '–'}</td>
                   <td>{pct !== null ? <span style={{ fontWeight: 600, color: pct < 70 ? 'var(--danger)' : pct < 85 ? 'var(--warning)' : 'var(--success)' }}>{pct}%</span> : '–'}</td>
                   <td><span className={`badge ${pay.badge}`}>{pay.label}</span></td>
-                  <td><span className={`badge ${stInfo[st].cls}`}>{stInfo[st].label}</span></td>
+                  <td><span className={`badge ${stInfo[st].cls}`} title={st === 'risk' ? 'פספס 2 שיעורים ברצף – מומלץ לפנות להורים' : st === 'warn' ? 'נעדר משיעור אחד לפחות' : 'נוכחות תקינה'}>{stInfo[st].label}</span></td>
                   <td><div className="ac-cell">
                     <button className="icon-btn" onClick={() => setModal({ student: s })}><Ico.edit/></button>
                     <button className="icon-btn" style={{ color: 'var(--danger)' }} onClick={() => { if (window.confirm(`למחוק ${s.name}?`)) onDelete(s.id) }}><Ico.trash/></button>

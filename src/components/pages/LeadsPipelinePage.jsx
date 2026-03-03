@@ -40,10 +40,11 @@ function LeadCard({ lead, onClick }) {
       }}
     >
       {risk && (
-        <div style={{
+        <div title={`לא הייתה פעילות כבר ${ds} ימים – מומלץ ליצור קשר`} style={{
           position: 'absolute', top: 8, left: 8,
           fontSize: 10, fontWeight: 700, color: '#ef4444',
           background: '#fee2e2', borderRadius: 4, padding: '1px 6px',
+          cursor: 'help',
         }}>⚠ {ds}ד׳</div>
       )}
 
@@ -221,7 +222,7 @@ export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage,
           <button className="btn btn-o btn-sm" onClick={() => setImporting(true)}>
             <Ico.ul/>ייבוא
           </button>
-          <button className="btn btn-p" onClick={() => setAddOpen(true)}>
+          <button className="btn btn-p" onClick={() => setAddOpen(true)} aria-label="הוסף ליד חדש">
             <Ico.plus/>ליד חדש
           </button>
         </div>
@@ -293,7 +294,7 @@ export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage,
                       <td style={{ color: risk ? '#ef4444' : 'var(--muted)', fontWeight: risk ? 600 : 400 }}>
                         {ds !== null ? `${ds} ימים` : '–'}
                       </td>
-                      <td>{risk && <span className="badge b-red">⚠ בסיכון</span>}</td>
+                      <td>{risk && <span className="badge b-red" title={`לא הייתה פעילות כבר ${ds} ימים`}>⚠ בסיכון</span>}</td>
                       <td><div className="ac-cell">
                         <button className="icon-btn" onClick={e => { e.stopPropagation(); setSelected(l) }}><Ico.edit/></button>
                       </div></td>

@@ -204,16 +204,16 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
         {/* ── KPI Cards (unified income) ────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
           {[
-            { icon: '💰', label: 'הכנסה החודש',  value: fmtShekel(curTotalInc),  color: '#10b981', bg: '#d1fae5',
-              sub: incDelta !== 0 ? `${incDelta > 0 ? '↑' : '↓'} ${Math.abs(incDelta)}% מחודש קודם` : 'חוגים + פעילויות', page: 'finance' },
-            { icon: '📉', label: 'הוצאות החודש',  value: fmtShekel(curTotalExp),  color: '#ef4444', bg: '#fee2e2',
-              sub: 'מדריכים + הוצאות', page: 'finance' },
-            { icon: '📊', label: 'רווח נקי',       value: fmtShekel(curProfit),     color: curProfit >= 0 ? '#3b82f6' : '#ef4444', bg: curProfit >= 0 ? '#dbeafe' : '#fee2e2',
-              sub: 'הכנסות - הוצאות', page: 'finance' },
-            { icon: '🎯', label: 'לידים פעילים',   value: activeLeads.length,       color: '#f97316', bg: '#fff7ed',
+            { icon: '💰', label: 'הכנסה החודש',  value: fmtShekel(curTotalInc),  color: dark ? '#6ee7b7' : '#10b981', bg: dark ? '#064e3b' : '#d1fae5',
+              sub: incDelta !== 0 ? `${incDelta > 0 ? '↑' : '↓'} ${Math.abs(incDelta)}% מחודש קודם` : 'חוגים + פעילויות', page: 'classes' },
+            { icon: '📉', label: 'הוצאות החודש',  value: fmtShekel(curTotalExp),  color: dark ? '#fca5a5' : '#ef4444', bg: dark ? '#4c0519' : '#fee2e2',
+              sub: 'מדריכים + הוצאות', page: 'classes' },
+            { icon: '📊', label: 'רווח נקי',       value: fmtShekel(curProfit),     color: curProfit >= 0 ? (dark ? '#93c5fd' : '#3b82f6') : (dark ? '#fca5a5' : '#ef4444'), bg: curProfit >= 0 ? (dark ? '#1e3a5f' : '#dbeafe') : (dark ? '#4c0519' : '#fee2e2'),
+              sub: 'הכנסות - הוצאות', page: 'classes' },
+            { icon: '🎯', label: 'לידים פעילים',   value: activeLeads.length,       color: dark ? '#fb923c' : '#f97316', bg: dark ? '#431407' : '#fff7ed',
               sub: atRiskLeads.length ? `⚠ ${atRiskLeads.length} בסיכון` : newLeadsToday.length ? `+${newLeadsToday.length} היום` : 'בפייפליין', page: 'leads' },
           ].map((f, i) => (
-            <div key={i} onClick={() => setPage?.(f.page)} onMouseEnter={hoverUp} onMouseLeave={hoverDown}
+            <div key={i} onClick={() => setPage?.(f.page)} onMouseEnter={hoverUp} onMouseLeave={hoverDown} role="button" tabIndex={0} aria-label={`${f.label}: ${f.value}`}
               style={{ background: f.bg, borderRadius: 12, padding: '16px 18px', border: `1px solid ${f.color}22`, cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                 <span style={{ fontSize: 24 }}>{f.icon}</span>
@@ -228,14 +228,14 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
         {/* ── Quick stats row ──────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
           {[
-            { icon: '🔥', label: 'משימות להיום', value: todayTasks.length, color: '#f97316', bg: '#fff7ed',
+            { icon: '🔥', label: 'משימות להיום', value: todayTasks.length, color: dark ? '#fb923c' : '#f97316', bg: dark ? '#431407' : '#fff7ed',
               sub: todayTasks.length ? todayTasks.slice(0,2).map(t=>t.title).join(', ') : 'הכל מסודר!', page: 'tasks' },
-            { icon: '⚠', label: 'לידים בסיכון', value: atRiskLeads.length, color: '#ef4444', bg: '#fee2e2',
+            { icon: '⚠', label: 'לידים בסיכון', value: atRiskLeads.length, color: dark ? '#fca5a5' : '#ef4444', bg: dark ? '#4c0519' : '#fee2e2',
               sub: atRiskLeads.length ? atRiskLeads.slice(0,2).map(l=>l.name).join(', ') : '0 בסיכון', page: 'leads' },
-            { icon: '🔔', label: 'התראות', value: totalAlerts, color: '#8b5cf6', bg: '#ede9fe',
+            { icon: '🔔', label: 'התראות', value: totalAlerts, color: dark ? '#c4b5fd' : '#8b5cf6', bg: dark ? '#2e1065' : '#ede9fe',
               sub: 'דרושה תשומת לב', page: 'tasks' },
           ].map((f, i) => (
-            <div key={i} onClick={() => setPage?.(f.page)} onMouseEnter={hoverUp} onMouseLeave={hoverDown}
+            <div key={i} onClick={() => setPage?.(f.page)} onMouseEnter={hoverUp} onMouseLeave={hoverDown} role="button" tabIndex={0} aria-label={`${f.label}: ${f.value}`}
               style={{ background: f.bg, borderRadius: 12, padding: '14px 16px', border: `1px solid ${f.color}22`, cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                 <span style={{ fontSize: 22 }}>{f.icon}</span>

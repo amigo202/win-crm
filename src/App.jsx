@@ -25,6 +25,7 @@ import ActivitiesPage       from './components/pages/ActivitiesPage'
 import AuthScreen           from './components/AuthScreen'
 import AgentPanel           from './components/agent/AgentPanel'
 import InstructorPortal     from './components/instructor/InstructorPortal'
+import ToastContainer       from './components/Toast'
 
 function useLS(key, init) {
   const [v, sv] = useState(() => {
@@ -214,6 +215,7 @@ export default function App() {
         students={s.students}
         agent={agent}
       />
+      <ToastContainer/>
     </div>
   )
 }

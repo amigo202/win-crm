@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from 'react'
 import { exportClassesCSV } from '../../utils/csv'
+import { toast_ok, toast_err } from '../Toast'
 import Papa from 'papaparse'
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -431,6 +432,8 @@ function ClassImportModal({ onClose, onAdd, onReload }) {
 export default function ClassesPage({ classes, instructors, contacts, onAdd, onUpdate, onDelete, onDuplicate, onReload, finance }) {
   const [modal, setModal]         = useState(null)
   const [importing, setImporting] = useState(false)
+  const [copyModal, setCopyModal] = useState(false)
+  const [copyTargets, setCopyTargets] = useState([])
   const [search, setSearch]       = useState('')
   const [filterCity, setFilterCity]         = useState('')
   const [filterStatus, setFilterStatus]     = useState('')
@@ -528,7 +531,7 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
       setEditingId(null)
       setEditForm({})
     } catch (e) {
-      alert('שגיאה בשמירה: ' + (e?.message || ''))
+      toast_err('שגיאה בשמירה: ' + (e?.message || ''))
     } finally {
       setSaving(false)
     }
@@ -567,6 +570,48 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
     if (onReload) await onReload()
   }
 
+  // Copy current month's classes to other months
+  const copyToMonths = async () => {
+    if (!copyTargets.length) return
+    const source = filtered
+    if (!source.length) { toast_err('אין חוגים בחודש הנוכחי לשכפול'); setCopyModal(false); return }
+    // Check which targets already have classes
+    const existingMonths = copyTargets.filter(t =>
+      classes.some(c => Number(c.month) === t.month && Number(c.year) === t.year)
+    )
+    const msg = existingMonths.length
+      ? `לשכפל ${source.length} חוגים ל-${copyTargets.length} חודשים?\n⚠ ${existingMonths.length} חודשים כבר מכילים חוגים — ייווצרו כפילויות`
+      : `לשכפל ${source.length} חוגים ל-${copyTargets.length} חודשים?`
+    if (!window.confirm(msg)) return
+    setSaving(true)
+    let count = 0
+    for (const target of copyTargets) {
+      for (const cls of source) {
+        const copy = { ...cls }
+        delete copy.id; delete copy.created_at; delete copy.updated_at
+        delete copy.instructors; delete copy.linked_payment_id; delete copy.owner_id
+        copy.month = target.month
+        copy.year = target.year
+        // Reset payment fields for new month
+        copy.paid = false; copy.payment_date = ''; copy.invoice_number = ''; copy.actual_income = ''
+        try { await onAdd(copy); count++ } catch (e) { console.error('copy error', e) }
+      }
+    }
+    setSaving(false)
+    setCopyModal(false)
+    setCopyTargets([])
+    if (onReload) await onReload()
+    toast_ok(`שוכפלו ${count} חוגים בהצלחה`)
+  }
+
+  const toggleCopyTarget = (m, y) => {
+    setCopyTargets(prev => {
+      const exists = prev.find(t => t.month === m && t.year === y)
+      if (exists) return prev.filter(t => !(t.month === m && t.year === y))
+      return [...prev, { month: m, year: y }]
+    })
+  }
+
   const clearFilters = () => { setFilterCity(''); setFilterStatus(''); setFilterPaid(''); setSearch(''); setFilterInstructor(''); setFilterSubject('') }
   const hasFilters = filterCity || filterStatus || filterPaid || search || filterInstructor || filterSubject
 
@@ -587,6 +632,7 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
         <div style={{ display:'flex', gap:8 }}>
           <button className="btn btn-o btn-sm" onClick={() => exportClassesCSV(filtered)}>📥 ייצוא CSV</button>
           <button className="btn btn-o btn-sm" onClick={() => setImporting(true)}>📤 ייבוא</button>
+          {filtered.length > 0 && <button className="btn btn-o btn-sm" onClick={() => { setCopyTargets([]); setCopyModal(true) }}>📋 העתק לחודשים</button>}
           <button className="btn btn-p btn-sm" onClick={() => setModal({ cls: null })}>+ הוסף חוג</button>
         </div>
       </div>
@@ -855,6 +901,75 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
       )}
       {importing && (
         <ClassImportModal onClose={() => setImporting(false)} onAdd={onAdd} onReload={onReload}/>
+      )}
+      {/* ── Copy to Months Modal ──────────────────────────── */}
+      {copyModal && (
+        <div className="overlay" onClick={e => e.target === e.currentTarget && setCopyModal(false)}>
+          <div className="modal" style={{ direction:'rtl', maxWidth:420 }}>
+            <div className="mh">
+              <h3>📋 העתק חוגים לחודשים</h3>
+              <button className="mx" onClick={() => setCopyModal(false)}>×</button>
+            </div>
+            <div className="mb" style={{ display:'flex', flexDirection:'column', gap:14 }}>
+              <div style={{ background:'var(--bg)', padding:'10px 14px', borderRadius:8, border:'1px solid var(--border)', fontSize:13 }}>
+                מעתיק <strong>{filtered.length} חוגים</strong> מ-<strong>{MONTHS_HE[filterMonth - 1]} {filterYear}</strong>
+                <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>פרטי תשלום (שולם, תאריך תשלום, חשבונית) יאופסו בחודשים החדשים</div>
+              </div>
+              <div style={{ fontSize:12, fontWeight:600, color:'var(--muted)' }}>בחר חודשי יעד:</div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+                {Array.from({ length: 12 }, (_, i) => {
+                  const m = i + 1, y = filterYear
+                  const isCurrent = m === filterMonth && y === filterYear
+                  const hasData = classes.some(c => Number(c.month) === m && Number(c.year) === y)
+                  const isSelected = copyTargets.some(t => t.month === m && t.year === y)
+                  return (
+                    <button key={m} disabled={isCurrent} onClick={() => toggleCopyTarget(m, y)}
+                      style={{
+                        padding:'8px 6px', borderRadius:8, fontSize:12, fontWeight:600, cursor: isCurrent ? 'not-allowed' : 'pointer',
+                        border: isSelected ? '2px solid #f97316' : '1px solid var(--border)',
+                        background: isCurrent ? 'var(--border)' : isSelected ? '#fff7ed' : 'var(--bg)',
+                        color: isCurrent ? 'var(--muted)' : isSelected ? '#f97316' : 'var(--text)',
+                        opacity: isCurrent ? .5 : 1,
+                        position: 'relative',
+                      }}>
+                      {MONTHS_HE[i]}
+                      {hasData && !isCurrent && <span style={{ position:'absolute', top:2, left:4, fontSize:8, color:'#f59e0b' }} title="כבר מכיל חוגים">●</span>}
+                    </button>
+                  )
+                })}
+              </div>
+              {/* Next year row */}
+              <div style={{ fontSize:11, fontWeight:600, color:'var(--muted)', marginTop:4 }}>{filterYear + 1}:</div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+                {Array.from({ length: 6 }, (_, i) => {
+                  const m = i + 1, y = filterYear + 1
+                  const hasData = classes.some(c => Number(c.month) === m && Number(c.year) === y)
+                  const isSelected = copyTargets.some(t => t.month === m && t.year === y)
+                  return (
+                    <button key={`n${m}`} onClick={() => toggleCopyTarget(m, y)}
+                      style={{
+                        padding:'8px 6px', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer',
+                        border: isSelected ? '2px solid #f97316' : '1px solid var(--border)',
+                        background: isSelected ? '#fff7ed' : 'var(--bg)',
+                        color: isSelected ? '#f97316' : 'var(--text)',
+                        position: 'relative',
+                      }}>
+                      {MONTHS_HE[i]}
+                      {hasData && <span style={{ position:'absolute', top:2, left:4, fontSize:8, color:'#f59e0b' }} title="כבר מכיל חוגים">●</span>}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="mf">
+                <button className="btn btn-p" disabled={!copyTargets.length || saving}
+                  onClick={copyToMonths}>
+                  {saving ? 'מעתיק...' : `העתק ל-${copyTargets.length || 0} חודשים`}
+                </button>
+                <button className="btn btn-o" onClick={() => setCopyModal(false)}>ביטול</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )

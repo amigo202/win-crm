@@ -371,7 +371,7 @@ export default function InstructorsPage({ instructors, contacts, onAdd, onUpdate
       <div className="ph"><h2>מדריכים</h2>
         <div style={{ display: 'flex', gap: 7 }}>
           <button className="btn btn-o btn-sm" onClick={() => exportInstructorsCSV(instructors)}><Ico.dl/>ייצוא</button>
-          <button className="btn btn-p" onClick={() => setModal({ inst: null })}><Ico.plus/>הוסף מדריך</button>
+          <button className="btn btn-p" onClick={() => setModal({ inst: null })} aria-label="הוסף מדריך חדש"><Ico.plus/>הוסף מדריך</button>
         </div>
       </div>
       <div className="pb"><div className="card">

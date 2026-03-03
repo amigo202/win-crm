@@ -22,7 +22,9 @@
       "Bash(find:*)",
       "Bash(node -e:*)",
       "Bash(ls:*)",
-      "Bash(git -c http.sslVerify=false push)"
+      "Bash(git -c http.sslVerify=false push)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node node_modules/vite/bin/vite.js build --logLevel error)"
     ]
   }
 }
