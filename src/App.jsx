@@ -14,14 +14,12 @@ import { STAGES }         from './constants'
 import Sidebar, { MobileBottomNav } from './components/Sidebar'
 import Dashboard            from './components/pages/Dashboard'
 import ContactsPage         from './components/pages/ContactsPage'
-import DealsPage            from './components/pages/DealsPage'
 import TasksPage            from './components/pages/TasksPage'
 import InstructorsPage      from './components/pages/InstructorsPage'
 import StudentsPage         from './components/pages/StudentsPage'
-import LeadsPipelinePage    from './components/pages/LeadsPipelinePage'
-import FinancePage          from './components/pages/FinancePage'
+import SalesPage            from './components/pages/SalesPage'
+import FinancialPage        from './components/pages/FinancialPage'
 import ClassesPage          from './components/pages/ClassesPage'
-import ActivitiesPage       from './components/pages/ActivitiesPage'
 import AuthScreen           from './components/AuthScreen'
 import AgentPanel           from './components/agent/AgentPanel'
 import InstructorPortal     from './components/instructor/InstructorPortal'
@@ -172,15 +170,13 @@ export default function App() {
 
   const pages = {
     dashboard:   <Dashboard    contacts={c.contacts} deals={d.deals} tasks={t.tasks} instructors={i.instructors} students={s.students} leads={le.leads} classes={cls.classes} activities={act.activities} dark={dark} setPage={setPage}/>,
-    leads:       <LeadsPipelinePage leads={le.leads} onAdd={le.addLead} onUpdate={le.editLead} onMoveStage={le.moveStage} onDelete={le.removeLead} onReload={le.load}/>,
+    sales:       <SalesPage leads={le.leads} onAddLead={le.addLead} onUpdateLead={le.editLead} onMoveStage={le.moveStage} onDeleteLead={le.removeLead} onReloadLeads={le.load} deals={d.deals} contacts={c.contacts} onAddDeal={addDeal} onUpdateDeal={updateDeal} onDeleteDeal={deleteDeal}/>,
     contacts:    <ContactsPage contacts={c.contacts} deals={d.deals} onAdd={addContact} onUpdate={updateContact} onDelete={deleteContact} onReload={c.load}/>,
-    deals:       <DealsPage    deals={d.deals} contacts={c.contacts} onAdd={addDeal} onUpdate={updateDeal} onDelete={deleteDeal}/>,
     tasks:       <TasksPage    tasks={t.tasks} contacts={c.contacts} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} onToggle={toggleTask} onSnooze={t.snoozeTask}/>,
     instructors: <InstructorsPage instructors={i.instructors} contacts={c.contacts} onAdd={addInstructor} onUpdate={updateInstructor} onDelete={deleteInstructor}/>,
     students:    <StudentsPage students={s.students} contacts={c.contacts} onAdd={addStudent} onUpdate={updateStudent} onDelete={deleteStudent}/>,
-    finance:     <FinancePage fin={fin} instructors={i.instructors} contacts={c.contacts}/>,
     classes:     <ClassesPage classes={cls.classes} instructors={i.instructors} contacts={c.contacts} onAdd={cls.addClass} onUpdate={cls.editClass} onDelete={cls.removeClass} onDuplicate={cls.duplicateClass} onReload={cls.load} finance={fin}/>,
-    activities:  <ActivitiesPage activities={act.activities} contacts={c.contacts} onAdd={act.addActivity} onUpdate={act.editActivity} onDelete={act.removeActivity} onReload={act.load}/>,
+    financial:   <FinancialPage fin={fin} instructors={i.instructors} contacts={c.contacts} activities={act.activities} classes={cls.classes} onAddActivity={act.addActivity} onUpdateActivity={act.editActivity} onDeleteActivity={act.removeActivity} onReloadActivities={act.load}/>,
   }
 
   return (

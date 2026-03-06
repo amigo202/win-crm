@@ -4,7 +4,7 @@ import { fmtShekel, fmtDate } from '../../utils/format'
 import { Ico } from '../icons/Ico'
 import DealModal from '../modals/DealModal'
 
-export default function DealsPage({ deals, contacts, onAdd, onUpdate, onDelete }) {
+export function DealsContent({ deals, contacts, onAdd, onUpdate, onDelete, hideHeader }) {
   const [modal, setModal] = useState(null)
   const [view,  setView]  = useState('kanban') // kanban | table
   const [stageFilter, setStageFilter] = useState('all')
@@ -34,26 +34,37 @@ export default function DealsPage({ deals, contacts, onAdd, onUpdate, onDelete }
 
   return (
     <>
-      <div className="ph">
+      {!hideHeader && <div className="ph">
         <div>
           <h2>עסקאות</h2>
-          <div style={{ display: 'flex', gap: 14, marginTop: 4, fontSize: 12 }}>
+          <div style={{ display: 'flex', gap: 14, marginTop: 4, fontSize: 12, flexWrap:'wrap' }}>
+            <span style={{ color: 'var(--muted)' }}>📅 {new Date().toLocaleDateString('he-IL', { month:'long', year:'numeric' })}</span>
+            <span style={{ color: 'var(--muted)' }}>•</span>
             <span style={{ color: 'var(--muted)' }}>פייפליין: <strong style={{ color: 'var(--accent)' }}>{fmtShekel(stats.pipeline)}</strong></span>
             <span style={{ color: 'var(--muted)' }}>חתום: <strong style={{ color: 'var(--success)' }}>{fmtShekel(stats.signed)}</strong></span>
             <span style={{ color: 'var(--muted)' }}>פעיל: <strong>{fmtShekel(stats.active)}</strong></span>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            className="btn btn-o btn-sm"
-            onClick={() => setView(v => v === 'kanban' ? 'table' : 'kanban')}
-            style={{ fontSize: 12 }}
-          >
+          <button className="btn btn-o btn-sm" onClick={() => setView(v => v === 'kanban' ? 'table' : 'kanban')} style={{ fontSize: 12 }}>
             {view === 'kanban' ? '📋 טבלה' : '📊 קנבן'}
           </button>
           <button className="btn btn-p" onClick={() => setModal({ deal: null, stage: 'lead' })}><Ico.plus/>הוסף עסקה</button>
         </div>
-      </div>
+      </div>}
+      {hideHeader && <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 14, fontSize: 12, flexWrap:'wrap' }}>
+          <span style={{ color: 'var(--muted)' }}>פייפליין: <strong style={{ color: 'var(--accent)' }}>{fmtShekel(stats.pipeline)}</strong></span>
+          <span style={{ color: 'var(--muted)' }}>חתום: <strong style={{ color: 'var(--success)' }}>{fmtShekel(stats.signed)}</strong></span>
+          <span style={{ color: 'var(--muted)' }}>פעיל: <strong>{fmtShekel(stats.active)}</strong></span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="btn btn-o btn-sm" onClick={() => setView(v => v === 'kanban' ? 'table' : 'kanban')} style={{ fontSize: 12 }}>
+            {view === 'kanban' ? '📋 טבלה' : '📊 קנבן'}
+          </button>
+          <button className="btn btn-p" onClick={() => setModal({ deal: null, stage: 'lead' })}><Ico.plus/>הוסף עסקה</button>
+        </div>
+      </div>}
 
       {/* ── Info banner explaining deals ── */}
       <div style={{ padding: '0 20px 10px' }}>
@@ -178,4 +189,8 @@ export default function DealsPage({ deals, contacts, onAdd, onUpdate, onDelete }
       )}
     </>
   )
+}
+
+export default function DealsPage(props) {
+  return <DealsContent {...props} />
 }

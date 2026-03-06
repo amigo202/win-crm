@@ -153,8 +153,8 @@ function KanbanCol({ stage, leads, onDrop, onCardClick }) {
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────
-export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage, onDelete, onReload }) {
+// ── Leads content (reusable inside SalesPage tabs) ────────────────
+export function LeadsContent({ leads, onAdd, onUpdate, onMoveStage, onDelete, onReload, hideHeader }) {
   const [selected,    setSelected]    = useState(null)
   const [addOpen,     setAddOpen]     = useState(false)
   const [importing,   setImporting]   = useState(false)
@@ -192,10 +192,12 @@ export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage,
   return (
     <>
       {/* ── Page header ──────────────────────────────────────────── */}
-      <div className="ph">
+      {!hideHeader && <div className="ph">
         <div>
           <h2>לידים נכנסים</h2>
           <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 12 }}>
+            <span style={{ color: 'var(--muted)' }}>📅 {new Date().toLocaleDateString('he-IL', { day:'numeric', month:'long', year:'numeric' })}</span>
+            <span style={{ color: 'var(--muted)' }}>•</span>
             <span style={{ color: 'var(--muted)' }}>{activeLeads.length} פעילים</span>
             {atRiskCount > 0 && <span style={{ color: '#ef4444', fontWeight: 600 }}>⚠ {atRiskCount} בסיכון</span>}
             {newToday   > 0 && <span style={{ color: '#10b981', fontWeight: 600 }}>+{newToday} היום</span>}
@@ -226,7 +228,25 @@ export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage,
             <Ico.plus/>ליד חדש
           </button>
         </div>
-      </div>
+      </div>}
+      {hideHeader && <div style={{ display: 'flex', gap: 7, alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, fontSize: 12 }}>
+          <span style={{ color: 'var(--muted)' }}>{activeLeads.length} פעילים</span>
+          {atRiskCount > 0 && <span style={{ color: '#ef4444', fontWeight: 600 }}>⚠ {atRiskCount} בסיכון</span>}
+          {newToday   > 0 && <span style={{ color: '#10b981', fontWeight: 600 }}>+{newToday} היום</span>}
+        </div>
+        <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+          <button className="btn btn-o btn-sm" onClick={() => setView(v => v === 'kanban' ? 'table' : 'kanban')} style={{ fontSize: 12 }}>
+            {view === 'kanban' ? '📋 טבלה' : '📊 קנבן'}
+          </button>
+          <button className="btn btn-o btn-sm" onClick={() => setShowClosed(v => !v)} style={{ fontSize: 12 }}>
+            {showClosed ? 'הסתר סגורים' : 'הצג סגורים'}
+          </button>
+          <button className="btn btn-o btn-sm" onClick={() => exportLeadsCSV(leads)}><Ico.dl/>ייצוא</button>
+          <button className="btn btn-o btn-sm" onClick={() => setImporting(true)}><Ico.ul/>ייבוא</button>
+          <button className="btn btn-p" onClick={() => setAddOpen(true)}><Ico.plus/>ליד חדש</button>
+        </div>
+      </div>}
 
       {/* ── Source filter chips ── */}
       <div style={{ padding: '0 20px', display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -330,4 +350,9 @@ export default function LeadsPipelinePage({ leads, onAdd, onUpdate, onMoveStage,
       )}
     </>
   )
+}
+
+// ── Default export (standalone page) ──────────────────────────────
+export default function LeadsPipelinePage(props) {
+  return <LeadsContent {...props} />
 }

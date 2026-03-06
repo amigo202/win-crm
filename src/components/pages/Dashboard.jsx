@@ -121,6 +121,72 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
       return (pOrd[a.priority] || 1) - (pOrd[b.priority] || 1)
     })
 
+  // ── Chart label plugins ─────────────────────────────────────
+  const lineLabelsPlugin = {
+    id: 'lineLabels',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart
+      // Only label the first dataset (income / green line)
+      const meta = chart.getDatasetMeta(0)
+      if (meta.hidden) return
+      const ds = chart.data.datasets[0]
+      meta.data.forEach((pt, idx) => {
+        const val = ds.data[idx]
+        if (!val) return
+        ctx.save()
+        ctx.font = 'bold 9px Rubik'
+        ctx.fillStyle = ds.borderColor
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'bottom'
+        ctx.fillText('₪' + val.toLocaleString(), pt.x, pt.y - 6)
+        ctx.restore()
+      })
+    }
+  }
+
+  const doughnutLabelsPlugin = (fmt) => ({
+    id: 'doughnutLabels',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart
+      const meta = chart.getDatasetMeta(0)
+      if (meta.hidden) return
+      const total = chart.data.datasets[0].data.reduce((s, v) => s + v, 0)
+      meta.data.forEach((el, idx) => {
+        const val = chart.data.datasets[0].data[idx]
+        if (!val || (val / total) < 0.05) return
+        const pos = el.tooltipPosition()
+        ctx.save()
+        ctx.font = 'bold 10px Rubik'
+        ctx.fillStyle = dark ? '#e2e8f0' : '#334155'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(fmt(val), pos.x, pos.y)
+        ctx.restore()
+      })
+    }
+  })
+
+  const barLabelsPlugin = {
+    id: 'barLabels',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart
+      const meta = chart.getDatasetMeta(0)
+      if (meta.hidden) return
+      meta.data.forEach((el, idx) => {
+        const val = chart.data.datasets[0].data[idx]
+        if (!val) return
+        const { x, y } = el.tooltipPosition()
+        ctx.save()
+        ctx.font = 'bold 10px Rubik'
+        ctx.fillStyle = dark ? '#e2e8f0' : '#334155'
+        ctx.textAlign = 'start'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(val.toString(), x + 6, y)
+        ctx.restore()
+      })
+    }
+  }
+
   // ── Charts ──────────────────────────────────────────────────
   const trendRef = useRef(null), sourceRef = useRef(null), dRef = useRef(null), sRef = useRef(null)
   const cRefs = useRef({})
@@ -161,7 +227,8 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
             x: { grid: { color: gc }, ticks: { color: tc, font: { family: 'Rubik' } } },
             y: { grid: { color: gc }, ticks: { color: tc, font: { family: 'Rubik' }, callback: v => '₪' + v.toLocaleString() } }
           }
-        }
+        },
+        plugins: [lineLabelsPlugin]
       })
     }
 
@@ -176,18 +243,29 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
         options: {
           responsive: true, maintainAspectRatio: false, cutout: '65%',
           plugins: { legend: { position: 'bottom', labels: { color: tc, font: { family: 'Rubik', size: 11 } } } }
-        }
+        },
+        plugins: [doughnutLabelsPlugin(v => '₪' + v.toLocaleString())]
       })
     }
 
     // ── Contacts by type ──────────────────────────────────────
     if (dRef.current) {
-      cRefs.current.d = new Chart(dRef.current, { type: 'doughnut', data: { labels: CONTACT_TYPES.map(t => t.label), datasets: [{ data: CONTACT_TYPES.map(t => contacts.filter(c => c.type === t.id).length), backgroundColor: ['#3b82f6','#f59e0b','#10b981','#8b5cf6','#f97316'], hoverOffset: 6 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: tc, font: { family: 'Rubik', size: 11 } } } } } })
+      cRefs.current.d = new Chart(dRef.current, {
+        type: 'doughnut',
+        data: { labels: CONTACT_TYPES.map(t => t.label), datasets: [{ data: CONTACT_TYPES.map(t => contacts.filter(c => c.type === t.id).length), backgroundColor: ['#3b82f6','#f59e0b','#10b981','#8b5cf6','#f97316'], hoverOffset: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: tc, font: { family: 'Rubik', size: 11 } } } } },
+        plugins: [doughnutLabelsPlugin(v => v.toString())]
+      })
     }
 
     // ── Deals by stage ────────────────────────────────────────
     if (sRef.current) {
-      cRefs.current.s = new Chart(sRef.current, { type: 'bar', data: { labels: STAGES.map(s => s.label), datasets: [{ data: STAGES.map(s => deals.filter(d => d.stage === s.id).length), backgroundColor: STAGES.map(s => s.color), borderRadius: 5 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: gc }, ticks: { color: tc, stepSize: 1, font: { family: 'Rubik' } } }, y: { grid: { display: false }, ticks: { color: tc, font: { family: 'Rubik' } } } } } })
+      cRefs.current.s = new Chart(sRef.current, {
+        type: 'bar',
+        data: { labels: STAGES.map(s => s.label), datasets: [{ data: STAGES.map(s => deals.filter(d => d.stage === s.id).length), backgroundColor: STAGES.map(s => s.color), borderRadius: 5 }] },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: gc }, ticks: { color: tc, stepSize: 1, font: { family: 'Rubik' } } }, y: { grid: { display: false }, ticks: { color: tc, font: { family: 'Rubik' } } } } },
+        plugins: [barLabelsPlugin]
+      })
     }
 
     return () => Object.values(cRefs.current).forEach(c => c && c.destroy())
@@ -198,20 +276,25 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
 
   return (
     <>
-      <div className="ph"><h2>דשבורד</h2></div>
+      <div className="ph">
+        <h2>דשבורד</h2>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--muted)', background: 'var(--bg)', padding: '4px 12px', borderRadius: 8, border: '1px solid var(--border)' }}>
+          📅 {now.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        </span>
+      </div>
       <div className="pb">
 
         {/* ── KPI Cards (unified income) ────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
           {[
             { icon: '💰', label: 'הכנסה החודש',  value: fmtShekel(curTotalInc),  color: dark ? '#6ee7b7' : '#10b981', bg: dark ? '#064e3b' : '#d1fae5',
-              sub: incDelta !== 0 ? `${incDelta > 0 ? '↑' : '↓'} ${Math.abs(incDelta)}% מחודש קודם` : 'חוגים + פעילויות', page: 'classes' },
+              sub: incDelta !== 0 ? `${incDelta > 0 ? '↑' : '↓'} ${Math.abs(incDelta)}% מחודש קודם` : 'חוגים + פעילויות', page: 'financial' },
             { icon: '📉', label: 'הוצאות החודש',  value: fmtShekel(curTotalExp),  color: dark ? '#fca5a5' : '#ef4444', bg: dark ? '#4c0519' : '#fee2e2',
-              sub: 'מדריכים + הוצאות', page: 'classes' },
+              sub: 'מדריכים + הוצאות', page: 'financial' },
             { icon: '📊', label: 'רווח נקי',       value: fmtShekel(curProfit),     color: curProfit >= 0 ? (dark ? '#93c5fd' : '#3b82f6') : (dark ? '#fca5a5' : '#ef4444'), bg: curProfit >= 0 ? (dark ? '#1e3a5f' : '#dbeafe') : (dark ? '#4c0519' : '#fee2e2'),
-              sub: 'הכנסות - הוצאות', page: 'classes' },
+              sub: 'הכנסות - הוצאות', page: 'financial' },
             { icon: '🎯', label: 'לידים פעילים',   value: activeLeads.length,       color: dark ? '#fb923c' : '#f97316', bg: dark ? '#431407' : '#fff7ed',
-              sub: atRiskLeads.length ? `⚠ ${atRiskLeads.length} בסיכון` : newLeadsToday.length ? `+${newLeadsToday.length} היום` : 'בפייפליין', page: 'leads' },
+              sub: atRiskLeads.length ? `⚠ ${atRiskLeads.length} בסיכון` : newLeadsToday.length ? `+${newLeadsToday.length} היום` : 'בפייפליין', page: 'sales' },
           ].map((f, i) => (
             <div key={i} onClick={() => setPage?.(f.page)} onMouseEnter={hoverUp} onMouseLeave={hoverDown} role="button" tabIndex={0} aria-label={`${f.label}: ${f.value}`}
               style={{ background: f.bg, borderRadius: 12, padding: '16px 18px', border: `1px solid ${f.color}22`, cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}>
@@ -231,7 +314,7 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
             { icon: '🔥', label: 'משימות להיום', value: todayTasks.length, color: dark ? '#fb923c' : '#f97316', bg: dark ? '#431407' : '#fff7ed',
               sub: todayTasks.length ? todayTasks.slice(0,2).map(t=>t.title).join(', ') : 'הכל מסודר!', page: 'tasks' },
             { icon: '⚠', label: 'לידים בסיכון', value: atRiskLeads.length, color: dark ? '#fca5a5' : '#ef4444', bg: dark ? '#4c0519' : '#fee2e2',
-              sub: atRiskLeads.length ? atRiskLeads.slice(0,2).map(l=>l.name).join(', ') : '0 בסיכון', page: 'leads' },
+              sub: atRiskLeads.length ? atRiskLeads.slice(0,2).map(l=>l.name).join(', ') : '0 בסיכון', page: 'sales' },
             { icon: '🔔', label: 'התראות', value: totalAlerts, color: dark ? '#c4b5fd' : '#8b5cf6', bg: dark ? '#2e1065' : '#ede9fe',
               sub: 'דרושה תשומת לב', page: 'tasks' },
           ].map((f, i) => (
