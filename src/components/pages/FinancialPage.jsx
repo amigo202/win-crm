@@ -38,6 +38,51 @@ const GRP = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }
 
 function fmt(n) { return Number(n || 0).toLocaleString('he-IL') }
 
+// ── Zebra row style helper ───────────────────────────────────────
+const zebraRow = (i) => ({
+  background: i % 2 === 0 ? 'transparent' : 'var(--bg)',
+  transition: 'background .15s',
+})
+
+// ── CSV export helper ────────────────────────────────────────────
+function exportCSV(filename, headers, rows) {
+  const bom = '\uFEFF'
+  const csv = bom + [headers.join(','), ...rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
+}
+
+// ── Trend arrow component ────────────────────────────────────────
+function Trend({ current, previous, reverse }) {
+  if (!previous) return null
+  const diff = current - previous
+  const pct = previous !== 0 ? Math.round((diff / previous) * 100) : (current > 0 ? 100 : 0)
+  if (pct === 0) return <span style={{ fontSize:11, color:'var(--muted)' }}>— ללא שינוי</span>
+  const up = diff > 0
+  const good = reverse ? !up : up
+  return (
+    <span style={{ fontSize:11, fontWeight:600, color: good ? '#10b981' : '#ef4444', display:'inline-flex', alignItems:'center', gap:2 }}>
+      {up ? '↑' : '↓'} {Math.abs(pct)}%
+    </span>
+  )
+}
+
+// ── Progress bar component ───────────────────────────────────────
+function ProgressBar({ value, max, color, label }) {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
+  return (
+    <div style={{ width:'100%' }}>
+      {label && <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+        <span style={{ fontSize:11, color:'var(--muted)' }}>{label}</span>
+        <span style={{ fontSize:11, fontWeight:600 }}>{Math.round(pct)}%</span>
+      </div>}
+      <div style={{ height:10, background:'var(--border)', borderRadius:5, overflow:'hidden' }}>
+        <div style={{ height:'100%', width:`${pct}%`, background: color || '#f97316', borderRadius:5, transition:'width .5s ease' }}/>
+      </div>
+    </div>
+  )
+}
+
 // ── PaymentModal ──────────────────────────────────────────────────
 function PaymentModal({ data, fin, contacts, instructors, onClose }) {
   const isE = !!data
@@ -206,6 +251,51 @@ export default function FinancialPage({
   const classIncomeTotal  = classData.reduce((s, c) => s + c._income, 0)
   const classExpenseTotal = classData.reduce((s, c) => s + c._expense, 0)
 
+  // ── Previous month data (for trends) ──────────────────────
+  const prevMonthData = useMemo(() => {
+    const pm = fin.month === 1 ? 12 : fin.month - 1
+    const py = fin.month === 1 ? fin.year - 1 : fin.year
+    const prevClasses = (classes || []).filter(c => Number(c.month) === pm && Number(c.year) === py).map(c => {
+      const students_n = Number(c.students_count) || 0
+      const pps = Number(c.price_per_student) || 0
+      const agreed = Number(c.agreed_price) || 0
+      const actual = Number(c.actual_income) || 0
+      const income = actual || (students_n * pps) || agreed
+      const instrCost = Number(c.instructor_total_override) || (Number(c.instructor_price_per_session || 0) * Number(c.monthly_hours || 4))
+      return { _income: income, _expense: instrCost }
+    })
+    const prevActs = (activities || []).filter(a => a.month === pm && a.year === py)
+    return {
+      classIncome: prevClasses.reduce((s, c) => s + c._income, 0),
+      classExpense: prevClasses.reduce((s, c) => s + c._expense, 0),
+      actIncome: prevActs.reduce((s, a) => s + (a.income || 0), 0),
+      actExpense: prevActs.reduce((s, a) => s + (a.expenses || 0), 0),
+    }
+  }, [classes, activities, fin.month, fin.year])
+
+  // ── Year-to-date totals ───────────────────────────────────
+  const ytdData = useMemo(() => {
+    const y = fin.year
+    const ytdClasses = (classes || []).filter(c => Number(c.year) === y && Number(c.month) <= fin.month).map(c => {
+      const students_n = Number(c.students_count) || 0
+      const pps = Number(c.price_per_student) || 0
+      const agreed = Number(c.agreed_price) || 0
+      const actual = Number(c.actual_income) || 0
+      const income = actual || (students_n * pps) || agreed
+      const instrCost = Number(c.instructor_total_override) || (Number(c.instructor_price_per_session || 0) * Number(c.monthly_hours || 4))
+      return { _income: income, _expense: instrCost }
+    })
+    const ytdActs = (activities || []).filter(a => a.year === y && a.month <= fin.month)
+    return {
+      classIncome: ytdClasses.reduce((s, c) => s + c._income, 0),
+      classExpense: ytdClasses.reduce((s, c) => s + c._expense, 0),
+      actIncome: ytdActs.reduce((s, a) => s + (a.income || 0), 0),
+      actExpense: ytdActs.reduce((s, a) => s + (a.expenses || 0), 0),
+      classCount: ytdClasses.length,
+      actCount: ytdActs.length,
+    }
+  }, [classes, activities, fin.month, fin.year])
+
   // ── Activities for selected month ─────────────────────────
   const monthActivities = useMemo(() =>
     (activities || []).filter(a => a.month === fin.month && a.year === fin.year),
@@ -222,6 +312,10 @@ export default function FinancialPage({
   const grandIncome  = classIncomeTotal + actIncomeTotal + paymentTotal
   const grandExpense = classExpenseTotal + actExpenseTotal + salaryTotal
   const grandProfit  = grandIncome - grandExpense
+
+  // ── Previous month grand totals (partial — no payment/salary data) ──
+  const prevGrandIncome  = prevMonthData.classIncome + prevMonthData.actIncome
+  const prevGrandExpense = prevMonthData.classExpense + prevMonthData.actExpense
 
   // ── Activities tab: filtered list ─────────────────────────
   const actFiltered = useMemo(() => {
@@ -267,12 +361,57 @@ export default function FinancialPage({
   const getPayMeta  = id => PAY_STATUSES.find(s => s.id === id) || PAY_STATUSES[0]
   const actProfitCalc = Number(actForm.income || 0) - Number(actForm.expenses || 0)
 
+  // ── CSV export handlers ───────────────────────────────────
+  const exportIncome = () => {
+    const mName = MONTHS.find(m => m.v === fin.month)?.l || ''
+    const rows = []
+    classData.forEach(c => rows.push(['חוג', c.name || c.activity_type, CLASS_TYPES[c.activity_type] || c.activity_type, c.students_count || 0, c._income]))
+    monthActivities.forEach(a => rows.push(['פעילות', a.name, getTypeMeta(a.activityType).label, '', a.income || 0]))
+    fin.payments.forEach(p => rows.push(['תשלום', contName(p.contactId), p.program || '', '', p.amount]))
+    exportCSV(`income_${mName}_${fin.year}.csv`, ['מקור','שם','סוג/תוכנית','תלמידים','סכום'], rows)
+    toast_ok('קובץ הכנסות יוצא בהצלחה')
+  }
+  const exportExpenses = () => {
+    const mName = MONTHS.find(m => m.v === fin.month)?.l || ''
+    const rows = []
+    fin.salaries.forEach(s => rows.push(['משכורת', instName(s.instructorId), s.baseSalary, s.additions, s.deductions, s.tax, s.nationalInsurance, s.healthInsurance, s.netSalary]))
+    exportCSV(`expenses_${mName}_${fin.year}.csv`, ['סוג','מדריך','בסיס','תוספות','ניכויים','מס','בט"ל','בריאות','נטו'], rows)
+    toast_ok('קובץ הוצאות יוצא בהצלחה')
+  }
+
+  // ── Source breakdown for report ───────────────────────────
+  const sourceBreakdown = useMemo(() => {
+    const sources = [
+      { label: 'חוגים וקורסים', icon: '🏫', amount: classIncomeTotal, color: '#8b5cf6' },
+      { label: 'פעילויות עסקיות', icon: '🎯', amount: actIncomeTotal, color: '#f97316' },
+      { label: 'תשלומים ישירים', icon: '💳', amount: paymentTotal, color: '#3b82f6' },
+    ]
+    const total = sources.reduce((s, x) => s + x.amount, 0)
+    return sources.map(s => ({ ...s, pct: total > 0 ? Math.round((s.amount / total) * 100) : 0 }))
+  }, [classIncomeTotal, actIncomeTotal, paymentTotal])
+
+  const expenseBreakdown = useMemo(() => {
+    const sources = [
+      { label: 'משכורות', icon: '💰', amount: salaryTotal, color: '#ef4444' },
+      { label: 'הוצאות פעילויות', icon: '🎯', amount: actExpenseTotal, color: '#f97316' },
+      { label: 'עלויות מדריכים', icon: '🏫', amount: classExpenseTotal, color: '#8b5cf6' },
+    ]
+    const total = sources.reduce((s, x) => s + x.amount, 0)
+    return sources.map(s => ({ ...s, pct: total > 0 ? Math.round((s.amount / total) * 100) : 0 }))
+  }, [salaryTotal, actExpenseTotal, classExpenseTotal])
+
   // ── Render ────────────────────────────────────────────────
+  const mName = MONTHS.find(m => m.v === fin.month)?.l || ''
+
   return (
     <>
       <div className="ph">
         <h2>פיננסים</h2>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* CSV export button */}
+          <button className="btn btn-o btn-sm" onClick={tab === 'expenses' ? exportExpenses : exportIncome} title="ייצוא CSV" style={{ fontSize:12 }}>
+            📥 ייצוא CSV
+          </button>
           <select value={fin.month} onChange={e => fin.setMonth(Number(e.target.value))} style={{ padding:'6px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:13, fontFamily:'inherit' }}>
             {MONTHS.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
           </select>
@@ -282,12 +421,15 @@ export default function FinancialPage({
         </div>
       </div>
 
-      {/* ── KPI Cards ─────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, padding: '18px 30px 0' }}>
+      {/* ── KPI Cards with trends ─────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14, padding: '18px 30px 0' }}>
         <div className="stat-card" style={{ background: '#d1fae5', border: '1px solid #10b98122' }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
             <span style={{ fontSize:24 }}>💰</span>
-            <span style={{ fontSize:26, fontWeight:700, color:'#10b981', lineHeight:1 }}>{fmtShekel(grandIncome)}</span>
+            <div style={{ textAlign:'left' }}>
+              <span style={{ fontSize:26, fontWeight:700, color:'#10b981', lineHeight:1 }}>{fmtShekel(grandIncome)}</span>
+              <div style={{ marginTop:4 }}><Trend current={classIncomeTotal + actIncomeTotal} previous={prevGrandIncome}/></div>
+            </div>
           </div>
           <div style={{ fontWeight:700, fontSize:13, color:'#10b981', marginTop:6 }}>הכנסות</div>
           <div style={{ fontSize:11, color:'#10b981', opacity:.7, marginTop:3 }}>חוגים + פעילויות + תשלומים</div>
@@ -295,7 +437,10 @@ export default function FinancialPage({
         <div className="stat-card" style={{ background: '#fee2e2', border: '1px solid #ef444422' }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
             <span style={{ fontSize:24 }}>📉</span>
-            <span style={{ fontSize:26, fontWeight:700, color:'#ef4444', lineHeight:1 }}>{fmtShekel(grandExpense)}</span>
+            <div style={{ textAlign:'left' }}>
+              <span style={{ fontSize:26, fontWeight:700, color:'#ef4444', lineHeight:1 }}>{fmtShekel(grandExpense)}</span>
+              <div style={{ marginTop:4 }}><Trend current={classExpenseTotal + actExpenseTotal} previous={prevGrandExpense} reverse/></div>
+            </div>
           </div>
           <div style={{ fontWeight:700, fontSize:13, color:'#ef4444', marginTop:6 }}>הוצאות</div>
           <div style={{ fontSize:11, color:'#ef4444', opacity:.7, marginTop:3 }}>משכורות + הוצאות פעילויות + מדריכים</div>
@@ -306,17 +451,19 @@ export default function FinancialPage({
             <span style={{ fontSize:26, fontWeight:700, color: grandProfit >= 0 ? '#3b82f6' : '#ef4444', lineHeight:1 }}>{fmtShekel(grandProfit)}</span>
           </div>
           <div style={{ fontWeight:700, fontSize:13, color: grandProfit >= 0 ? '#3b82f6' : '#ef4444', marginTop:6 }}>רווח</div>
-          <div style={{ fontSize:11, color: grandProfit >= 0 ? '#3b82f6' : '#ef4444', opacity:.7, marginTop:3 }}>הכנסות - הוצאות</div>
+          <div style={{ fontSize:11, color: grandProfit >= 0 ? '#3b82f6' : '#ef4444', opacity:.7, marginTop:3 }}>
+            {grandExpense > 0 ? `מרווחיות: ${Math.round((grandProfit / grandIncome) * 100) || 0}%` : 'הכנסות - הוצאות'}
+          </div>
         </div>
       </div>
 
       {/* ── Tabs ──────────────────────────────────────────── */}
       <div style={{ padding: '16px 30px 0' }}>
         <div className="tabs">
-          <button className={`tab ${tab === 'income' ? 'on' : ''}`} onClick={() => setTab('income')}>הכנסות</button>
-          <button className={`tab ${tab === 'expenses' ? 'on' : ''}`} onClick={() => setTab('expenses')}>הוצאות</button>
-          <button className={`tab ${tab === 'activities' ? 'on' : ''}`} onClick={() => setTab('activities')}>פעילויות</button>
-          <button className={`tab ${tab === 'report' ? 'on' : ''}`} onClick={() => setTab('report')}>דוח</button>
+          <button className={`tab ${tab === 'income' ? 'on' : ''}`} onClick={() => setTab('income')}>💰 הכנסות</button>
+          <button className={`tab ${tab === 'expenses' ? 'on' : ''}`} onClick={() => setTab('expenses')}>📉 הוצאות</button>
+          <button className={`tab ${tab === 'activities' ? 'on' : ''}`} onClick={() => setTab('activities')}>🎯 פעילויות</button>
+          <button className={`tab ${tab === 'report' ? 'on' : ''}`} onClick={() => setTab('report')}>📊 דוח</button>
         </div>
       </div>
 
@@ -325,52 +472,96 @@ export default function FinancialPage({
         {/* ── INCOME TAB ───────────────────────────────────── */}
         {/* ════════════════════════════════════════════════════ */}
         {tab === 'income' && <>
-          {/* Classes income (read-only) */}
+          {/* Classes income */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <strong style={{ fontSize:13 }}>🏫 הכנסות מחוגים/קורסים</strong>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <strong style={{ fontSize:13 }}>🏫 הכנסות מחוגים/קורסים</strong>
+                <span style={{ fontSize:11, color:'var(--muted)', background:'var(--bg)', padding:'2px 8px', borderRadius:10 }}>{classData.length} חוגים</span>
+              </div>
               <span style={{ fontWeight:700, color:'#10b981' }}>{fmtShekel(classIncomeTotal)}</span>
             </div>
             {classData.length === 0
-              ? <div style={{ padding:'16px', textAlign:'center', color:'var(--muted)', fontSize:13 }}>אין חוגים לחודש זה</div>
-              : <div className="tbl-wrap"><table><thead><tr><th>שם</th><th>סוג</th><th>תלמידים</th><th>הכנסה</th></tr></thead>
-                <tbody>{classData.map(c => (
-                  <tr key={c.id}><td><strong>{c.name || c.activity_type}</strong></td><td>{CLASS_TYPES[c.activity_type] || c.activity_type}</td><td>{c.students_count || 0}</td><td style={{ color:'#10b981', fontWeight:600 }}>{fmtShekel(c._income)}</td></tr>
-                ))}</tbody></table></div>
+              ? <div style={{ padding:'24px', textAlign:'center', color:'var(--muted)', fontSize:13 }}>
+                  <div style={{ fontSize:32, marginBottom:8 }}>🏫</div>
+                  אין חוגים לחודש {mName}
+                </div>
+              : <div className="tbl-wrap"><table><thead><tr><th>שם</th><th>סוג</th><th>תוכנית</th><th>מדריך</th><th>תלמידים</th><th>מחיר לתלמיד</th><th>הכנסה</th><th>סטטוס</th></tr></thead>
+                <tbody>{classData.map((c, i) => {
+                  const paid = c.paid || c.payment_status
+                  const payLabel = paid === 'paid' ? 'שולם' : paid === 'partial' ? 'חלקי' : 'ממתין'
+                  const payColor = paid === 'paid' ? '#10b981' : paid === 'partial' ? '#f97316' : '#f59e0b'
+                  return (
+                    <tr key={c.id} style={zebraRow(i)}>
+                      <td><strong>{c.name || c.activity_type}</strong></td>
+                      <td>{CLASS_TYPES[c.activity_type] || c.activity_type}</td>
+                      <td><span style={{ fontSize:11, color:'var(--accent)' }}>{c.program || '–'}</span></td>
+                      <td>{c.instructor_name || '–'}</td>
+                      <td style={{ textAlign:'center' }}>{c.students_count || 0}</td>
+                      <td>{c.price_per_student ? fmtShekel(c.price_per_student) : '–'}</td>
+                      <td style={{ color:'#10b981', fontWeight:600 }}>{fmtShekel(c._income)}</td>
+                      <td><span className="badge" style={{ background:payColor+'18', color:payColor, fontSize:11 }}>{payLabel}</span></td>
+                    </tr>
+                  )
+                })}</tbody>
+                <tfoot><tr style={{ background:'var(--bg)', fontWeight:700 }}><td colSpan={6}>סה"כ חוגים</td><td style={{ color:'#10b981' }}>{fmtShekel(classIncomeTotal)}</td><td></td></tr></tfoot>
+              </table></div>
             }
           </div>
 
-          {/* Activities income (read-only) */}
+          {/* Activities income */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <strong style={{ fontSize:13 }}>🎯 הכנסות מפעילויות</strong>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <strong style={{ fontSize:13 }}>🎯 הכנסות מפעילויות</strong>
+                <span style={{ fontSize:11, color:'var(--muted)', background:'var(--bg)', padding:'2px 8px', borderRadius:10 }}>{monthActivities.length} פעילויות</span>
+              </div>
               <span style={{ fontWeight:700, color:'#10b981' }}>{fmtShekel(actIncomeTotal)}</span>
             </div>
             {monthActivities.length === 0
-              ? <div style={{ padding:'16px', textAlign:'center', color:'var(--muted)', fontSize:13 }}>אין פעילויות לחודש זה</div>
-              : <div className="tbl-wrap"><table><thead><tr><th>שם</th><th>סוג</th><th>לקוח</th><th>הכנסה</th></tr></thead>
-                <tbody>{monthActivities.map(a => {
+              ? <div style={{ padding:'24px', textAlign:'center', color:'var(--muted)', fontSize:13 }}>
+                  <div style={{ fontSize:32, marginBottom:8 }}>🎯</div>
+                  אין פעילויות לחודש {mName}
+                </div>
+              : <div className="tbl-wrap"><table><thead><tr><th>שם</th><th>סוג</th><th>לקוח</th><th>תאריך</th><th>הכנסה</th><th>תשלום</th><th>אמצעי</th></tr></thead>
+                <tbody>{monthActivities.map((a, i) => {
                   const tm = getTypeMeta(a.activityType)
-                  return <tr key={a.id}><td><strong>{a.name}</strong></td><td><span className="badge" style={{ background:tm.color+'18', color:tm.color }}>{tm.icon} {tm.label}</span></td><td>{a.contactName || '—'}</td><td style={{ color:'#10b981', fontWeight:600 }}>{fmtShekel(a.income)}</td></tr>
-                })}</tbody></table></div>
+                  const pm = getPayMeta(a.paymentStatus)
+                  return (
+                    <tr key={a.id} style={zebraRow(i)}>
+                      <td><strong>{a.name}</strong></td>
+                      <td><span className="badge" style={{ background:tm.color+'18', color:tm.color }}>{tm.icon} {tm.label}</span></td>
+                      <td>{a.contactName || '—'}</td>
+                      <td style={{ fontSize:12 }}>{a.activityDate || '—'}</td>
+                      <td style={{ color:'#10b981', fontWeight:600 }}>{fmtShekel(a.income)}</td>
+                      <td><span className="badge" style={{ background:pm.bg, color:pm.color, fontSize:11 }}>{pm.label}</span></td>
+                      <td style={{ fontSize:12 }}>{a.paymentMethod || '—'}</td>
+                    </tr>
+                  )
+                })}</tbody>
+                <tfoot><tr style={{ background:'var(--bg)', fontWeight:700 }}><td colSpan={4}>סה"כ פעילויות</td><td style={{ color:'#10b981' }}>{fmtShekel(actIncomeTotal)}</td><td colSpan={2}></td></tr></tfoot>
+              </table></div>
             }
           </div>
 
-          {/* Direct payments (editable) */}
+          {/* Direct payments */}
           <div className="card">
             <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <strong style={{ fontSize:13 }}>💳 תשלומים ישירים</strong>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <strong style={{ fontSize:13 }}>💳 תשלומים ישירים</strong>
+                <span style={{ fontSize:11, color:'var(--muted)', background:'var(--bg)', padding:'2px 8px', borderRadius:10 }}>{fin.payments.length} תשלומים</span>
+              </div>
               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                 <span style={{ fontWeight:700, color:'#10b981' }}>{fmtShekel(paymentTotal)}</span>
                 <button className="btn btn-p btn-sm" onClick={() => setModal({ type:'payment', data:null })}><Ico.plus/>הוסף תשלום</button>
               </div>
             </div>
             {!fin.payments.length
-              ? <div className="empty"><div className="empty-ico">💳</div><p>אין תשלומים לחודש זה</p></div>
+              ? <div className="empty"><div className="empty-ico">💳</div><p>אין תשלומים לחודש {mName}</p><p style={{ fontSize:12, color:'var(--muted)' }}>לחץ "הוסף תשלום" כדי להוסיף תשלום ישיר</p></div>
               : <div className="tbl-wrap"><table><thead><tr><th>איש קשר</th><th>תוכנית</th><th>מדריך</th><th>סכום</th><th>סטטוס</th><th></th></tr></thead>
-                <tbody>{fin.payments.map(p => {
+                <tbody>{fin.payments.map((p, i) => {
                   const st = PAY_STATUS.find(x => x.value === p.status)
-                  return <tr key={p.id}><td>{contName(p.contactId)}</td><td>{p.program || '–'}</td><td>{instName(p.instructorId)}</td><td><strong>{fmtShekel(p.amount)}</strong></td><td><span className={`badge ${st?.badge || 'b-gray'}`}>{st?.label || p.status}</span></td><td><div className="ac-cell"><button className="icon-btn" onClick={() => setModal({ type:'payment', data:p })}><Ico.edit/></button><button className="icon-btn" style={{ color:'var(--danger)' }} onClick={async () => { if (window.confirm('למחוק תשלום?')) await fin.removePayment(p.id) }}><Ico.trash/></button></div></td></tr>
+                  return <tr key={p.id} style={zebraRow(i)}><td>{contName(p.contactId)}</td><td>{p.program || '–'}</td><td>{instName(p.instructorId)}</td><td><strong>{fmtShekel(p.amount)}</strong></td><td><span className={`badge ${st?.badge || 'b-gray'}`}>{st?.label || p.status}</span></td><td><div className="ac-cell"><button className="icon-btn" onClick={() => setModal({ type:'payment', data:p })}><Ico.edit/></button><button className="icon-btn" style={{ color:'var(--danger)' }} onClick={async () => { if (window.confirm('למחוק תשלום?')) await fin.removePayment(p.id) }}><Ico.trash/></button></div></td></tr>
                 })}</tbody>
                 <tfoot><tr style={{ background:'var(--bg)' }}><td colSpan={3}><strong>סה"כ תשלומים</strong></td><td><strong>{fmtShekel(paymentTotal)}</strong></td><td colSpan={2}></td></tr></tfoot>
               </table></div>
@@ -380,7 +571,7 @@ export default function FinancialPage({
           {/* Grand total */}
           <div style={{ padding:'16px 0', display:'flex', justifyContent:'center' }}>
             <div style={{ background:'#d1fae5', borderRadius:12, padding:'16px 32px', textAlign:'center' }}>
-              <div style={{ fontSize:13, fontWeight:600, color:'#065f46', marginBottom:6 }}>סה"כ הכנסות החודש</div>
+              <div style={{ fontSize:13, fontWeight:600, color:'#065f46', marginBottom:6 }}>סה"כ הכנסות {mName} {fin.year}</div>
               <div style={{ fontSize:32, fontWeight:800, color:'#10b981' }}>{fmtShekel(grandIncome)}</div>
             </div>
           </div>
@@ -390,11 +581,12 @@ export default function FinancialPage({
         {/* ── EXPENSES TAB ─────────────────────────────────── */}
         {/* ════════════════════════════════════════════════════ */}
         {tab === 'expenses' && <>
-          {/* Salaries (editable) */}
+          {/* Salaries */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                 <strong style={{ fontSize:13 }}>💰 משכורות מדריכים</strong>
+                <span style={{ fontSize:11, color:'var(--muted)', background:'var(--bg)', padding:'2px 8px', borderRadius:10 }}>{fin.salaries.length} מדריכים</span>
                 <button className="btn btn-o btn-sm" onClick={async () => { if (window.confirm('לייצר רשומות שכר לכל המדריכים?')) await fin.autoGenerate(instructors, fin.month, fin.year) }}>⚡ ייצר אוטומטי</button>
               </div>
               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
@@ -403,51 +595,82 @@ export default function FinancialPage({
               </div>
             </div>
             {!fin.salaries.length
-              ? <div className="empty"><div className="empty-ico">💰</div><p>אין רשומות שכר לחודש זה</p></div>
-              : <div className="tbl-wrap"><table><thead><tr><th>מדריך</th><th>בסיס</th><th>תוספות</th><th>ניכויים</th><th>מס</th><th>בט"ל</th><th>בריאות</th><th>נטו</th><th></th></tr></thead>
-                <tbody>{fin.salaries.map(s => (
-                  <tr key={s.id}><td><strong>{instName(s.instructorId)}</strong></td><td>{fmtShekel(s.baseSalary)}</td><td>{fmtShekel(s.additions)}</td><td>{fmtShekel(s.deductions)}</td><td>{fmtShekel(s.tax)}</td><td>{fmtShekel(s.nationalInsurance)}</td><td>{fmtShekel(s.healthInsurance)}</td><td><strong style={{ color:'var(--success)' }}>{fmtShekel(s.netSalary)}</strong></td><td><div className="ac-cell"><button className="icon-btn" onClick={() => setModal({ type:'salary', data:s })}><Ico.edit/></button><button className="icon-btn" style={{ color:'var(--danger)' }} onClick={async () => { if (window.confirm('למחוק רשומת שכר?')) await fin.removeSalary(s.id) }}><Ico.trash/></button></div></td></tr>
-                ))}</tbody>
-                <tfoot><tr style={{ background:'var(--bg)' }}><td><strong>סה"כ</strong></td><td colSpan={6}></td><td><strong style={{ color:'var(--success)' }}>{fmtShekel(salaryTotal)}</strong></td><td></td></tr></tfoot>
+              ? <div className="empty"><div className="empty-ico">💰</div><p>אין רשומות שכר לחודש {mName}</p><p style={{ fontSize:12, color:'var(--muted)' }}>השתמש ב"ייצר אוטומטי" או "הוסף ידנית"</p></div>
+              : <div className="tbl-wrap"><table><thead><tr><th>מדריך</th><th>תעריף/שעה</th><th>בסיס</th><th>תוספות</th><th>ניכויים</th><th>מס</th><th>בט"ל</th><th>בריאות</th><th>נטו</th><th></th></tr></thead>
+                <tbody>{fin.salaries.map((s, i) => {
+                  const inst = instructors.find(x => x.id === s.instructorId)
+                  const hourlyRate = inst?.price_per_session || inst?.hourlyRate || '–'
+                  return (
+                    <tr key={s.id} style={zebraRow(i)}>
+                      <td><strong>{instName(s.instructorId)}</strong></td>
+                      <td style={{ fontSize:12, color:'var(--muted)' }}>{hourlyRate !== '–' ? `₪${fmt(hourlyRate)}` : '–'}</td>
+                      <td>{fmtShekel(s.baseSalary)}</td>
+                      <td>{fmtShekel(s.additions)}</td>
+                      <td>{fmtShekel(s.deductions)}</td>
+                      <td>{fmtShekel(s.tax)}</td>
+                      <td>{fmtShekel(s.nationalInsurance)}</td>
+                      <td>{fmtShekel(s.healthInsurance)}</td>
+                      <td><strong style={{ color:'var(--success)' }}>{fmtShekel(s.netSalary)}</strong></td>
+                      <td><div className="ac-cell"><button className="icon-btn" onClick={() => setModal({ type:'salary', data:s })}><Ico.edit/></button><button className="icon-btn" style={{ color:'var(--danger)' }} onClick={async () => { if (window.confirm('למחוק רשומת שכר?')) await fin.removeSalary(s.id) }}><Ico.trash/></button></div></td>
+                    </tr>
+                  )
+                })}</tbody>
+                <tfoot><tr style={{ background:'var(--bg)' }}><td colSpan={2}><strong>סה"כ משכורות</strong></td><td colSpan={6}></td><td><strong style={{ color:'var(--success)' }}>{fmtShekel(salaryTotal)}</strong></td><td></td></tr></tfoot>
               </table></div>
             }
           </div>
 
-          {/* Activity expenses (read-only) */}
+          {/* Activity expenses */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <strong style={{ fontSize:13 }}>🎯 הוצאות פעילויות</strong>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <strong style={{ fontSize:13 }}>🎯 הוצאות פעילויות</strong>
+                <span style={{ fontSize:11, color:'var(--muted)', background:'var(--bg)', padding:'2px 8px', borderRadius:10 }}>{monthActivities.filter(a => a.expenses > 0).length} פעילויות</span>
+              </div>
               <span style={{ fontWeight:700, color:'#ef4444' }}>{fmtShekel(actExpenseTotal)}</span>
             </div>
             {monthActivities.filter(a => a.expenses > 0).length === 0
-              ? <div style={{ padding:'16px', textAlign:'center', color:'var(--muted)', fontSize:13 }}>אין הוצאות פעילויות לחודש זה</div>
-              : <div className="tbl-wrap"><table><thead><tr><th>שם</th><th>סוג</th><th>הוצאות</th></tr></thead>
-                <tbody>{monthActivities.filter(a => a.expenses > 0).map(a => {
+              ? <div style={{ padding:'20px', textAlign:'center', color:'var(--muted)', fontSize:13 }}>אין הוצאות פעילויות לחודש {mName}</div>
+              : <div className="tbl-wrap"><table><thead><tr><th>שם</th><th>סוג</th><th>לקוח</th><th>הוצאות</th></tr></thead>
+                <tbody>{monthActivities.filter(a => a.expenses > 0).map((a, i) => {
                   const tm = getTypeMeta(a.activityType)
-                  return <tr key={a.id}><td><strong>{a.name}</strong></td><td><span className="badge" style={{ background:tm.color+'18', color:tm.color }}>{tm.icon} {tm.label}</span></td><td style={{ color:'#ef4444', fontWeight:600 }}>{fmtShekel(a.expenses)}</td></tr>
-                })}</tbody></table></div>
+                  return <tr key={a.id} style={zebraRow(i)}><td><strong>{a.name}</strong></td><td><span className="badge" style={{ background:tm.color+'18', color:tm.color }}>{tm.icon} {tm.label}</span></td><td>{a.contactName || '—'}</td><td style={{ color:'#ef4444', fontWeight:600 }}>{fmtShekel(a.expenses)}</td></tr>
+                })}</tbody>
+                <tfoot><tr style={{ background:'var(--bg)', fontWeight:700 }}><td colSpan={3}>סה"כ הוצאות פעילויות</td><td style={{ color:'#ef4444' }}>{fmtShekel(actExpenseTotal)}</td></tr></tfoot>
+              </table></div>
             }
           </div>
 
-          {/* Class instructor costs (read-only) */}
+          {/* Class instructor costs */}
           <div className="card">
             <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <strong style={{ fontSize:13 }}>🏫 עלויות מדריכים בחוגים</strong>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <strong style={{ fontSize:13 }}>🏫 עלויות מדריכים בחוגים</strong>
+                <span style={{ fontSize:11, color:'var(--muted)', background:'var(--bg)', padding:'2px 8px', borderRadius:10 }}>{classData.filter(c => c._expense > 0).length} חוגים</span>
+              </div>
               <span style={{ fontWeight:700, color:'#ef4444' }}>{fmtShekel(classExpenseTotal)}</span>
             </div>
             {classData.filter(c => c._expense > 0).length === 0
-              ? <div style={{ padding:'16px', textAlign:'center', color:'var(--muted)', fontSize:13 }}>אין עלויות מדריכים לחודש זה</div>
-              : <div className="tbl-wrap"><table><thead><tr><th>שם</th><th>מדריך</th><th>שעות</th><th>עלות</th></tr></thead>
-                <tbody>{classData.filter(c => c._expense > 0).map(c => (
-                  <tr key={c.id}><td><strong>{c.name || c.activity_type}</strong></td><td>{c.instructor_name || '–'}</td><td>{c.monthly_hours || 4}</td><td style={{ color:'#ef4444', fontWeight:600 }}>{fmtShekel(c._expense)}</td></tr>
-                ))}</tbody></table></div>
+              ? <div style={{ padding:'20px', textAlign:'center', color:'var(--muted)', fontSize:13 }}>אין עלויות מדריכים לחודש {mName}</div>
+              : <div className="tbl-wrap"><table><thead><tr><th>שם</th><th>מדריך</th><th>תעריף/שיעור</th><th>שעות</th><th>עלות</th></tr></thead>
+                <tbody>{classData.filter(c => c._expense > 0).map((c, i) => (
+                  <tr key={c.id} style={zebraRow(i)}>
+                    <td><strong>{c.name || c.activity_type}</strong></td>
+                    <td>{c.instructor_name || '–'}</td>
+                    <td style={{ fontSize:12 }}>{c.instructor_price_per_session ? fmtShekel(c.instructor_price_per_session) : '–'}</td>
+                    <td>{c.monthly_hours || 4}</td>
+                    <td style={{ color:'#ef4444', fontWeight:600 }}>{fmtShekel(c._expense)}</td>
+                  </tr>
+                ))}</tbody>
+                <tfoot><tr style={{ background:'var(--bg)', fontWeight:700 }}><td colSpan={4}>סה"כ עלויות מדריכים</td><td style={{ color:'#ef4444' }}>{fmtShekel(classExpenseTotal)}</td></tr></tfoot>
+              </table></div>
             }
           </div>
 
           {/* Grand total */}
           <div style={{ padding:'16px 0', display:'flex', justifyContent:'center' }}>
             <div style={{ background:'#fee2e2', borderRadius:12, padding:'16px 32px', textAlign:'center' }}>
-              <div style={{ fontSize:13, fontWeight:600, color:'#991b1b', marginBottom:6 }}>סה"כ הוצאות החודש</div>
+              <div style={{ fontSize:13, fontWeight:600, color:'#991b1b', marginBottom:6 }}>סה"כ הוצאות {mName} {fin.year}</div>
               <div style={{ fontSize:32, fontWeight:800, color:'#ef4444' }}>{fmtShekel(grandExpense)}</div>
             </div>
           </div>
@@ -493,27 +716,31 @@ export default function FinancialPage({
           {actFiltered.length === 0 ? (
             <div className="card" style={{ padding:40, textAlign:'center' }}>
               <div style={{ fontSize:48, marginBottom:12 }}>📋</div>
-              <p style={{ color:'var(--muted)', fontSize:14 }}>אין פעילויות עדיין</p>
-              <button className="btn btn-p" onClick={openNewAct} style={{ marginTop:12 }}>+ הוסף פעילות ראשונה</button>
+              <p style={{ color:'var(--text)', fontSize:15, fontWeight:600 }}>אין פעילויות עדיין</p>
+              <p style={{ color:'var(--muted)', fontSize:13, marginTop:4 }}>פעילויות כוללות: צילום סרטון, PIXMIX, הרצאות, ייעוץ ועוד</p>
+              <button className="btn btn-p" onClick={openNewAct} style={{ marginTop:16 }}>+ הוסף פעילות ראשונה</button>
             </div>
           ) : (
             <div className="card tbl-wrap"><table><thead><tr>
-              <th>סוג</th><th>שם פעילות</th><th>לקוח</th><th>חודש</th><th>הכנסה</th><th>הוצאות</th><th>רווח</th><th>תשלום</th><th style={{ width:50 }}></th>
+              <th>סוג</th><th>שם פעילות</th><th>לקוח</th><th>תאריך</th><th>חודש</th><th>הכנסה</th><th>הוצאות</th><th>רווח</th><th>תשלום</th><th>אמצעי</th><th>חשבונית</th><th style={{ width:50 }}></th>
             </tr></thead>
-            <tbody>{actFiltered.map(a => {
+            <tbody>{actFiltered.map((a, i) => {
               const tm = getTypeMeta(a.activityType)
               const pm = getPayMeta(a.paymentStatus)
               const profit = a.income - a.expenses
               return (
-                <tr key={a.id} style={{ cursor:'pointer' }} onClick={() => openEditAct(a)}>
+                <tr key={a.id} style={{ ...zebraRow(i), cursor:'pointer' }} onClick={() => openEditAct(a)}>
                   <td><span className="badge" style={{ background:tm.color+'18', color:tm.color }}>{tm.icon} {tm.label}</span></td>
                   <td><strong>{a.name}</strong></td>
                   <td>{a.contactName || '—'}</td>
-                  <td>{a.month ? MONTHS.find(m=>m.v===a.month)?.l + ' ' + a.year : '—'}</td>
+                  <td style={{ fontSize:12 }}>{a.activityDate || '—'}</td>
+                  <td style={{ fontSize:12 }}>{a.month ? MONTHS.find(m=>m.v===a.month)?.l + ' ' + a.year : '—'}</td>
                   <td style={{ color:'#10b981', fontWeight:600 }}>₪{fmt(a.income)}</td>
                   <td style={{ color:'#ef4444' }}>{a.expenses ? '₪'+fmt(a.expenses) : '—'}</td>
                   <td style={{ fontWeight:700, color: profit >= 0 ? '#10b981' : '#ef4444' }}>₪{fmt(profit)}</td>
-                  <td><span className="badge" style={{ background:pm.bg, color:pm.color }}>{pm.label}</span></td>
+                  <td><span className="badge" style={{ background:pm.bg, color:pm.color, fontSize:11 }}>{pm.label}</span></td>
+                  <td style={{ fontSize:12 }}>{a.paymentMethod || '—'}</td>
+                  <td style={{ fontSize:12 }}>{a.invoiceNumber || '—'}</td>
                   <td onClick={e => e.stopPropagation()}><button className="icon-btn" style={{ color:'var(--danger)' }} onClick={() => deleteAct(a.id)} title="מחק">✕</button></td>
                 </tr>
               )
@@ -525,79 +752,188 @@ export default function FinancialPage({
         {/* ── REPORT TAB ───────────────────────────────────── */}
         {/* ════════════════════════════════════════════════════ */}
         {tab === 'report' && (
-          <div className="card">
-            <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:24 }}>
-              {/* Income breakdown */}
-              <div>
-                <div style={{ fontSize:12, fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.05em', marginBottom:12 }}>סה"כ הכנסות</div>
-                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}><span>🏫</span><span style={{ fontSize:12 }}>הכנסות מחוגים ({classData.length} חוגים)</span></div>
-                    <strong>{fmtShekel(classIncomeTotal)}</strong>
-                  </div>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}><span>🎯</span><span style={{ fontSize:12 }}>הכנסות מפעילויות ({monthActivities.length} פעילויות)</span></div>
-                    <strong>{fmtShekel(actIncomeTotal)}</strong>
-                  </div>
-                  {PAY_STATUS.map(st => {
-                    const items = fin.payments.filter(p => p.status === st.value)
-                    const total = items.reduce((s, p) => s + p.amount, 0)
-                    if (!items.length) return null
-                    return (
-                      <div key={st.value} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                          <span className={`badge ${st.badge}`}>{st.label}</span>
-                          <span style={{ fontSize:12, color:'var(--muted)' }}>{items.length} תשלומים</span>
-                        </div>
-                        <strong>{fmtShekel(total)}</strong>
-                      </div>
-                    )
-                  })}
-                  <div style={{ display:'flex', justifyContent:'space-between', padding:'12px 14px', borderTop:'2px solid var(--border)', fontWeight:700, fontSize:15 }}>
-                    <span>סה"כ הכנסות</span>
-                    <span style={{ color:'var(--success)' }}>{fmtShekel(grandIncome)}</span>
-                  </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
+            {/* ── Income vs Expenses visual ── */}
+            <div className="card" style={{ padding:'20px 24px' }}>
+              <div style={{ fontSize:14, fontWeight:700, marginBottom:16, display:'flex', alignItems:'center', gap:8 }}>
+                📊 יחס הכנסות להוצאות — {mName} {fin.year}
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
+                <div>
+                  <ProgressBar value={grandIncome} max={Math.max(grandIncome, grandExpense) || 1} color="#10b981" label={`הכנסות: ${fmtShekel(grandIncome)}`}/>
+                </div>
+                <div>
+                  <ProgressBar value={grandExpense} max={Math.max(grandIncome, grandExpense) || 1} color="#ef4444" label={`הוצאות: ${fmtShekel(grandExpense)}`}/>
                 </div>
               </div>
+              <div style={{ textAlign:'center', padding:'16px', background: grandProfit >= 0 ? '#d1fae522' : '#fee2e222', borderRadius:10, border:`1px solid ${grandProfit >= 0 ? '#10b98133' : '#ef444433'}` }}>
+                <div style={{ fontSize:12, color:'var(--muted)', marginBottom:4 }}>רווח גולמי</div>
+                <div style={{ fontSize:28, fontWeight:800, color: grandProfit >= 0 ? '#10b981' : '#ef4444' }}>{fmtShekel(grandProfit)}</div>
+                {grandIncome > 0 && <div style={{ fontSize:12, color:'var(--muted)', marginTop:4 }}>מרווחיות: {Math.round((grandProfit / grandIncome) * 100)}%</div>}
+              </div>
+            </div>
 
-              {/* Expense breakdown */}
-              <div>
-                <div style={{ fontSize:12, fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.05em', marginBottom:12 }}>סה"כ הוצאות</div>
-                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                  {fin.salaries.map(s => (
-                    <div key={s.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
-                      <span style={{ fontWeight:500 }}>💰 {instName(s.instructorId)}</span>
-                      <strong style={{ color:'var(--danger)' }}>{fmtShekel(s.netSalary)}</strong>
+            {/* ── Source breakdown ── */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+              {/* Income sources */}
+              <div className="card" style={{ padding:'20px 24px' }}>
+                <div style={{ fontSize:13, fontWeight:700, marginBottom:14, color:'#10b981' }}>💰 מקורות הכנסה</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {sourceBreakdown.map((s, i) => (
+                    <div key={i}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                        <span style={{ fontSize:12, display:'flex', alignItems:'center', gap:4 }}>{s.icon} {s.label}</span>
+                        <span style={{ fontSize:12, fontWeight:600 }}>{fmtShekel(s.amount)} ({s.pct}%)</span>
+                      </div>
+                      <div style={{ height:8, background:'var(--border)', borderRadius:4, overflow:'hidden' }}>
+                        <div style={{ height:'100%', width:`${s.pct}%`, background:s.color, borderRadius:4, transition:'width .5s' }}/>
+                      </div>
                     </div>
                   ))}
-                  {actExpenseTotal > 0 && (
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
-                      <span style={{ fontWeight:500 }}>🎯 הוצאות פעילויות</span>
-                      <strong style={{ color:'var(--danger)' }}>{fmtShekel(actExpenseTotal)}</strong>
-                    </div>
-                  )}
-                  {classExpenseTotal > 0 && (
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
-                      <span style={{ fontWeight:500 }}>🏫 עלויות מדריכים בחוגים</span>
-                      <strong style={{ color:'var(--danger)' }}>{fmtShekel(classExpenseTotal)}</strong>
-                    </div>
-                  )}
-                  {!fin.salaries.length && !actExpenseTotal && !classExpenseTotal && <div style={{ color:'var(--muted)', fontSize:13 }}>אין הוצאות לחודש זה</div>}
-                  <div style={{ display:'flex', justifyContent:'space-between', padding:'12px 14px', borderTop:'2px solid var(--border)', fontWeight:700, fontSize:15 }}>
-                    <span>סה"כ הוצאות</span>
-                    <span style={{ color:'var(--danger)' }}>{fmtShekel(grandExpense)}</span>
-                  </div>
                 </div>
               </div>
 
-              {/* Gross Profit */}
-              <div style={{ padding:24, background: grandProfit >= 0 ? '#d1fae5' : '#fee2e2', borderRadius:12, textAlign:'center' }}>
-                <div style={{ fontSize:13, fontWeight:600, color: grandProfit >= 0 ? '#065f46' : '#991b1b', marginBottom:8 }}>רווח גולמי</div>
-                <div style={{ fontSize:36, fontWeight:800, color: grandProfit >= 0 ? '#10b981' : '#ef4444' }}>{fmtShekel(grandProfit)}</div>
-                <div style={{ fontSize:12, color: grandProfit >= 0 ? '#065f46' : '#991b1b', marginTop:8 }}>
-                  {grandExpense > 0 ? `יחס הכנסה להוצאה: ${Math.round((grandIncome / grandExpense) * 100)}%` : grandIncome > 0 ? 'אין הוצאות לחודש זה' : 'אין נתונים לחודש זה'}
+              {/* Expense sources */}
+              <div className="card" style={{ padding:'20px 24px' }}>
+                <div style={{ fontSize:13, fontWeight:700, marginBottom:14, color:'#ef4444' }}>📉 מקורות הוצאות</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {expenseBreakdown.map((s, i) => (
+                    <div key={i}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                        <span style={{ fontSize:12, display:'flex', alignItems:'center', gap:4 }}>{s.icon} {s.label}</span>
+                        <span style={{ fontSize:12, fontWeight:600 }}>{fmtShekel(s.amount)} ({s.pct}%)</span>
+                      </div>
+                      <div style={{ height:8, background:'var(--border)', borderRadius:4, overflow:'hidden' }}>
+                        <div style={{ height:'100%', width:`${s.pct}%`, background:s.color, borderRadius:4, transition:'width .5s' }}/>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
+            </div>
+
+            {/* ── Detailed breakdown ── */}
+            <div className="card" style={{ padding:'20px 24px' }}>
+              <div style={{ fontSize:14, fontWeight:700, marginBottom:16 }}>📋 פירוט הכנסות</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}><span>🏫</span><span style={{ fontSize:12 }}>הכנסות מחוגים ({classData.length} חוגים)</span></div>
+                  <strong>{fmtShekel(classIncomeTotal)}</strong>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}><span>🎯</span><span style={{ fontSize:12 }}>הכנסות מפעילויות ({monthActivities.length} פעילויות)</span></div>
+                  <strong>{fmtShekel(actIncomeTotal)}</strong>
+                </div>
+                {PAY_STATUS.map(st => {
+                  const items = fin.payments.filter(p => p.status === st.value)
+                  const total = items.reduce((s, p) => s + p.amount, 0)
+                  if (!items.length) return null
+                  return (
+                    <div key={st.value} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <span className={`badge ${st.badge}`}>{st.label}</span>
+                        <span style={{ fontSize:12, color:'var(--muted)' }}>{items.length} תשלומים</span>
+                      </div>
+                      <strong>{fmtShekel(total)}</strong>
+                    </div>
+                  )
+                })}
+                <div style={{ display:'flex', justifyContent:'space-between', padding:'12px 14px', borderTop:'2px solid var(--border)', fontWeight:700, fontSize:15 }}>
+                  <span>סה"כ הכנסות</span>
+                  <span style={{ color:'var(--success)' }}>{fmtShekel(grandIncome)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Expense breakdown ── */}
+            <div className="card" style={{ padding:'20px 24px' }}>
+              <div style={{ fontSize:14, fontWeight:700, marginBottom:16 }}>📋 פירוט הוצאות</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {fin.salaries.map(s => (
+                  <div key={s.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
+                    <span style={{ fontWeight:500 }}>💰 {instName(s.instructorId)}</span>
+                    <strong style={{ color:'var(--danger)' }}>{fmtShekel(s.netSalary)}</strong>
+                  </div>
+                ))}
+                {actExpenseTotal > 0 && (
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
+                    <span style={{ fontWeight:500 }}>🎯 הוצאות פעילויות</span>
+                    <strong style={{ color:'var(--danger)' }}>{fmtShekel(actExpenseTotal)}</strong>
+                  </div>
+                )}
+                {classExpenseTotal > 0 && (
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'var(--bg)', borderRadius:8 }}>
+                    <span style={{ fontWeight:500 }}>🏫 עלויות מדריכים בחוגים</span>
+                    <strong style={{ color:'var(--danger)' }}>{fmtShekel(classExpenseTotal)}</strong>
+                  </div>
+                )}
+                {!fin.salaries.length && !actExpenseTotal && !classExpenseTotal && <div style={{ color:'var(--muted)', fontSize:13 }}>אין הוצאות לחודש זה</div>}
+                <div style={{ display:'flex', justifyContent:'space-between', padding:'12px 14px', borderTop:'2px solid var(--border)', fontWeight:700, fontSize:15 }}>
+                  <span>סה"כ הוצאות</span>
+                  <span style={{ color:'var(--danger)' }}>{fmtShekel(grandExpense)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Year-to-date ── */}
+            <div className="card" style={{ padding:'20px 24px' }}>
+              <div style={{ fontSize:14, fontWeight:700, marginBottom:16 }}>📅 מצטבר שנתי ({fin.year}) — ינואר עד {mName}</div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:12 }}>
+                <div style={{ background:'#d1fae5', borderRadius:10, padding:'14px 16px', textAlign:'center' }}>
+                  <div style={{ fontSize:11, color:'#065f46', fontWeight:600, marginBottom:4 }}>הכנסות חוגים</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:'#10b981' }}>{fmtShekel(ytdData.classIncome)}</div>
+                  <div style={{ fontSize:11, color:'#065f46', marginTop:4 }}>{ytdData.classCount} חוגים</div>
+                </div>
+                <div style={{ background:'#ffedd5', borderRadius:10, padding:'14px 16px', textAlign:'center' }}>
+                  <div style={{ fontSize:11, color:'#9a3412', fontWeight:600, marginBottom:4 }}>הכנסות פעילויות</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:'#f97316' }}>{fmtShekel(ytdData.actIncome)}</div>
+                  <div style={{ fontSize:11, color:'#9a3412', marginTop:4 }}>{ytdData.actCount} פעילויות</div>
+                </div>
+                <div style={{ background:'#fee2e2', borderRadius:10, padding:'14px 16px', textAlign:'center' }}>
+                  <div style={{ fontSize:11, color:'#991b1b', fontWeight:600, marginBottom:4 }}>הוצאות חוגים</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:'#ef4444' }}>{fmtShekel(ytdData.classExpense)}</div>
+                </div>
+                <div style={{ background:'#fef3c7', borderRadius:10, padding:'14px 16px', textAlign:'center' }}>
+                  <div style={{ fontSize:11, color:'#92400e', fontWeight:600, marginBottom:4 }}>הוצאות פעילויות</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:'#f59e0b' }}>{fmtShekel(ytdData.actExpense)}</div>
+                </div>
+              </div>
+              <div style={{ marginTop:16, textAlign:'center', padding:'14px', background:'var(--bg)', borderRadius:10, border:'1px solid var(--border)' }}>
+                <div style={{ fontSize:12, color:'var(--muted)', marginBottom:4 }}>רווח מצטבר (חוגים + פעילויות)</div>
+                <div style={{ fontSize:24, fontWeight:800, color: (ytdData.classIncome + ytdData.actIncome - ytdData.classExpense - ytdData.actExpense) >= 0 ? '#10b981' : '#ef4444' }}>
+                  {fmtShekel(ytdData.classIncome + ytdData.actIncome - ytdData.classExpense - ytdData.actExpense)}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Month comparison ── */}
+            <div className="card" style={{ padding:'20px 24px' }}>
+              <div style={{ fontSize:14, fontWeight:700, marginBottom:16 }}>📈 השוואה לחודש הקודם</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, textAlign:'center' }}>
+                <div style={{ background:'var(--bg)', borderRadius:10, padding:'12px' }}>
+                  <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>הכנסות (חוגים + פעילויות)</div>
+                  <div style={{ fontSize:18, fontWeight:700, color:'#10b981' }}>{fmtShekel(classIncomeTotal + actIncomeTotal)}</div>
+                  <div style={{ marginTop:6 }}><Trend current={classIncomeTotal + actIncomeTotal} previous={prevGrandIncome}/></div>
+                  {prevGrandIncome > 0 && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>חודש קודם: {fmtShekel(prevGrandIncome)}</div>}
+                </div>
+                <div style={{ background:'var(--bg)', borderRadius:10, padding:'12px' }}>
+                  <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>הוצאות (חוגים + פעילויות)</div>
+                  <div style={{ fontSize:18, fontWeight:700, color:'#ef4444' }}>{fmtShekel(classExpenseTotal + actExpenseTotal)}</div>
+                  <div style={{ marginTop:6 }}><Trend current={classExpenseTotal + actExpenseTotal} previous={prevGrandExpense} reverse/></div>
+                  {prevGrandExpense > 0 && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>חודש קודם: {fmtShekel(prevGrandExpense)}</div>}
+                </div>
+                <div style={{ background:'var(--bg)', borderRadius:10, padding:'12px' }}>
+                  <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>רווח</div>
+                  <div style={{ fontSize:18, fontWeight:700, color: (classIncomeTotal + actIncomeTotal - classExpenseTotal - actExpenseTotal) >= 0 ? '#3b82f6' : '#ef4444' }}>
+                    {fmtShekel(classIncomeTotal + actIncomeTotal - classExpenseTotal - actExpenseTotal)}
+                  </div>
+                  <div style={{ marginTop:6 }}>
+                    <Trend current={classIncomeTotal + actIncomeTotal - classExpenseTotal - actExpenseTotal} previous={prevGrandIncome - prevGrandExpense}/>
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginTop:10, fontSize:11, color:'var(--muted)', textAlign:'center' }}>* ההשוואה מבוססת על נתוני חוגים ופעילויות בלבד (ללא תשלומים ישירים/משכורות)</div>
             </div>
           </div>
         )}
