@@ -270,11 +270,14 @@ textarea{resize:vertical;min-height:70px}
 
 /* ═══ Classes Table ═══ */
 .cls-table-card{overflow:hidden;padding:0}
-.cls-table-scroll{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 340px);-webkit-overflow-scrolling:touch}
-.cls-table-scroll::-webkit-scrollbar{height:8px;width:6px}
-.cls-table-scroll::-webkit-scrollbar-track{background:var(--bg)}
-.cls-table-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
-.cls-table-scroll::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+.cls-table-scroll{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 340px);-webkit-overflow-scrolling:touch;cursor:grab;scroll-behavior:smooth}
+.cls-table-scroll:active{cursor:grabbing}
+.cls-table-scroll::-webkit-scrollbar{height:14px;width:6px}
+.cls-table-scroll::-webkit-scrollbar-track{background:var(--surface);border-radius:7px}
+.cls-table-scroll::-webkit-scrollbar-thumb{background:#f97316;border-radius:7px;border:3px solid var(--surface)}
+.cls-table-scroll::-webkit-scrollbar-thumb:hover{background:#ea580c}
+.cls-scroll-hint{text-align:center;padding:8px;font-size:12px;color:var(--muted);animation:pulse 2s infinite;user-select:none}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
 
 .cls-table{width:100%;min-width:1600px;border-collapse:separate;border-spacing:0;font-size:12px}
 .cls-table thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:2px solid var(--border);padding:10px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--muted);white-space:nowrap;letter-spacing:.02em;text-transform:uppercase}

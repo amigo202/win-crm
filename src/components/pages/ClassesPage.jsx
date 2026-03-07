@@ -449,6 +449,25 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
   // Inline editing
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm]   = useState({})
+  // Drag-to-scroll
+  const scrollRef = useRef(null)
+  const [scrollHint, setScrollHint] = useState(true)
+  const dragState = useRef({ isDown: false, startX: 0, scrollLeft: 0 })
+  const onMouseDown = e => {
+    if (e.target.closest('input,select,button,.cls-action-btn')) return
+    const el = scrollRef.current; if (!el) return
+    dragState.current = { isDown: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft }
+    el.style.cursor = 'grabbing'
+  }
+  const onMouseUp = () => { dragState.current.isDown = false; if (scrollRef.current) scrollRef.current.style.cursor = 'grab' }
+  const onMouseMove = e => {
+    if (!dragState.current.isDown) return; e.preventDefault()
+    const el = scrollRef.current; if (!el) return
+    const x = e.pageX - el.offsetLeft
+    el.scrollLeft = dragState.current.scrollLeft - (x - dragState.current.startX)
+    if (scrollHint) setScrollHint(false)
+  }
+  const onScroll = () => { if (scrollHint) setScrollHint(false) }
   const [saving, setSaving]       = useState(false)
 
   const cities = useMemo(() => [...new Set(classes.map(c => c.city).filter(Boolean))].sort(), [classes])
@@ -729,7 +748,10 @@ export default function ClassesPage({ classes, instructors, contacts, onAdd, onU
           </div>
         ) : (
           <div className="card cls-table-card">
-            <div className="cls-table-scroll">
+            {scrollHint && <div className="cls-scroll-hint">← גלול ימינה ושמאלה לעוד עמודות →</div>}
+            <div className="cls-table-scroll" ref={scrollRef}
+              onMouseDown={onMouseDown} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+              onMouseMove={onMouseMove} onScroll={onScroll}>
               <table className="cls-table">
                 <thead>
                   <tr>

@@ -2,19 +2,20 @@ import { Ico } from './icons/Ico'
 import { computeAlerts } from '../utils/alerts'
 import { useState, useEffect } from 'react'
 
+// Sidebar order follows the business flow: Lead → Contact → Class/Activity → Payment → Management
 const NAV = [
   { id: 'dashboard',   label: 'דשבורד',      ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
   { id: 'sales',       label: 'מכירות',       ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
   { id: 'contacts',    label: 'לקוחות',       ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
+  { id: 'classes',     label: 'חוגים וקורסים', ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
+  { id: 'financial',   label: 'פיננסים ₪',    ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> },
   { id: 'tasks',       label: 'משימות',      ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> },
   { id: 'instructors', label: 'מדריכים',       ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><path d="M12 12v9"/><path d="M9 15l3-3 3 3"/></svg> },
   { id: 'students',    label: 'תלמידים',       ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg> },
-  { id: 'classes',     label: 'חוגים וקורסים', ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-  { id: 'financial',   label: 'פיננסים ₪',    ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> },
 ]
 
 // Pages not shown in bottom nav - appear in "more" popup
-const MORE_PAGES = NAV.filter(n => !['dashboard','sales','contacts','tasks'].includes(n.id))
+const MORE_PAGES = NAV.filter(n => !['dashboard','sales','contacts','classes'].includes(n.id))
 
 export function MobileBottomNav({ page, setPage, tasks, leads, onMore }) {
   const [moreOpen, setMoreOpen] = useState(false)
@@ -28,7 +29,7 @@ export function MobileBottomNav({ page, setPage, tasks, leads, onMore }) {
     { id: 'dashboard', label: 'דשבורד',  badge: 0,         ico: NAV[0].ico },
     { id: 'sales',     label: 'מכירות',  badge: leadBadge,  ico: NAV[1].ico },
     { id: 'contacts',  label: 'לקוחות',  badge: 0,         ico: NAV[2].ico },
-    { id: 'tasks',     label: 'משימות',  badge: todayTasks, ico: NAV[3].ico },
+    { id: 'classes',   label: 'חוגים',   badge: 0,         ico: NAV[3].ico },
     { id: 'more',      label: 'עוד',     badge: 0,
       ico: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg> },
   ]
