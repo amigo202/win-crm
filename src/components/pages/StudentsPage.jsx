@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { PROGRAMS, PAY_STATUS } from '../../constants'
 import { fmtD, ini, avBg } from '../../utils/format'
 import { attPct, studentStatus } from '../../utils/alerts'
@@ -8,7 +8,7 @@ import Papa from 'papaparse'
 
 // ── Student Import Modal ─────────────────────────────────────────
 function StudentImportModal({ onClose, onImport }) {
-  const [step, setStep]     = useState('upload') // upload | preview | done
+  const [step, setStep]     = useState('upload')
   const [rows, setRows]     = useState([])
   const [error, setError]   = useState(null)
   const fileRef             = useRef()
@@ -23,11 +23,15 @@ function StudentImportModal({ onClose, onImport }) {
       complete: result => {
         if (!result.data?.length) { setError('הקובץ ריק'); return }
         const mapped = result.data.map(r => ({
-          name:          r['שם'] || r['name'] || r['Name'] || '',
-          program:       r['תוכנית'] || r['program'] || r['Program'] || PROGRAMS[0],
+          name:          r['שם תלמיד'] || r['שם'] || r['name'] || '',
+          className:     r['שם חוג']   || r['class_name'] || '',
+          schoolName:    r['בית ספר']  || r['school_name'] || '',
+          grade:         r['כיתה']     || r['grade'] || '',
+          parentName:    r['שם הורה']  || r['parent_name'] || '',
+          parentPhone:   r['טלפון']    || r['טלפון הורה'] || r['phone'] || '',
+          program:       r['תוכנית']   || r['program'] || PROGRAMS[0],
           paymentStatus: r['סטטוס תשלום'] || r['payment_status'] || 'pending',
-          parentPhone:   r['טלפון הורה'] || r['parent_phone'] || r['phone'] || '',
-          notes:         r['הערות'] || r['notes'] || '',
+          notes:         r['הערות']    || r['notes'] || '',
         })).filter(r => r.name.trim())
         if (!mapped.length) { setError('לא נמצאו שורות תקינות'); return }
         setRows(mapped)
@@ -49,12 +53,12 @@ function StudentImportModal({ onClose, onImport }) {
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal modal-lg">
-        <div className="mh"><h3>ייבוא תלמידים מ-CSV/Excel</h3><button className="mx" onClick={onClose}>×</button></div>
+        <div className="mh"><h3>ייבוא תלמידים מ-CSV</h3><button className="mx" onClick={onClose}>×</button></div>
         <div className="mb">
           {step === 'upload' && (
             <div style={{ textAlign: 'center', padding: 24 }}>
               <p style={{ color: 'var(--muted)', marginBottom: 16 }}>
-                העלה קובץ CSV או Excel עם עמודות: שם, תוכנית, סטטוס תשלום, טלפון הורה, הערות
+                העלה קובץ CSV עם עמודות: שם תלמיד, שם חוג, בית ספר, כיתה, שם הורה, טלפון, הערות
               </p>
               <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} style={{ display: 'none' }}/>
               <button className="btn btn-p" onClick={() => fileRef.current?.click()}>📁 בחר קובץ</button>
@@ -67,9 +71,9 @@ function StudentImportModal({ onClose, onImport }) {
                 נמצאו {rows.length} תלמידים לייבוא:
               </p>
               <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-                <table><thead><tr><th>שם</th><th>תוכנית</th><th>תשלום</th><th>טלפון</th></tr></thead>
+                <table><thead><tr><th>שם</th><th>חוג</th><th>בי"ס</th><th>כיתה</th><th>הורה</th><th>טלפון</th></tr></thead>
                 <tbody>{rows.slice(0, 50).map((r, i) => (
-                  <tr key={i}><td>{r.name}</td><td>{r.program}</td><td>{r.paymentStatus}</td><td>{r.parentPhone}</td></tr>
+                  <tr key={i}><td>{r.name}</td><td>{r.className}</td><td>{r.schoolName}</td><td>{r.grade}</td><td>{r.parentName}</td><td>{r.parentPhone}</td></tr>
                 ))}</tbody></table>
               </div>
               {error && <p style={{ color: 'var(--danger)', marginTop: 8 }}>{error}</p>}
@@ -96,16 +100,38 @@ function StudentImportModal({ onClose, onImport }) {
 export default function StudentsPage({ students, contacts, onAdd, onUpdate, onDelete }) {
   const [pf, setPf]         = useState('all')
   const [payf, setPayf]     = useState('all')
+  const [search, setSearch] = useState('')
   const [modal, setModal]   = useState(null)
   const [importing, setImporting] = useState(false)
 
-  const filtered = students.filter(s => (pf === 'all' || s.program === pf) && (payf === 'all' || s.paymentStatus === payf))
+  const filtered = useMemo(() => {
+    let list = students
+    if (pf !== 'all') list = list.filter(s => s.program === pf)
+    if (payf !== 'all') list = list.filter(s => s.paymentStatus === payf)
+    if (search) {
+      const q = search.toLowerCase()
+      list = list.filter(s =>
+        (s.name || '').toLowerCase().includes(q) ||
+        (s.className || '').toLowerCase().includes(q) ||
+        (s.schoolName || '').toLowerCase().includes(q) ||
+        (s.parentName || '').toLowerCase().includes(q) ||
+        (s.parentPhone || '').includes(q) ||
+        (s.grade || '').toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [students, pf, payf, search])
+
   const cname = id => contacts.find(c => c.id === id)?.name || ''
 
+  // ── Student Modal ───────────────────────────────────────────────
   function StudentModal({ student }) {
     const isE = !!student
     const [tab, setTab]   = useState('details')
-    const [form, setForm] = useState(() => student ? { ...student } : { name: '', contactId: '', program: PROGRAMS[0], paymentStatus: 'pending', parentPhone: '', notes: '', attendance: [] })
+    const [form, setForm] = useState(() => student
+      ? { ...student }
+      : { name: '', className: '', schoolName: '', grade: '', parentName: '', parentPhone: '',
+          contactId: '', program: PROGRAMS[0], paymentStatus: 'pending', notes: '', attendance: [] })
     const [af, setAf]     = useState({ date: new Date().toISOString().split('T')[0], present: true })
     const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }))
 
@@ -122,17 +148,48 @@ export default function StudentsPage({ students, contacts, onAdd, onUpdate, onDe
       <div className="overlay" onClick={e => e.target === e.currentTarget && setModal(null)}>
         <div className="modal modal-lg">
           <div className="mh">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><h3>{isE ? form.name : 'תלמיד חדש'}</h3>{isE && <span className={`badge ${stInfo[st].cls}`}>{stInfo[st].label}</span>}</div>
-            <button className="mx" onClick={() => setModal(null)}>×</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h3>{isE ? form.name : 'תלמיד חדש'}</h3>
+              {isE && <span className={`badge ${stInfo[st].cls}`}>{stInfo[st].label}</span>}
+            </div>
+            <button className="mx" onClick={() => setModal(null)} aria-label="סגור">×</button>
           </div>
-          {isE && <div className="tabs"><button className={`tab ${tab === 'details' ? 'on' : ''}`} onClick={() => setTab('details')}>פרטים</button><button className={`tab ${tab === 'att' ? 'on' : ''}`} onClick={() => setTab('att')}>נוכחות</button></div>}
+          {isE && (
+            <div className="tabs">
+              <button className={`tab ${tab === 'details' ? 'on' : ''}`} onClick={() => setTab('details')}>פרטים</button>
+              <button className={`tab ${tab === 'att' ? 'on' : ''}`} onClick={() => setTab('att')}>נוכחות</button>
+            </div>
+          )}
           {(!isE || tab === 'details') && (
             <div className="mb"><div className="fg">
-              <div className="frow full"><label>שם *</label><input required value={form.name} onChange={f('name')} placeholder="שם תלמיד"/></div>
+              {/* ── פרטי תלמיד ── */}
+              <div className="frow full" style={{ gridColumn: '1/-1', borderBottom: '2px solid var(--accent)', paddingBottom: 4, marginBottom: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>🎓 פרטי תלמיד</span>
+              </div>
+              <div className="frow"><label>שם תלמיד *</label><input required value={form.name} onChange={f('name')} placeholder="שם מלא"/></div>
+              <div className="frow"><label>כיתה</label><input value={form.grade || ''} onChange={f('grade')} placeholder='למשל: ד׳2, ו׳1'/></div>
+              <div className="frow"><label>שם חוג</label><input value={form.className || ''} onChange={f('className')} placeholder="WIN ENGLISH, PixMix..."/></div>
               <div className="frow"><label>תוכנית</label><select value={form.program} onChange={f('program')}>{PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+
+              {/* ── בית ספר ── */}
+              <div className="frow full" style={{ gridColumn: '1/-1', borderBottom: '2px solid #3b82f6', paddingBottom: 4, marginBottom: 4, marginTop: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#3b82f6' }}>🏫 מוסד לימודים</span>
+              </div>
+              <div className="frow"><label>שם בית ספר</label><input value={form.schoolName || ''} onChange={f('schoolName')} placeholder="בית ספר..."/></div>
+              <div className="frow"><label>קשור למוסד</label><select value={form.contactId} onChange={f('contactId')}><option value="">ללא</option>{contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+
+              {/* ── הורים ── */}
+              <div className="frow full" style={{ gridColumn: '1/-1', borderBottom: '2px solid #f97316', paddingBottom: 4, marginBottom: 4, marginTop: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#f97316' }}>👨‍👩‍👧 פרטי הורה</span>
+              </div>
+              <div className="frow"><label>שם הורה</label><input value={form.parentName || ''} onChange={f('parentName')} placeholder="שם ההורה"/></div>
+              <div className="frow"><label>טלפון הורה</label><input value={form.parentPhone || ''} onChange={f('parentPhone')} placeholder="050-0000000" dir="ltr"/></div>
+
+              {/* ── תשלום והערות ── */}
+              <div className="frow full" style={{ gridColumn: '1/-1', borderBottom: '2px solid #10b981', paddingBottom: 4, marginBottom: 4, marginTop: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#10b981' }}>💰 תשלום והערות</span>
+              </div>
               <div className="frow"><label>סטטוס תשלום</label><select value={form.paymentStatus} onChange={f('paymentStatus')}>{PAY_STATUS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
-              <div className="frow full"><label>קשור ל (מוסד)</label><select value={form.contactId} onChange={f('contactId')}><option value="">ללא</option>{contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-              <div className="frow full"><label>טלפון הורה</label><input value={form.parentPhone || ''} onChange={f('parentPhone')} placeholder="050-0000000"/></div>
               <div className="frow full"><label>הערות</label><textarea value={form.notes || ''} onChange={f('notes')} placeholder="הערות..."/></div>
             </div>
             <div className="mf">
@@ -187,29 +244,63 @@ export default function StudentsPage({ students, contacts, onAdd, onUpdate, onDe
         </div>
       </div>
       <div className="pb"><div className="card">
+        {/* ── Filters ── */}
         <div className="filter-bar">
+          <input className="si-input" placeholder="🔍 חיפוש..." value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 180 }} aria-label="חיפוש תלמידים"/>
           <button className={`fp ${pf === 'all' ? 'on' : ''}`} onClick={() => setPf('all')}>הכל<span className="fp-cnt">{students.length}</span></button>
           {PROGRAMS.map(p => { const cnt = students.filter(s => s.program === p).length; return cnt > 0 ? <button key={p} className={`fp ${pf === p ? 'on' : ''}`} onClick={() => setPf(p)}>{p}<span className="fp-cnt">{cnt}</span></button> : null })}
           <div style={{ borderRight: '1px solid var(--border)', margin: '0 4px', height: 20 }}/>
           {PAY_STATUS.map(p => <button key={p.value} className={`fp ${payf === p.value ? 'on' : ''}`} onClick={() => setPayf(payf === p.value ? 'all' : p.value)}>{p.label}<span className="fp-cnt">{students.filter(s => s.paymentStatus === p.value).length}</span></button>)}
+          <span style={{ fontSize: 12, color: 'var(--muted)', marginRight: 'auto' }}>{filtered.length} תלמידים</span>
         </div>
         {!filtered.length
           ? <div className="empty"><div className="empty-ico">🎓</div><p>אין תלמידים עדיין</p></div>
-          : <div className="tbl-wrap"><table><thead><tr><th>שם</th><th>תוכנית</th><th>מוסד</th><th>נוכחות</th><th>תשלום</th><th>סטטוס</th><th></th></tr></thead>
+          : <div className="tbl-wrap"><table>
+            <thead><tr>
+              <th>שם חוג</th>
+              <th>בית ספר</th>
+              <th>שם תלמיד</th>
+              <th>כיתה</th>
+              <th>שם הורה</th>
+              <th>טלפון</th>
+              <th>סטטוס</th>
+              <th>הערות</th>
+              <th style={{ width: 60 }}></th>
+            </tr></thead>
             <tbody>{filtered.map(s => {
-              const pct = attPct(s), st = studentStatus(s), pay = PAY_STATUS.find(p => p.value === s.paymentStatus) || PAY_STATUS[1]
+              const st = studentStatus(s)
+              const pay = PAY_STATUS.find(p => p.value === s.paymentStatus) || PAY_STATUS[1]
               return (
-                <tr key={s.id}>
-                  <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div className="av" style={{ width: 30, height: 30, fontSize: 11, background: avBg(s.name) }}>{ini(s.name)}</div><div style={{ fontWeight: 600 }}>{s.name}</div></div></td>
-                  <td><span className="badge b-teal" style={{ fontSize: 11 }}>{s.program}</span></td>
-                  <td style={{ fontSize: 12, color: 'var(--muted)' }}>{cname(s.contactId) || '–'}</td>
-                  <td>{pct !== null ? <span style={{ fontWeight: 600, color: pct < 70 ? 'var(--danger)' : pct < 85 ? 'var(--warning)' : 'var(--success)' }}>{pct}%</span> : '–'}</td>
-                  <td><span className={`badge ${pay.badge}`}>{pay.label}</span></td>
-                  <td><span className={`badge ${stInfo[st].cls}`} title={st === 'risk' ? 'פספס 2 שיעורים ברצף – מומלץ לפנות להורים' : st === 'warn' ? 'נעדר משיעור אחד לפחות' : 'נוכחות תקינה'}>{stInfo[st].label}</span></td>
-                  <td><div className="ac-cell">
-                    <button className="icon-btn" onClick={() => setModal({ student: s })}><Ico.edit/></button>
-                    <button className="icon-btn" style={{ color: 'var(--danger)' }} onClick={() => { if (window.confirm(`למחוק ${s.name}?`)) onDelete(s.id) }}><Ico.trash/></button>
-                  </div></td>
+                <tr key={s.id} style={{ cursor: 'pointer' }} onClick={() => setModal({ student: s })}>
+                  <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{s.className || s.program || '–'}</td>
+                  <td>{s.schoolName || cname(s.contactId) || '–'}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div className="av" style={{ width: 28, height: 28, fontSize: 10, background: avBg(s.name) }}>{ini(s.name)}</div>
+                      <strong>{s.name}</strong>
+                    </div>
+                  </td>
+                  <td>{s.grade || '–'}</td>
+                  <td>{s.parentName || '–'}</td>
+                  <td style={{ direction: 'ltr', textAlign: 'right' }}>
+                    {s.parentPhone
+                      ? <a href={`tel:${s.parentPhone}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--accent)', textDecoration: 'none' }}>{s.parentPhone}</a>
+                      : '–'}
+                  </td>
+                  <td>
+                    <span className={`badge ${stInfo[st].cls}`} title={st === 'risk' ? 'פספס 2 שיעורים ברצף' : st === 'warn' ? 'נעדר משיעור אחד' : 'נוכחות תקינה'}>{stInfo[st].label}</span>
+                    {' '}
+                    <span className={`badge ${pay.badge}`} style={{ fontSize: 10 }}>{pay.label}</span>
+                  </td>
+                  <td style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {s.notes || '–'}
+                  </td>
+                  <td onClick={e => e.stopPropagation()}>
+                    <div className="ac-cell">
+                      <button className="icon-btn" onClick={() => setModal({ student: s })} aria-label={`ערוך ${s.name}`}><Ico.edit/></button>
+                      <button className="icon-btn" style={{ color: 'var(--danger)' }} onClick={() => { if (window.confirm(`למחוק ${s.name}?`)) onDelete(s.id) }} aria-label={`מחק ${s.name}`}><Ico.trash/></button>
+                    </div>
+                  </td>
                 </tr>
               )
             })}</tbody></table></div>}

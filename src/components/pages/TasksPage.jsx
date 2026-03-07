@@ -189,7 +189,12 @@ export default function TasksPage({ tasks, contacts, onAdd, onUpdate, onDelete, 
     <>
       <div className="ph">
         <h2>משימות</h2>
-        <button className="btn btn-p" onClick={() => setModal({ task: null })}><Ico.plus/>הוסף</button>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontSize:12, color:'var(--muted)', background:'var(--bg)', padding:'3px 10px', borderRadius:6, border:'1px solid var(--border)' }}>
+            📅 היום: {new Date().toLocaleDateString('he-IL', { day:'numeric', month:'long' })}
+          </span>
+          <button className="btn btn-p" onClick={() => setModal({ task: null })}><Ico.plus/>הוסף</button>
+        </div>
       </div>
       <div className="pb"><div className="card">
         <div className="filter-bar">
