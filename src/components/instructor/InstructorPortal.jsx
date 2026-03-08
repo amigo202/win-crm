@@ -35,56 +35,67 @@ const INP = {
 }
 const CARD = { background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 2px 8px rgba(0,0,0,.06)' }
 
-// ── Row ────────────────────────────────────────────────────────────────────
+// ── Small label style ──────────────────────────────────────────────────────
+const FLBL = { display:'block', fontSize:10, fontWeight:600, color:'#94a3b8', marginBottom:3, direction:'rtl' }
+
+// ── Row (mobile-friendly card) ─────────────────────────────────────────────
 function ReportRow({ row, onChange, onDelete, canDelete }) {
   const f = k => e => onChange(row.id, k, e.target.value)
   return (
-    <>
-      <tr style={{ borderBottom:'1px solid #f1f5f9' }}>
-        {/* Date */}
-        <td style={{ padding:'7px 6px', width:130, verticalAlign:'top' }}>
-          <input type="date" value={row.date} onChange={f('date')} style={{ ...INP }}/>
-          <div style={{ fontSize:11, color:'#f97316', fontWeight:600, marginTop:2, textAlign:'center', minHeight:16 }}>
-            {row.date ? dayName(row.date) : ''}
-          </div>
-        </td>
-        {/* Location */}
-        <td style={{ padding:'7px 6px', verticalAlign:'top' }}>
-          <input value={row.location} onChange={f('location')} placeholder='שם בית ספר / מתנ"ס'
-            style={{ ...INP }}/>
-        </td>
-        {/* Subject */}
-        <td style={{ padding:'7px 6px', verticalAlign:'top' }}>
-          <input value={row.subject} onChange={f('subject')} placeholder="מה לימדת..."
-            style={{ ...INP, minWidth:100 }}/>
-        </td>
-        {/* Hours */}
-        <td style={{ padding:'7px 6px', width:70, verticalAlign:'top' }}>
+    <div style={{
+      ...CARD, padding:'12px 14px', display:'flex', flexDirection:'column', gap:10,
+      direction:'rtl',
+    }}>
+      {/* Row 1: Date full-width */}
+      <div>
+        <label style={FLBL}>תאריך</label>
+        <input type="date" value={row.date} onChange={f('date')} style={{ ...INP, fontSize:14, padding:'10px 12px' }}/>
+        <div style={{ fontSize:11, color:'#f97316', fontWeight:600, marginTop:3, textAlign:'center', minHeight:16 }}>
+          {row.date ? dayName(row.date) : ''}
+        </div>
+      </div>
+      {/* Row 2: Location + Subject (2 columns) */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+        <div>
+          <label style={FLBL}>בית ספר / מתנ"ס</label>
+          <input value={row.location} onChange={f('location')} placeholder="שם המקום"
+            style={{ ...INP, fontSize:14, padding:'10px 12px' }}/>
+        </div>
+        <div>
+          <label style={FLBL}>מה לימדת</label>
+          <input value={row.subject} onChange={f('subject')} placeholder="נושא..."
+            style={{ ...INP, fontSize:14, padding:'10px 12px' }}/>
+        </div>
+      </div>
+      {/* Row 3: Hours + Delete */}
+      <div style={{ display:'flex', gap:10, alignItems:'flex-end' }}>
+        <div style={{ flex:1 }}>
+          <label style={FLBL}>שעות</label>
           <input type="number" value={row.hours} onChange={f('hours')}
-            placeholder="2" min=".5" step=".5" style={{ ...INP, textAlign:'center' }}/>
-        </td>
-        {/* Delete */}
-        <td style={{ padding:'7px 4px', textAlign:'center', width:30, verticalAlign:'top' }}>
-          {canDelete && (
-            <button onClick={() => onDelete(row.id)}
-              style={{ background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:14, padding:'2px 5px', borderRadius:5, lineHeight:1 }}>
-              ✕
-            </button>
-          )}
-        </td>
-      </tr>
-      {/* Notes row - spans full width */}
-      <tr style={{ borderBottom:'1px solid #e8edf3' }}>
-        <td colSpan={5} style={{ padding:'0 8px 8px' }}>
-          <input
-            value={row.notes}
-            onChange={f('notes')}
-            placeholder="הערות לשיעור זה (אופציונלי)..."
-            style={{ ...INP, fontSize:12, background:'#fff', border:'1px solid #e8edf3', color:'#64748b', paddingTop:6, paddingBottom:6 }}
-          />
-        </td>
-      </tr>
-    </>
+            placeholder="0" min="0" step=".5"
+            style={{ ...INP, textAlign:'center', fontSize:18, fontWeight:700, padding:'10px 12px', color:'#f97316' }}/>
+        </div>
+        {canDelete && (
+          <button onClick={() => onDelete(row.id)}
+            style={{
+              background:'#fee2e2', border:'none', color:'#ef4444', cursor:'pointer',
+              fontSize:13, padding:'10px 14px', borderRadius:8, fontWeight:600,
+              fontFamily:'inherit', marginBottom:0, lineHeight:1, flexShrink:0,
+            }}>
+            ✕ מחק
+          </button>
+        )}
+      </div>
+      {/* Row 4: Notes full-width */}
+      <div>
+        <input
+          value={row.notes}
+          onChange={f('notes')}
+          placeholder="הערות לשיעור זה (אופציונלי)..."
+          style={{ ...INP, fontSize:13, background:'#fff', border:'1px solid #e8edf3', color:'#64748b', padding:'10px 12px' }}
+        />
+      </div>
+    </div>
   )
 }
 
@@ -136,32 +147,17 @@ function ReportTab({ instructorId }) {
         </select>
       </div>
 
-      {/* Table */}
-      <div style={{ ...CARD, overflowX:'auto', marginBottom:12 }}>
-        <table style={{ tableLayout:'auto', width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-          <thead>
-            <tr style={{ background:'#f8fafc', borderBottom:'1px solid #e2e8f0' }}>
-              <th style={{ padding:'9px 8px', textAlign:'right', fontSize:11, fontWeight:600, color:'#64748b', width:130 }}>תאריך</th>
-              <th style={{ padding:'9px 8px', textAlign:'right', fontSize:11, fontWeight:600, color:'#64748b' }}>שם בית ספר / מתנ"ס</th>
-              <th style={{ padding:'9px 8px', textAlign:'right', fontSize:11, fontWeight:600, color:'#64748b' }}>מה לימדת</th>
-              <th style={{ padding:'9px 8px', textAlign:'center', fontSize:11, fontWeight:600, color:'#64748b', width:70 }}>שעות</th>
-              <th style={{ width:30 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(row => (
-              <ReportRow key={row.id} row={row} onChange={updateRow} onDelete={deleteRow} canDelete={rows.length > 1}/>
-            ))}
-          </tbody>
-        </table>
-        <div style={{ padding:'8px 8px', borderTop:'1px solid #f1f5f9' }}>
-          <button onClick={addRow}
-            style={{ width:'100%', background:'none', border:'1px dashed #cbd5e1', borderRadius:7, padding:'7px', color:'#64748b', cursor:'pointer', fontSize:13, fontFamily:'inherit', direction:'rtl', transition:'border-color .15s' }}
-            onMouseEnter={e => e.currentTarget.style.borderColor='#f97316'}
-            onMouseLeave={e => e.currentTarget.style.borderColor='#cbd5e1'}>
-            + הוסף שורה
-          </button>
-        </div>
+      {/* Report cards */}
+      <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:12 }}>
+        {rows.map(row => (
+          <ReportRow key={row.id} row={row} onChange={updateRow} onDelete={deleteRow} canDelete={rows.length > 1}/>
+        ))}
+        <button onClick={addRow}
+          style={{ width:'100%', background:'none', border:'2px dashed #cbd5e1', borderRadius:10, padding:'12px', color:'#64748b', cursor:'pointer', fontSize:14, fontFamily:'inherit', direction:'rtl', transition:'border-color .15s', fontWeight:600 }}
+          onMouseEnter={e => e.currentTarget.style.borderColor='#f97316'}
+          onMouseLeave={e => e.currentTarget.style.borderColor='#cbd5e1'}>
+          + הוסף שורה
+        </button>
       </div>
 
       {/* Totals + auto-save note */}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { PROGRAMS } from '../../constants'
 import { fmtShekel, fmtD, ini, avBg } from '../../utils/format'
-import { monthlyHours, monthlyPay, noSessionDays } from '../../utils/alerts'
+import { monthlyHours, monthlyPay } from '../../utils/alerts'
 import { exportInstructorsCSV } from '../../utils/csv'
 import { Ico } from '../icons/Ico'
 import { supabase } from '../../lib/supabase'
@@ -291,6 +291,30 @@ function HoursModal({ inst, onClose }) {
 export default function InstructorsPage({ instructors, contacts, onAdd, onUpdate, onDelete }) {
   const [modal, setModal] = useState(null)
   const [hoursInst, setHoursInst] = useState(null)
+  const [allReports, setAllReports] = useState([])
+
+  // Fetch all hour_reports for current month to display in the table
+  useEffect(() => {
+    const now = new Date()
+    const y = now.getFullYear(), m = now.getMonth() + 1
+    const start = `${y}-${String(m).padStart(2, '0')}-01`
+    const end = new Date(y, m, 0).toISOString().split('T')[0]
+    supabase.from('hour_reports').select('*')
+      .gte('report_date', start).lte('report_date', end)
+      .then(({ data }) => setAllReports(data || []))
+  }, [instructors])
+
+  function instReportData(instId) {
+    const reps = allReports.filter(r => r.instructor_id === instId)
+    const total = reps.reduce((s, r) => s + Number(r.hours || 0), 0)
+    const approved = reps.filter(r => r.status === 'approved')
+      .reduce((s, r) => s + Number(r.hours || 0), 0)
+    const pending = reps.filter(r => (r.status || 'pending') === 'pending').length
+    const last = reps.length
+      ? [...reps].sort((a, b) => b.report_date.localeCompare(a.report_date))[0].report_date
+      : null
+    return { total, approved, pending, last, count: reps.length }
+  }
 
   function InstructorModal({ inst }) {
     const isE = !!inst
@@ -340,7 +364,7 @@ export default function InstructorsPage({ instructors, contacts, onAdd, onUpdate
               <div className="sumbox"><div>שעות החודש: <span>{mh}</span></div><div>תשלום: <span>{fmtShekel(mp)}</span></div><div>סה"כ שיעורים: <span>{(form.sessions || []).length}</span></div></div>
               <div className="fg" style={{ marginBottom: 12 }}>
                 <div className="frow"><label>תאריך</label><input type="date" value={sf.date} onChange={sff('date')}/></div>
-                <div className="frow"><label>שעות</label><input type="number" value={sf.hours} onChange={sff('hours')} placeholder="2" min=".5" step=".5"/></div>
+                <div className="frow"><label>שעות</label><input type="number" value={sf.hours} onChange={sff('hours')} placeholder="0" min="0" step=".5"/></div>
                 <div className="frow"><label>תוכנית</label><select value={sf.program} onChange={sff('program')}>{PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
                 <div className="frow"><label>איש קשר</label><select value={sf.contactId} onChange={sff('contactId')}><option value="">ללא</option>{contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                 <div className="frow full"><label>הערות</label><input value={sf.notes} onChange={sff('notes')} placeholder="הערות..."/></div>
@@ -377,17 +401,29 @@ export default function InstructorsPage({ instructors, contacts, onAdd, onUpdate
       <div className="pb"><div className="card">
         {!instructors.length
           ? <div className="empty"><div className="empty-ico">👨‍🏫</div><p>אין מדריכים עדיין. לחץ "הוסף מדריך"</p></div>
-          : <div className="tbl-wrap"><table><thead><tr><th>שם</th><th>טלפון</th><th>תוכניות</th><th>שעות חודש</th><th>תשלום חודש</th><th>סטטוס</th><th></th></tr></thead>
+          : <div className="tbl-wrap"><table><thead><tr><th>שם</th><th>טלפון</th><th>תוכניות</th><th>שעות דווחו</th><th>תשלום (מאושר)</th><th>סטטוס</th><th>דיווח אחרון</th><th></th></tr></thead>
             <tbody>{instructors.map(i => {
-              const mh = monthlyHours(i), mp = monthlyPay(i), alert = noSessionDays(i, 14)
+              const rd = instReportData(i.id)
+              const pay = rd.approved * Number(i.hourlyRate || 0)
               return (
                 <tr key={i.id}>
                   <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div className="av" style={{ width: 30, height: 30, fontSize: 11, background: avBg(i.name) }}>{ini(i.name)}</div><div><div style={{ fontWeight: 600 }}>{i.name}</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{i.email || ''}</div></div></div></td>
                   <td>{i.phone || '–'}</td>
                   <td><div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>{(i.programs || []).map((p, j) => <span key={j} className="badge b-teal" style={{ fontSize: 11, padding: '1px 6px' }}>{p}</span>)}</div></td>
-                  <td><strong>{mh}</strong>ש׳</td>
-                  <td><strong style={{ color: 'var(--accent)' }}>{fmtShekel(mp)}</strong></td>
-                  <td><span className={`badge ${alert ? 'b-red' : 'b-green'}`}>{alert ? 'לא דיווח' : 'פעיל'}</span></td>
+                  <td>
+                    <strong>{rd.total}</strong>ש׳
+                    {rd.pending > 0 && <span style={{ background: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: 10, fontSize: 10, fontWeight: 600, marginRight: 4 }}>⏳ {rd.pending}</span>}
+                  </td>
+                  <td><strong style={{ color: 'var(--accent)' }}>{fmtShekel(pay)}</strong>{rd.approved > 0 && <div style={{ fontSize: 10, color: 'var(--muted)' }}>{rd.approved}ש׳ מאושרות</div>}</td>
+                  <td>
+                    {rd.count === 0
+                      ? <span className="badge b-red">לא דיווח</span>
+                      : rd.pending > 0
+                        ? <span className="badge b-orange" style={{ background: '#fef3c7', color: '#92400e' }}>ממתין ({rd.pending})</span>
+                        : <span className="badge b-green">דיווח ✓</span>
+                    }
+                  </td>
+                  <td style={{ fontSize: 12, color: 'var(--muted)' }}>{rd.last || '–'}</td>
                   <td><div className="ac-cell">
                     <button className="icon-btn" title="דוח שעות" onClick={() => setHoursInst(i)} style={{ fontSize: 13 }}>📊</button>
                     <button className="icon-btn" onClick={() => setModal({ inst: i })}><Ico.edit/></button>
