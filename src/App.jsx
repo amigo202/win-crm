@@ -20,6 +20,8 @@ import StudentsPage         from './components/pages/StudentsPage'
 import SalesPage            from './components/pages/SalesPage'
 import FinancialPage        from './components/pages/FinancialPage'
 import ClassesPage          from './components/pages/ClassesPage'
+import AutomationsPage      from './components/pages/AutomationsPage'
+import { useWorkflows }     from './hooks/useWorkflows'
 import AuthScreen           from './components/AuthScreen'
 import AgentPanel           from './components/agent/AgentPanel'
 import InstructorPortal     from './components/instructor/InstructorPortal'
@@ -59,6 +61,7 @@ export default function App() {
   const cls = useClasses()
   const act = useActivities()
   const agent = useAgent()
+  const wf    = useWorkflows()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
@@ -85,7 +88,7 @@ export default function App() {
   }, [agent.messages])
 
   const loadAll = () => {
-    c.load(); d.load(); t.load(); i.load(); s.load(); le.load(); fin.load(); cls.load(); act.load()
+    c.load(); d.load(); t.load(); i.load(); s.load(); le.load(); fin.load(); cls.load(); act.load(); wf.load()
   }
 
   useEffect(() => {
@@ -177,6 +180,7 @@ export default function App() {
     students:    <StudentsPage students={s.students} contacts={c.contacts} onAdd={addStudent} onUpdate={updateStudent} onDelete={deleteStudent}/>,
     classes:     <ClassesPage classes={cls.classes} instructors={i.instructors} contacts={c.contacts} onAdd={cls.addClass} onUpdate={cls.editClass} onDelete={cls.removeClass} onDuplicate={cls.duplicateClass} onReload={cls.load} finance={fin}/>,
     financial:   <FinancialPage fin={fin} instructors={i.instructors} contacts={c.contacts} activities={act.activities} classes={cls.classes} onAddActivity={act.addActivity} onUpdateActivity={act.editActivity} onDeleteActivity={act.removeActivity} onReloadActivities={act.load}/>,
+    automations: <AutomationsPage rules={wf.rules} onAdd={wf.addRule} onUpdate={wf.editRule} onDelete={wf.removeRule} onToggle={wf.toggle} onReload={wf.load} tasks={t.tasks} classes={cls.classes}/>,
   }
 
   return (

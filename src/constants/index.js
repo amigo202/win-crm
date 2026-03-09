@@ -74,3 +74,63 @@ export const ACTIVITY_TYPES = [
   { id: 'task_created', label: 'משימה נוצרה', icon: '📋' },
   { id: 'lead_created', label: 'ליד נכנס',    icon: '🎯' },
 ]
+
+// ── Workflow / Automations ───────────────────────────────────────────
+export const WORKFLOW_TRIGGERS = [
+  { id: 'lead_created',        label: 'ליד חדש נוצר',           icon: '🎯' },
+  { id: 'deal_stage_changed',  label: 'שלב עסקה השתנה',         icon: '🔄' },
+  { id: 'payment_overdue',     label: 'תשלום באיחור',           icon: '💰' },
+  { id: 'task_overdue',        label: 'משימה באיחור',           icon: '⏰' },
+  { id: 'class_created',       label: 'חוג חדש נוצר',           icon: '🏠' },
+  { id: 'student_absent_2x',   label: 'תלמיד נעדר 2+ פעמים',   icon: '⚠️' },
+  { id: 'contact_inactive_7d', label: 'לקוח לא פעיל 7+ ימים',  icon: '😴' },
+]
+
+export const WORKFLOW_ACTIONS = [
+  { id: 'create_task',            label: 'צור משימה',          icon: '📋' },
+  { id: 'send_whatsapp_template', label: 'שלח WhatsApp',       icon: '💬' },
+  { id: 'send_email',             label: 'שלח אימייל',         icon: '✉️' },
+  { id: 'update_status',          label: 'עדכן סטטוס',         icon: '🔄' },
+  { id: 'create_activity_log',    label: 'רשום פעילות',         icon: '📝' },
+  { id: 'show_notification',      label: 'הצג התראה',           icon: '🔔' },
+]
+
+export const CONDITION_OPERATORS = [
+  { id: '==',       label: 'שווה ל' },
+  { id: '!=',       label: 'שונה מ' },
+  { id: '>',        label: 'גדול מ' },
+  { id: '<',        label: 'קטן מ' },
+  { id: '>=',       label: 'גדול או שווה' },
+  { id: 'contains', label: 'מכיל' },
+]
+
+export const CONDITION_FIELDS = [
+  { id: 'lead_stage', label: 'שלב ליד' },
+  { id: 'status',     label: 'סטטוס' },
+  { id: 'source',     label: 'מקור' },
+  { id: 'value',      label: 'סכום' },
+  { id: 'priority',   label: 'עדיפות' },
+  { id: 'type',       label: 'סוג' },
+  { id: 'city',       label: 'עיר' },
+  { id: 'program',    label: 'תוכנית' },
+  { id: 'at_risk',    label: 'בסיכון' },
+]
+
+// ── Recurrence ───────────────────────────────────────────────────────
+export const RECURRENCE_TYPES = [
+  { id: '',        label: 'ללא חזרה' },
+  { id: 'daily',   label: 'יומי' },
+  { id: 'weekly',  label: 'שבועי' },
+  { id: 'monthly', label: 'חודשי' },
+  { id: 'custom',  label: 'מותאם אישית' },
+]
+
+export const WEEK_DAYS = [
+  { id: 0, label: 'א׳' },
+  { id: 1, label: 'ב׳' },
+  { id: 2, label: 'ג׳' },
+  { id: 3, label: 'ד׳' },
+  { id: 4, label: 'ה׳' },
+  { id: 5, label: 'ו׳' },
+  { id: 6, label: 'ש׳' },
+]
