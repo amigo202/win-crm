@@ -21,7 +21,9 @@ import SalesPage            from './components/pages/SalesPage'
 import FinancialPage        from './components/pages/FinancialPage'
 import ClassesPage          from './components/pages/ClassesPage'
 import AutomationsPage      from './components/pages/AutomationsPage'
+import InvoicesPage         from './components/pages/InvoicesPage'
 import { useWorkflows }     from './hooks/useWorkflows'
+import { useInvoices }      from './hooks/useInvoices'
 import AuthScreen           from './components/AuthScreen'
 import AgentPanel           from './components/agent/AgentPanel'
 import InstructorPortal     from './components/instructor/InstructorPortal'
@@ -62,6 +64,7 @@ export default function App() {
   const act = useActivities()
   const agent = useAgent()
   const wf    = useWorkflows()
+  const inv   = useInvoices()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
@@ -88,7 +91,7 @@ export default function App() {
   }, [agent.messages])
 
   const loadAll = () => {
-    c.load(); d.load(); t.load(); i.load(); s.load(); le.load(); fin.load(); cls.load(); act.load(); wf.load()
+    c.load(); d.load(); t.load(); i.load(); s.load(); le.load(); fin.load(); cls.load(); act.load(); wf.load(); inv.load()
   }
 
   useEffect(() => {
@@ -103,7 +106,7 @@ export default function App() {
       else {
         c.setContacts([]); d.setDeals([]); t.setTasks([])
         i.setInstructors([]); s.setStudents([]); le.setLeads([])
-        fin.setPayments([]); fin.setSalaries([]); cls.setClasses([]); act.setActivities([])
+        fin.setPayments([]); fin.setSalaries([]); cls.setClasses([]); act.setActivities([]); inv.setInvoices([])
         setLoading(false)
       }
     })
@@ -181,6 +184,7 @@ export default function App() {
     classes:     <ClassesPage classes={cls.classes} instructors={i.instructors} contacts={c.contacts} onAdd={cls.addClass} onUpdate={cls.editClass} onDelete={cls.removeClass} onDuplicate={cls.duplicateClass} onReload={cls.load} finance={fin}/>,
     financial:   <FinancialPage fin={fin} instructors={i.instructors} contacts={c.contacts} activities={act.activities} classes={cls.classes} onAddActivity={act.addActivity} onUpdateActivity={act.editActivity} onDeleteActivity={act.removeActivity} onReloadActivities={act.load}/>,
     automations: <AutomationsPage rules={wf.rules} onAdd={wf.addRule} onUpdate={wf.editRule} onDelete={wf.removeRule} onToggle={wf.toggle} onReload={wf.load} tasks={t.tasks} classes={cls.classes}/>,
+    invoices:    <InvoicesPage invoiceStore={inv}/>,
   }
 
   return (
@@ -213,6 +217,9 @@ export default function App() {
         deals={d.deals}
         leads={le.leads}
         students={s.students}
+        classes={cls.classes}
+        finance={fin}
+        activities={act.activities}
         agent={agent}
       />
       <ToastContainer/>
