@@ -10,13 +10,13 @@ export default function CalendarSettings({ tasks, classes }) {
     checkConnection().then(r => setConnected(r.connected))
   }, [])
 
-  const handleConnect = () => {
-    const url = getAuthUrl()
-    if (!url) {
-      setMsg({ type: 'err', text: 'VITE_GOOGLE_CLIENT_ID לא הוגדר בקובץ .env.local' })
-      return
+  const handleConnect = async () => {
+    try {
+      const url = await getAuthUrl()
+      window.location.href = url
+    } catch (e) {
+      setMsg({ type: 'err', text: 'שגיאה בחיבור Google: ' + e.message })
     }
-    window.location.href = url
   }
 
   const handleDisconnect = async () => {

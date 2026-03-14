@@ -410,8 +410,12 @@ export default function InvoicesPage({ invoiceStore }) {
 
   const handleScan = async () => {
     if (!gmailConnected) {
-      const url = getGmailAuthUrl()
-      if (url) window.location.href = url
+      try {
+        const url = await getGmailAuthUrl()
+        window.location.href = url
+      } catch (e) {
+        toast_err('שגיאה בחיבור Gmail: ' + (e.message || e))
+      }
       return
     }
     try {
@@ -423,8 +427,10 @@ export default function InvoicesPage({ invoiceStore }) {
       }
     } catch (e) {
       if (e.message?.includes('needs_auth') || e.message?.includes('not connected')) {
-        const url = getGmailAuthUrl()
-        if (url) window.location.href = url
+        try {
+          const url = await getGmailAuthUrl()
+          window.location.href = url
+        } catch { toast_err('שגיאה בחיבור Gmail') }
       } else {
         toast_err('שגיאה בסריקת מייל: ' + (e.message || e))
       }

@@ -175,6 +175,27 @@ serve(async (req) => {
         return jsonRes({ success: true, synced })
       }
 
+      case 'get_auth_url': {
+        if (!GOOGLE_CLIENT_ID()) {
+          return jsonRes({ error: 'Google OAuth credentials not configured on server' }, 500)
+        }
+        const { redirectUri, state: oauthState } = body
+        const scopes = [
+          'https://www.googleapis.com/auth/calendar',
+          'https://www.googleapis.com/auth/gmail.readonly',
+        ].join(' ')
+        const params = new URLSearchParams({
+          client_id:     GOOGLE_CLIENT_ID()!,
+          redirect_uri:  redirectUri,
+          response_type: 'code',
+          scope:         scopes,
+          access_type:   'offline',
+          prompt:        'consent',
+          state:         oauthState || 'google_calendar_connect',
+        })
+        return jsonRes({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` })
+      }
+
       case 'check_connection': {
         const { data } = await supabase
           .from('google_tokens').select('id, expires_at').eq('user_id', userId).maybeSingle()
