@@ -37,10 +37,16 @@ CREATE TABLE IF NOT EXISTS business_activities (
 
 ALTER TABLE business_activities ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "business_activities_owner" ON business_activities
-  FOR ALL TO authenticated
-  USING (owner_id = auth.uid())
-  WITH CHECK (owner_id = auth.uid());
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'business_activities' AND policyname = 'business_activities_owner'
+  ) THEN
+    CREATE POLICY "business_activities_owner" ON business_activities
+      FOR ALL TO authenticated
+      USING (owner_id = auth.uid())
+      WITH CHECK (owner_id = auth.uid());
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_biz_act_year_month ON business_activities(year, month);
 CREATE INDEX IF NOT EXISTS idx_biz_act_type ON business_activities(activity_type);

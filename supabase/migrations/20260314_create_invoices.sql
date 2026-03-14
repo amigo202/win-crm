@@ -39,13 +39,19 @@ CREATE TABLE IF NOT EXISTS invoices (
 -- Row Level Security
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "invoices_owner" ON invoices
-  USING (owner_id = auth.uid())
-  WITH CHECK (owner_id = auth.uid());
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'invoices' AND policyname = 'invoices_owner'
+  ) THEN
+    CREATE POLICY "invoices_owner" ON invoices
+      USING (owner_id = auth.uid())
+      WITH CHECK (owner_id = auth.uid());
+  END IF;
+END $$;
 
 -- Indexes for common queries
-CREATE INDEX idx_invoices_owner    ON invoices(owner_id);
-CREATE INDEX idx_invoices_year_month ON invoices(year, month);
-CREATE INDEX idx_invoices_category ON invoices(category);
-CREATE INDEX idx_invoices_status   ON invoices(status);
-CREATE INDEX idx_invoices_source   ON invoices(source);
+CREATE INDEX IF NOT EXISTS idx_invoices_owner      ON invoices(owner_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_year_month ON invoices(year, month);
+CREATE INDEX IF NOT EXISTS idx_invoices_category   ON invoices(category);
+CREATE INDEX IF NOT EXISTS idx_invoices_status     ON invoices(status);
+CREATE INDEX IF NOT EXISTS idx_invoices_source     ON invoices(source);
