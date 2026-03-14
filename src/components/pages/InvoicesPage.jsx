@@ -51,7 +51,7 @@ function InvoiceModal({ invoice, onSave, onClose }) {
   }
 
   const INP = {
-    background: 'var(--input-bg, #1e293b)', border: '1px solid var(--border, #334155)',
+    background: 'var(--surface)', border: '1px solid var(--border, #334155)',
     borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 14,
     width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', direction: 'rtl',
   }
@@ -60,7 +60,7 @@ function InvoiceModal({ invoice, onSave, onClose }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'var(--card)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', direction: 'rtl' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', direction: 'rtl' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ margin: 0, fontSize: 18 }}>{invoice?.id ? 'עריכת חשבונית' : 'חשבונית חדשה'}</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
@@ -68,7 +68,7 @@ function InvoiceModal({ invoice, onSave, onClose }) {
 
         {/* Image preview */}
         {form.imageUrl && (
-          <div style={{ marginBottom: 16, borderRadius: 10, overflow: 'hidden', maxHeight: 200, textAlign: 'center', background: '#0f172a' }}>
+          <div style={{ marginBottom: 16, borderRadius: 10, overflow: 'hidden', maxHeight: 200, textAlign: 'center', background: 'var(--bg)' }}>
             <img src={form.imageUrl} alt="חשבונית" style={{ maxWidth: '100%', maxHeight: 200, objectFit: 'contain' }}
               onError={e => { e.target.style.display = 'none' }}/>
           </div>
@@ -102,7 +102,7 @@ function InvoiceModal({ invoice, onSave, onClose }) {
 
           <div style={{ ...GRP, gridColumn: '1/-1' }}>
             <label style={LBL}>סה"כ לתשלום ₪ *</label>
-            <input style={{ ...INP, background: '#1a2744', fontWeight: 700, fontSize: 16 }} type="number" value={form.totalAmount} onChange={e => set('totalAmount', e.target.value)} placeholder="117"/>
+            <input style={{ ...INP, border: '2px solid var(--accent)', fontWeight: 700, fontSize: 16 }} type="number" value={form.totalAmount} onChange={e => set('totalAmount', e.target.value)} placeholder="117"/>
           </div>
 
           <div style={{ ...GRP, gridColumn: '1/-1' }}>
@@ -152,7 +152,7 @@ function UploadModal({ onFile, onCamera, onClose, processing }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'var(--card)', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400, direction: 'rtl', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400, direction: 'rtl', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
         <h3 style={{ margin: '0 0 8px', fontSize: 18 }}>הוסף חשבונית</h3>
         <p style={{ color: 'var(--muted)', fontSize: 13, margin: '0 0 24px' }}>העלה תמונה, PDF, או צלם עם המצלמה</p>
 
@@ -207,7 +207,7 @@ function ViewModal({ invoice, onClose, onEdit, onVerify }) {
   const color = CATEGORY_COLORS[invoice.category] || '#94a3b8'
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'var(--card)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', direction: 'rtl' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', direction: 'rtl' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 18 }}>{invoice.vendor || 'ספק לא ידוע'}</h3>
@@ -217,7 +217,7 @@ function ViewModal({ invoice, onClose, onEdit, onVerify }) {
         </div>
 
         {invoice.imageUrl && (
-          <div style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 16, textAlign: 'center', background: '#0f172a', maxHeight: 280 }}>
+          <div style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 16, textAlign: 'center', background: 'var(--bg)', maxHeight: 280 }}>
             <img src={invoice.imageUrl} alt="חשבונית" style={{ maxWidth: '100%', maxHeight: 280, objectFit: 'contain' }}
               onError={e => { e.target.style.display = 'none' }}/>
           </div>
@@ -238,8 +238,8 @@ function ViewModal({ invoice, onClose, onEdit, onVerify }) {
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
           <span style={{ background: color + '22', color, padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{invoice.category}</span>
-          <span style={{ background: '#1e293b', color: 'var(--muted)', padding: '3px 10px', borderRadius: 20, fontSize: 12 }}>{srcLabel(invoice.source)}</span>
-          {invoice.month && <span style={{ background: '#1e293b', color: 'var(--muted)', padding: '3px 10px', borderRadius: 20, fontSize: 12 }}>{MONTHS_HE[invoice.month - 1]} {invoice.year}</span>}
+          <span style={{ background: 'var(--bg)', color: 'var(--muted)', padding: '3px 10px', borderRadius: 20, fontSize: 12 }}>{srcLabel(invoice.source)}</span>
+          {invoice.month && <span style={{ background: 'var(--bg)', color: 'var(--muted)', padding: '3px 10px', borderRadius: 20, fontSize: 12 }}>{MONTHS_HE[invoice.month - 1]} {invoice.year}</span>}
           <span style={{ background: invoice.status === 'verified' ? '#10b98122' : '#f9731622', color: invoice.status === 'verified' ? '#10b981' : '#f97316', padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
             {invoice.status === 'verified' ? '✓ אושר' : '⏳ ממתין'}
           </span>
@@ -450,19 +450,19 @@ export default function InvoicesPage({ invoiceStore }) {
     header:  { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginBottom: 20, justifyContent: 'space-between' },
     h1:      { margin: 0, fontSize: 22, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 },
     kpis:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 },
-    kpi:     { background: 'var(--card)', borderRadius: 12, padding: '14px 16px', borderRight: '4px solid var(--accent)' },
+    kpi:     { background: 'var(--surface)', borderRadius: 12, padding: '14px 16px', borderRight: '4px solid var(--accent)' },
     kpiVal:  { fontSize: 20, fontWeight: 700, margin: '4px 0' },
     kpiLbl:  { fontSize: 12, color: 'var(--muted)' },
     tabs:    { display: 'flex', gap: 4, background: 'var(--surface)', borderRadius: 10, padding: 4, marginBottom: 20, overflowX: 'auto', flexWrap: 'nowrap' },
     tab:     active => ({ padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', background: active ? '#f97316' : 'transparent', color: active ? '#fff' : 'var(--muted)', transition: 'all .2s', fontFamily: 'inherit' }),
     filters: { display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, alignItems: 'center' },
-    sel:     { background: 'var(--input-bg, #1e293b)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', direction: 'rtl', cursor: 'pointer' },
-    inp:     { background: 'var(--input-bg, #1e293b)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', direction: 'rtl', minWidth: 180 },
+    sel:     { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', direction: 'rtl', cursor: 'pointer' },
+    inp:     { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', direction: 'rtl', minWidth: 180 },
     table:   { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
     th:      { textAlign: 'right', padding: '8px 10px', color: 'var(--muted)', fontWeight: 600, fontSize: 12, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' },
-    td:      { padding: '10px', borderBottom: '1px solid var(--border, #1e293b)', verticalAlign: 'middle' },
+    td:      { padding: '10px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' },
     btn:     (color = '#f97316') => ({ padding: '8px 18px', borderRadius: 9, border: 'none', background: color, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', fontFamily: 'inherit' }),
-    card:    { background: 'var(--card)', borderRadius: 12, padding: 16 },
+    card:    { background: 'var(--surface)', borderRadius: 12, padding: 16 },
     empty:   { textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontSize: 14 },
   }
 
@@ -576,7 +576,7 @@ export default function InvoicesPage({ invoiceStore }) {
                         {inv.imageUrl
                           ? <img src={inv.imageUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }} onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex' }}/>
                           : null}
-                        <div style={{ width: 36, height: 36, borderRadius: 6, background: '#1e293b', display: inv.imageUrl ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📄</div>
+                        <div style={{ width: 36, height: 36, borderRadius: 6, background: 'var(--bg)', border: '1px solid var(--border)', display: inv.imageUrl ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📄</div>
                       </td>
                       <td style={S.td}>
                         <div style={{ fontWeight: 600, fontSize: 13 }}>{inv.vendor || '—'}</div>
@@ -632,7 +632,7 @@ export default function InvoicesPage({ invoiceStore }) {
                         <span style={{ color: col, fontWeight: 600 }}>{cat}</span>
                         <span style={{ color: 'var(--muted)' }}>{fmtShekel(total)} ({pct.toFixed(1)}%)</span>
                       </div>
-                      <div style={{ height: 8, background: '#1e293b', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
                         <div style={{ width: `${pct}%`, height: '100%', background: col, borderRadius: 4, transition: 'width .3s' }}/>
                       </div>
                     </div>
@@ -681,7 +681,7 @@ export default function InvoicesPage({ invoiceStore }) {
                         <div style={{ fontSize: 11, color: 'var(--muted)' }}>{count} חשבוניות</div>
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ height: 10, background: '#1e293b', borderRadius: 5, overflow: 'hidden' }}>
+                        <div style={{ height: 10, background: 'var(--border)', borderRadius: 5, overflow: 'hidden' }}>
                           <div style={{ width: `${pct}%`, height: '100%', background: '#f97316', borderRadius: 5, transition: 'width .3s', minWidth: pct > 0 ? 4 : 0 }}/>
                         </div>
                       </div>
@@ -778,7 +778,7 @@ export default function InvoicesPage({ invoiceStore }) {
                       <td style={{ ...S.td, fontWeight: 700 }}>{fmtShekel(d.total)}</td>
                     </tr>
                   ))}
-                  <tr style={{ background: '#0f172a', fontWeight: 700 }}>
+                  <tr style={{ background: 'var(--bg)', fontWeight: 700 }}>
                     <td style={S.td}>סה"כ</td>
                     <td style={S.td}>{expList.length}</td>
                     <td style={S.td}>{fmtShekel(expPreVAT)}</td>
