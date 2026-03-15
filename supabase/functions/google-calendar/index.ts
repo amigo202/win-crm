@@ -8,6 +8,8 @@ const corsHeaders = {
 
 const GOOGLE_CLIENT_ID     = () => Deno.env.get('GOOGLE_CLIENT_ID')
 const GOOGLE_CLIENT_SECRET = () => Deno.env.get('GOOGLE_CLIENT_SECRET')
+// Use server-side redirect URI (must match Google Cloud Console + secret)
+const GOOGLE_REDIRECT_URI  = () => Deno.env.get('GOOGLE_REDIRECT_URI')
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -32,7 +34,9 @@ serve(async (req) => {
 
     switch (action) {
       case 'exchange_code': {
-        const { code, redirectUri } = body
+        const { code, redirectUri: clientRedirectUri } = body
+        // Use same redirect URI that was used in get_auth_url (must match exactly)
+        const redirectUri = GOOGLE_REDIRECT_URI() || clientRedirectUri
         if (!GOOGLE_CLIENT_ID() || !GOOGLE_CLIENT_SECRET()) {
           return jsonRes({ error: 'Google OAuth credentials not configured' }, 500)
         }
@@ -179,7 +183,9 @@ serve(async (req) => {
         if (!GOOGLE_CLIENT_ID()) {
           return jsonRes({ error: 'Google OAuth credentials not configured on server' }, 500)
         }
-        const { redirectUri, state: oauthState } = body
+        const { redirectUri: clientRedirectUri, state: oauthState } = body
+        // Prefer server-side GOOGLE_REDIRECT_URI secret; fallback to client-provided
+        const redirectUri = GOOGLE_REDIRECT_URI() || clientRedirectUri
         const scopes = [
           'https://www.googleapis.com/auth/calendar',
           'https://www.googleapis.com/auth/gmail.readonly',
