@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { INVOICE_CATEGORIES, CATEGORY_COLORS } from '../../services/invoicesService'
-import { getGmailAuthUrl, exchangeCode, checkConnection } from '../../services/googleCalendarService'
+import { getGmailAuthUrl, exchangeCode } from '../../services/googleCalendarService'
 import { toast, toast_ok, toast_err } from '../Toast'
 
 const MONTHS_HE = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר']
@@ -282,17 +282,12 @@ export default function InvoicesPage({ invoiceStore }) {
   const [editingInv,  setEditingInv]  = useState(null)   // invoice being edited
   const [draftInv,    setDraftInv]    = useState(null)   // AI-extracted draft
   const [viewInv,     setViewInv]     = useState(null)   // invoice being viewed
-  const [gmailConnected, setGmailConnected] = useState(null)
+  const [gmailConnected, setGmailConnected] = useState(false)
   const [exportFrom,  setExportFrom]  = useState(`${now.getFullYear()}-01-01`)
   const [exportTo,    setExportTo]    = useState(`${now.getFullYear()}-12-31`)
 
   // Load on mount
   useEffect(() => { load(year) }, [year])
-
-  // Check Gmail connection (checkConnection guards session internally)
-  useEffect(() => {
-    checkConnection().then(r => setGmailConnected(!!r?.connected))
-  }, [])
 
   // Handle Google OAuth callback
   useEffect(() => {
