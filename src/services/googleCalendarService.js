@@ -30,6 +30,10 @@ export async function exchangeCode(code) {
 
 // ── Connection Status ─────────────────────────────────────────────
 export async function checkConnection() {
+  // Don't call Edge Function without an active user session — avoids 401
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return { connected: false }
+
   const { data, error } = await supabase.functions.invoke('google-calendar', {
     body: { action: 'check_connection' }
   })

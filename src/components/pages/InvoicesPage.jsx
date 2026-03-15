@@ -2,7 +2,6 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { INVOICE_CATEGORIES, CATEGORY_COLORS } from '../../services/invoicesService'
 import { getGmailAuthUrl, exchangeCode, checkConnection } from '../../services/googleCalendarService'
 import { toast, toast_ok, toast_err } from '../Toast'
-import { supabase } from '../../lib/supabase'
 
 const MONTHS_HE = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר']
 
@@ -290,12 +289,9 @@ export default function InvoicesPage({ invoiceStore }) {
   // Load on mount
   useEffect(() => { load(year) }, [year])
 
-  // Check Gmail connection — only after Supabase session is ready
+  // Check Gmail connection (checkConnection guards session internally)
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) { setGmailConnected(false); return }
-      checkConnection().then(r => setGmailConnected(!!r?.connected))
-    })
+    checkConnection().then(r => setGmailConnected(!!r?.connected))
   }, [])
 
   // Handle Google OAuth callback
