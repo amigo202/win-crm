@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { WORKFLOW_TRIGGERS, WORKFLOW_ACTIONS } from '../../constants'
 import { Ico } from '../icons/Ico'
 import WorkflowRuleModal from '../modals/WorkflowRuleModal'
-import CalendarSettings from '../settings/CalendarSettings'
 import NotificationSettings from '../settings/NotificationSettings'
 import { fetchSchedules, createSchedule, updateSchedule, deleteSchedule, triggerReport } from '../../services/reportScheduleService'
 
@@ -226,7 +225,7 @@ const TABS = [
 ]
 
 /* ── Main page ───────────────────────────────────────────── */
-export default function AutomationsPage({ rules, onAdd, onUpdate, onDelete, onToggle, onReload, tasks, classes }) {
+export default function AutomationsPage({ rules, onAdd, onUpdate, onDelete, onToggle, onReload }) {
   const [modal, setModal] = useState(null)
   const [tab, setTab]     = useState('rules')
 
@@ -312,7 +311,6 @@ export default function AutomationsPage({ rules, onAdd, onUpdate, onDelete, onTo
         {tab === 'settings' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <NotificationSettings/>
-            <CalendarSettings tasks={tasks} classes={classes}/>
             <ReportScheduleSettings/>
           </div>
         )}

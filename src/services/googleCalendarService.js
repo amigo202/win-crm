@@ -49,19 +49,3 @@ export async function disconnect() {
   return data
 }
 
-// ── Sync ──────────────────────────────────────────────────────────
-export async function syncTasks(tasks) {
-  const { data, error } = await supabase.functions.invoke('google-calendar', {
-    body: { action: 'sync_tasks', tasks }
-  })
-  if (error) throw error
-  return data
-}
-
-export async function syncClasses(classes) {
-  const { data, error } = await supabase.functions.invoke('google-calendar', {
-    body: { action: 'sync_classes', classes }
-  })
-  if (error) throw error
-  return data
-}
