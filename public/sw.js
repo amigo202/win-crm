@@ -1,5 +1,5 @@
 // WIN CRM Service Worker — offline shell caching
-const CACHE = 'win-crm-v1'
+const CACHE = 'win-crm-v3'
 const SHELL = ['/', '/index.html']
 
 self.addEventListener('install', e => {
