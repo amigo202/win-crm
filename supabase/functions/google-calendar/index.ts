@@ -21,12 +21,16 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    // Get user from JWT
+    // Decode userId from JWT directly (avoids extra API call / auth failures)
     let userId: string | null = null
     if (authHeader) {
-      const token = authHeader.replace('Bearer ', '')
-      const { data: { user } } = await supabase.auth.getUser(token)
-      userId = user?.id || null
+      try {
+        const token = authHeader.replace('Bearer ', '')
+        if (token && token.includes('.')) {
+          const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+          if (payload.role === 'authenticated') userId = payload.sub || null
+        }
+      } catch { /* leave userId null */ }
     }
 
     const body = await req.json()

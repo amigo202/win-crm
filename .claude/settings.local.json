@@ -24,7 +24,29 @@
       "Bash(ls:*)",
       "Bash(git -c http.sslVerify=false push)",
       "mcp__Claude_Preview__preview_start",
-      "Bash(node node_modules/vite/bin/vite.js build --logLevel error)"
+      "Bash(node node_modules/vite/bin/vite.js build --logLevel error)",
+      "Bash(npx vite build)",
+      "Bash(npx netlify status)",
+      "Bash(npx netlify-cli status)",
+      "Bash(npx supabase:*)",
+      "Read(//c/Users/User/**)",
+      "Read(//root/**)",
+      "Read(//c//**)",
+      "Read(//c/Users/User/crm-app/$APPDATA/supabase/**)",
+      "Read(//c/Users/User/crm-app/$USERPROFILE/.supabase/**)",
+      "Bash(ANON_KEY=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9reHV1Y2h6YW1nb2hyZ213Z2JlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2NDM0NDgsImV4cCI6MjA4NzIxOTQ0OH0.kb1sbCnGfYTgybiTrY7zKpaZVxG-36TMDosBLBN2YYE\")",
+      "Bash(curl -s \"https://okxuuchzamgohrgmwgbe.supabase.co/storage/v1/bucket\" -H \"Authorization: Bearer $ANON_KEY\" -H \"apikey: $ANON_KEY\")",
+      "Bash(/c/Users/User/crm-app/supabase/migrations/20260316_create_workflow_rules.sql:*)",
+      "Bash(for fn:*)",
+      "Bash(do echo:*)",
+      "Bash(grep -n import.*CalendarSettings /c/Users/User/crm-app/src/components/pages/AutomationsPage.jsx)",
+      "Bash(grep -n \"from.*googleCalendarService\" /c/Users/User/crm-app/src/components/pages/*.jsx)",
+      "Bash(grep -n \"import.*CalendarSettings\" /c/Users/User/crm-app/src/components/pages/*.jsx)",
+      "Bash(grep -n \"calendar_events\" /c/Users/User/crm-app/supabase/migrations/*.sql)",
+      "Bash(grep -r calendar_events /c/Users/User/crm-app --include=*.sql --include=*.ts)",
+      "Bash(npm install:*)",
+      "Bash(npx netlify:*)",
+      "Bash(npx netlify-cli:*)"
     ]
   }
 }

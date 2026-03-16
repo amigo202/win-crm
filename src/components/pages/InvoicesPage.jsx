@@ -263,13 +263,147 @@ function ViewModal({ invoice, onClose, onEdit, onVerify }) {
   )
 }
 
+// ── Batch ZIP Import Modal ─────────────────────────────────────────
+function BatchImportModal({ results, onSave, onClose }) {
+  const [items, setItems] = useState(() =>
+    results.map((r, i) => ({ ...r, _key: i, editing: false }))
+  )
+  const [editIdx, setEditIdx] = useState(null)
+
+  const toggle = (i) => setItems(prev => prev.map((x, j) => j === i ? { ...x, selected: !x.selected } : x))
+
+  const selectedItems = items.filter(x => x.selected && x.extracted)
+  const fmtAmt = v => v ? `₪${Number(v).toLocaleString('he-IL')}` : '—'
+
+  // Inline editing of a single result
+  const [editForm, setEditForm] = useState(null)
+  const openEdit = (i) => {
+    const ext = items[i].extracted || {}
+    setEditForm({
+      idx: i,
+      vendor:        ext.vendor         || '',
+      invoiceNumber: ext.invoice_number || '',
+      invoiceDate:   ext.invoice_date   || new Date().toISOString().split('T')[0],
+      amount:        ext.amount         || '',
+      vatAmount:     ext.vat_amount     || '',
+      totalAmount:   ext.total_amount   || '',
+      category:      ext.category       || 'אחר',
+      description:   ext.description   || '',
+    })
+  }
+  const saveEdit = () => {
+    if (!editForm) return
+    setItems(prev => prev.map((x, j) => {
+      if (j !== editForm.idx) return x
+      return {
+        ...x,
+        selected: true,
+        extracted: {
+          vendor:          editForm.vendor,
+          invoice_number:  editForm.invoiceNumber,
+          invoice_date:    editForm.invoiceDate,
+          amount:          Number(editForm.amount)      || null,
+          vat_amount:      Number(editForm.vatAmount)   || null,
+          total_amount:    Number(editForm.totalAmount) || null,
+          category:        editForm.category,
+          description:     editForm.description,
+        }
+      }
+    }))
+    setEditForm(null)
+  }
+
+  const inp = { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }
+  const sel = { ...inp, cursor: 'pointer' }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 780, maxHeight: '90vh', overflowY: 'auto', direction: 'rtl' }} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <h3 style={{ margin: 0, fontSize: 18 }}>📦 יבוא חשבוניות מ-ZIP <span style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 400 }}>({results.length} קבצים)</span></h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>×</button>
+        </div>
+
+        {/* Inline edit form */}
+        {editForm && (
+          <div style={{ background: 'var(--bg)', borderRadius: 12, padding: 16, marginBottom: 16, border: '2px solid #7c3aed' }}>
+            <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 14 }}>✏️ עריכת: {items[editForm.idx]?.filename}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {[
+                { label: 'ספק', key: 'vendor' },
+                { label: 'מספר חשבונית', key: 'invoiceNumber' },
+                { label: 'תאריך', key: 'invoiceDate', type: 'date' },
+                { label: 'לפני מע"מ', key: 'amount', type: 'number' },
+                { label: 'מע"מ', key: 'vatAmount', type: 'number' },
+                { label: 'סה"כ', key: 'totalAmount', type: 'number' },
+                { label: 'תיאור', key: 'description' },
+              ].map(({ label, key, type = 'text' }) => (
+                <div key={key}>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>{label}</div>
+                  <input type={type} value={editForm[key] || ''} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} style={inp} />
+                </div>
+              ))}
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>קטגוריה</div>
+                <select value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))} style={sel}>
+                  {INVOICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditForm(null)} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 13 }}>ביטול</button>
+              <button onClick={saveEdit} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: '#7c3aed', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>שמור עריכה</button>
+            </div>
+          </div>
+        )}
+
+        {/* Results list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {items.map((item, i) => (
+            <div key={item._key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: item.error ? '#ef444411' : item.selected ? 'var(--bg)' : 'transparent', border: '1px solid var(--border)', opacity: item.error ? 0.7 : 1 }}>
+              {/* Checkbox */}
+              <input type="checkbox" checked={!!item.selected} disabled={!!item.error} onChange={() => toggle(i)} style={{ width: 16, height: 16, cursor: item.error ? 'not-allowed' : 'pointer', flexShrink: 0 }} />
+
+              {/* Filename */}
+              <span style={{ fontSize: 12, color: 'var(--muted)', minWidth: 140, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }} title={item.filename}>
+                📄 {item.filename}
+              </span>
+
+              {item.error ? (
+                <span style={{ color: '#ef4444', fontSize: 12, flex: 1 }}>⚠️ שגיאה: {item.error}</span>
+              ) : (
+                <>
+                  <span style={{ fontSize: 13, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.extracted?.vendor || '—'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--muted)', minWidth: 70 }}>{fmtAmt(item.extracted?.total_amount)}</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)', minWidth: 90, textAlign: 'center' }}>{item.extracted?.category || ''}</span>
+                  <button onClick={() => openEdit(i)} style={{ padding: '4px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>✏️</button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: 'var(--muted)', flex: 1 }}>{selectedItems.length} מתוך {results.length} נבחרו לשמירה</span>
+          <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 9, border: '1px solid var(--border)', background: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>ביטול</button>
+          <button disabled={selectedItems.length === 0} onClick={() => onSave(selectedItems)} style={{ padding: '9px 20px', borderRadius: 9, border: 'none', background: selectedItems.length ? '#7c3aed' : '#94a3b8', color: '#fff', cursor: selectedItems.length ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+            💾 שמור {selectedItems.length} חשבוניות
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────
 export default function InvoicesPage({ invoiceStore }) {
   const {
     invoices, loading, scanning, processing,
     year, setYear, load,
     addInvoice, editInvoice, removeInvoice,
-    processImage, processCamera, scanEmails, exportCSV,
+    processImage, processCamera, importZip, scanEmails, exportCSV,
   } = invoiceStore
 
   const now = new Date()
@@ -285,6 +419,8 @@ export default function InvoicesPage({ invoiceStore }) {
   const [gmailConnected, setGmailConnected] = useState(false)
   const [exportFrom,  setExportFrom]  = useState(`${now.getFullYear()}-01-01`)
   const [exportTo,    setExportTo]    = useState(`${now.getFullYear()}-12-31`)
+  const [batchResults,setBatchResults]= useState(null)  // ZIP import results
+  const zipInputRef = useRef()
 
   // Load on mount
   useEffect(() => { load(year) }, [year])
@@ -445,6 +581,20 @@ export default function InvoicesPage({ invoiceStore }) {
     toast_ok(`יוצאו ${filtered.length} חשבוניות לייצוא לרו"ח 📊`)
   }
 
+  // ── ZIP batch import ─────────────────────────────────────────
+  const handleZip = async (file) => {
+    if (!file) return
+    toast('⏳ מעבד ZIP — אנא המתן...')
+    try {
+      const results = await importZip(file)
+      setBatchResults(results)
+      if (zipInputRef.current) zipInputRef.current.value = ''
+    } catch (e) {
+      toast_err('שגיאה ביבוא ZIP: ' + (e.message || e))
+      if (zipInputRef.current) zipInputRef.current.value = ''
+    }
+  }
+
   // ── Styles ────────────────────────────────────────────────────
   const S = {
     page:    { padding: '20px', direction: 'rtl', maxWidth: 1100, margin: '0 auto' },
@@ -486,6 +636,16 @@ export default function InvoicesPage({ invoiceStore }) {
           <button onClick={handleScan} disabled={scanning} style={S.btn(gmailConnected ? '#3b82f6' : '#64748b')}>
             {scanning ? '⏳ סורק...' : gmailConnected ? '📧 סרוק מייל' : '🔗 חבר Gmail'}
           </button>
+          <button onClick={() => zipInputRef.current?.click()} disabled={processing} style={S.btn('#7c3aed')}>
+            📦 יבא ZIP
+          </button>
+          <input
+            ref={zipInputRef}
+            type="file"
+            accept=".zip,application/zip"
+            style={{ display: 'none' }}
+            onChange={e => handleZip(e.target.files?.[0])}
+          />
           <button onClick={() => setShowUpload(true)} style={S.btn('#f97316')}>
             + הוסף חשבונית
           </button>
@@ -855,6 +1015,43 @@ export default function InvoicesPage({ invoiceStore }) {
           onClose={() => setViewInv(null)}
           onEdit={inv => { setEditingInv(inv); setViewInv(null) }}
           onVerify={handleVerify}
+        />
+      )}
+
+      {batchResults && (
+        <BatchImportModal
+          results={batchResults}
+          onSave={async (selected) => {
+            let saved = 0
+            for (const item of selected) {
+              try {
+                const ext = item.extracted || {}
+                const invDate = ext.invoice_date || new Date().toISOString().split('T')[0]
+                const d = new Date(invDate)
+                await addInvoice({
+                  vendor:        ext.vendor         || item.filename,
+                  invoiceNumber: ext.invoice_number || null,
+                  invoiceDate:   invDate,
+                  amount:        Number(ext.amount)       || null,
+                  vatAmount:     Number(ext.vat_amount)   || null,
+                  totalAmount:   Number(ext.total_amount) || null,
+                  category:      ext.category       || 'אחר',
+                  month:         ext.month          || (d.getMonth() + 1),
+                  year:          ext.year           || d.getFullYear(),
+                  description:   ext.description    || item.filename,
+                  source:        'upload',
+                  status:        'pending',
+                })
+                saved++
+              } catch (e) {
+                console.error('batch save error:', e)
+              }
+            }
+            setBatchResults(null)
+            toast_ok(`נשמרו ${saved} חשבוניות בהצלחה ✅`)
+            await load(year)
+          }}
+          onClose={() => setBatchResults(null)}
         />
       )}
     </div>

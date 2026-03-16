@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { studentStatus, attPct, monthlyHours, monthlyPay, noSessionDays } from '../utils/alerts'
 
 // Max history turns to send (keeps token usage manageable)
 const MAX_HISTORY = 10
 
 export function useAgent() {
-  const [messages, setMessages] = useState([])  // { id, role, text, actions? }
+  const [messages, setMessages] = useState([])  // { id, role, text, actions?, blocks? }
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
 
@@ -17,7 +18,7 @@ export function useAgent() {
    * @param media          Optional { base64, mimeType, preview? } — image or audio
    * @param instructors    Full instructors array
    * @param model          Gemini model id
-   * @param businessData   { tasks, deals, leads, students } — for business snapshot
+   * @param businessData   { tasks, deals, leads, students, classes, finance, activities }
    */
   const send = useCallback(async (
     text,
@@ -51,8 +52,17 @@ export function useAgent() {
 
     try {
       // ── Build business snapshot ───────────────────────────────────────────
-      const { tasks = [], deals = [], leads = [], students = [] } = businessData
+      const {
+        tasks = [], deals = [], leads = [], students = [],
+        classes = [], finance = null, activities = [],
+      } = businessData
+
       const today = new Date().toISOString().split('T')[0]
+      const now = new Date()
+      const curMonth = now.getMonth() + 1
+      const curYear  = now.getFullYear()
+      const prevMonth = curMonth === 1 ? 12 : curMonth - 1
+      const prevYear  = curMonth === 1 ? curYear - 1 : curYear
 
       const openTasks = tasks
         .filter(t => !t.completed)
@@ -102,12 +112,85 @@ export function useAgent() {
         .filter(d => d.stage !== 'closed' && d.stage !== 'lost')
         .reduce((sum, d) => sum + (d.value || 0), 0)
       const staleLeads = leads.filter(l => {
-        const lastTouch = l.lastTouchAt || l.last_touch_at
+        const lastTouch = l.lastTouchAt || l.last_touch_at || l.lastActivityAt || l.last_activity_at
         if (!lastTouch) return true
         const daysSince = Math.floor((Date.now() - new Date(lastTouch).getTime()) / 86400000)
         return daysSince > 7
       }).length
 
+      // ── v3: Financial snapshot ─────────────────────────────────────────
+      const calcMonthFinancials = (m, y) => {
+        const classInc = classes
+          .filter(c => Number(c.month) === m && Number(c.year) === y)
+          .reduce((sum, c) => {
+            const actual = Number(c.actual_income) || 0
+            const calc = (Number(c.students_count) || 0) * (Number(c.price_per_student) || 0)
+            return sum + (actual || calc || Number(c.agreed_price) || 0)
+          }, 0)
+        const classExp = classes
+          .filter(c => Number(c.month) === m && Number(c.year) === y)
+          .reduce((sum, c) => sum + (
+            Number(c.instructor_total_override) ||
+            (Number(c.instructor_price_per_session || 0) * Number(c.sessions_count || 4))
+          ), 0)
+        const actInc = activities
+          .filter(a => Number(a.month) === m && Number(a.year) === y)
+          .reduce((sum, a) => sum + (Number(a.income) || 0), 0)
+        const actExp = activities
+          .filter(a => Number(a.month) === m && Number(a.year) === y)
+          .reduce((sum, a) => sum + (Number(a.expenses) || 0), 0)
+        return {
+          income:   classInc + actInc,
+          expenses: classExp + actExp,
+          profit:   (classInc + actInc) - (classExp + actExp),
+        }
+      }
+
+      const financialSnapshot = (classes.length > 0 || activities.length > 0) ? {
+        currentMonth:  calcMonthFinancials(curMonth, curYear),
+        previousMonth: calcMonthFinancials(prevMonth, prevYear),
+      } : undefined
+
+      // ── v3: Class snapshot ─────────────────────────────────────────────
+      const classSnapshot = classes
+        .filter(c => Number(c.month) === curMonth && Number(c.year) === curYear)
+        .map(c => {
+          const income = Number(c.actual_income) ||
+            (Number(c.students_count) || 0) * (Number(c.price_per_student) || 0) ||
+            Number(c.agreed_price) || 0
+          const instructorCost = Number(c.instructor_total_override) ||
+            (Number(c.instructor_price_per_session || 0) * Number(c.sessions_count || 4))
+          return {
+            name:           c.class_name || c.subject || 'ללא שם',
+            type:           c.activity_type || 'חוג',
+            studentsCount:  Number(c.students_count) || 0,
+            income,
+            instructorCost,
+            profit:         income - instructorCost,
+          }
+        })
+        .sort((a, b) => b.income - a.income)
+        .slice(0, 15)
+
+      // ── v3: Student alerts ─────────────────────────────────────────────
+      const studentAlerts = students
+        .map(s => ({
+          name:   s.name,
+          status: studentStatus(s),
+          attPct: attPct(s),
+        }))
+        .filter(s => s.status === 'risk' || s.status === 'warn')
+        .slice(0, 15)
+
+      // ── v3: Instructor snapshot ────────────────────────────────────────
+      const instructorSnapshot = instructors.map(inst => ({
+        name:         inst.name,
+        monthlyHours: monthlyHours(inst),
+        monthlyPay:   monthlyPay(inst),
+        inactive:     noSessionDays(inst, 14),
+      }))
+
+      // ── Build complete snapshot ────────────────────────────────────────
       const businessSnapshot = {
         stats: {
           contactsTotal:    contacts.length,
@@ -123,6 +206,11 @@ export function useAgent() {
         recentLeads,
         activeDeals,
         role: 'business_advisor',
+        // v3 enriched data
+        financialSnapshot,
+        classSnapshot:      classSnapshot.length > 0 ? classSnapshot : undefined,
+        studentAlerts:      studentAlerts.length > 0 ? studentAlerts : undefined,
+        instructorSnapshot: instructorSnapshot.length > 0 ? instructorSnapshot : undefined,
       }
 
       // ── Build request body ────────────────────────────────────────────────
@@ -163,6 +251,7 @@ export function useAgent() {
         role:    'agent',
         text:    result.response ?? 'בוצע',
         actions,
+        blocks:  result.blocks ?? [],
       }])
 
     } catch (e) {

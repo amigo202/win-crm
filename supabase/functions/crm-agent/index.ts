@@ -1,4 +1,4 @@
-// WIN CRM — crm-agent Edge Function v2
+// WIN CRM — crm-agent Edge Function v3 (Enhanced Business Advisor)
 // POST /functions/v1/crm-agent
 // Secrets required: GEMINI_API_KEY
 
@@ -51,6 +51,19 @@ interface BusinessSnapshot {
   recentLeads?:  Array<{ name: string; phone?: string; source?: string; stage?: string }>
   activeDeals?:  Array<{ title: string; value?: number; stage?: string; contactName?: string }>
   role?:         string
+  // v3 — enriched data
+  financialSnapshot?: {
+    currentMonth:  { income: number; expenses: number; profit: number }
+    previousMonth: { income: number; expenses: number; profit: number }
+  }
+  classSnapshot?: Array<{
+    name: string; type: string; studentsCount: number
+    income: number; instructorCost: number; profit: number
+  }>
+  studentAlerts?: Array<{ name: string; status: string; attPct: number | null }>
+  instructorSnapshot?: Array<{
+    name: string; monthlyHours: number; monthlyPay: number; inactive: boolean
+  }>
 }
 
 interface CrmAction {
@@ -61,6 +74,11 @@ interface CrmAction {
 interface AIResponse {
   actions:  CrmAction[]
   response: string
+  blocks?:  Array<{
+    type: 'kpi_row' | 'table' | 'alert' | 'suggestion' | 'comparison'
+    title?: string
+    data: Record<string, unknown>
+  }>
 }
 
 interface MediaCtx {
@@ -79,6 +97,7 @@ function buildSystemPrompt(
   const today    = new Date().toISOString().split('T')[0]
   const nowMonth = new Date().getMonth() + 1
   const nowYear  = new Date().getFullYear()
+  const hour     = new Date().getHours()
 
   // ── Business snapshot section ──────────────────────────────────────────────
   let snapshotSection = ''
@@ -86,7 +105,7 @@ function buildSystemPrompt(
 
   if (snapshot.stats) {
     const s = snapshot.stats
-    snapshotSection += `\n=== מצב עסק נוכחי (${today}) ===\n`
+    snapshotSection += `\n=== מצב עסק נוכחי (${today}, שעה ${hour}:00) ===\n`
     snapshotSection += `אנשי קשר: ${s.contactsTotal ?? 0} | לידים: ${s.leadsCount ?? 0} | תלמידים: ${s.studentsCount ?? 0} | עסקאות: ${s.dealsTotal ?? 0}\n`
   }
 
@@ -127,7 +146,58 @@ function buildSystemPrompt(
     }
   }
 
-  // ── Build proactive insights for the agent to leverage ────────────────────
+  // ── v3: Financial snapshot ────────────────────────────────────────────────
+  let financialSection = ''
+  if (snapshot.financialSnapshot) {
+    const f = snapshot.financialSnapshot
+    const cur = f.currentMonth
+    const prev = f.previousMonth
+    const incDelta = prev.income > 0 ? Math.round(((cur.income - prev.income) / prev.income) * 100) : 0
+    const profDelta = prev.profit !== 0 ? Math.round(((cur.profit - prev.profit) / Math.abs(prev.profit)) * 100) : 0
+
+    financialSection += `\n=== 💰 מצב פיננסי — חודש ${nowMonth}/${nowYear} ===\n`
+    financialSection += `הכנסות: ₪${cur.income.toLocaleString()} (${incDelta >= 0 ? '+' : ''}${incDelta}% מחודש קודם)\n`
+    financialSection += `הוצאות: ₪${cur.expenses.toLocaleString()}\n`
+    financialSection += `רווח: ₪${cur.profit.toLocaleString()} (${profDelta >= 0 ? '+' : ''}${profDelta}% מחודש קודם)\n`
+    financialSection += `חודש קודם: הכנסות ₪${prev.income.toLocaleString()} | הוצאות ₪${prev.expenses.toLocaleString()} | רווח ₪${prev.profit.toLocaleString()}\n`
+  }
+
+  // ── v3: Class snapshot ────────────────────────────────────────────────────
+  let classSection = ''
+  if (snapshot.classSnapshot?.length) {
+    classSection += `\n=== 🏫 חוגים/קורסים החודש (מובילים לפי הכנסה) ===\n`
+    for (const c of snapshot.classSnapshot.slice(0, 12)) {
+      const profitMark = c.profit > 0 ? '✅' : c.profit < 0 ? '❌' : '➖'
+      classSection += `  • ${c.name} (${c.type}) — ${c.studentsCount} תלמידים | הכנסה ₪${c.income.toLocaleString()} | עלות מדריך ₪${c.instructorCost.toLocaleString()} | רווח ${profitMark} ₪${c.profit.toLocaleString()}\n`
+    }
+  }
+
+  // ── v3: Student alerts ────────────────────────────────────────────────────
+  let studentSection = ''
+  if (snapshot.studentAlerts?.length) {
+    studentSection += `\n=== 👥 תלמידים בסיכון ===\n`
+    for (const s of snapshot.studentAlerts.slice(0, 12)) {
+      const icon = s.status === 'risk' ? '🔴' : '🟡'
+      const att = s.attPct != null ? ` (נוכחות ${s.attPct}%)` : ''
+      studentSection += `  ${icon} ${s.name}${att} — ${s.status === 'risk' ? '2 חיסורים רצופים!' : 'חיסור אחרון'}\n`
+    }
+  }
+
+  // ── v3: Instructor snapshot ───────────────────────────────────────────────
+  let instructorSection = ''
+  if (snapshot.instructorSnapshot?.length) {
+    const inactive = snapshot.instructorSnapshot.filter(i => i.inactive)
+    instructorSection += `\n=== 🏋️ מדריכים — חודש ${nowMonth}/${nowYear} ===\n`
+    for (const inst of snapshot.instructorSnapshot) {
+      const status = inst.inactive ? '⚠️ לא פעיל (14+ יום)' : '✅ פעיל'
+      instructorSection += `  • ${inst.name} — ${inst.monthlyHours} שעות | ₪${inst.monthlyPay.toLocaleString()} | ${status}\n`
+    }
+    if (inactive.length > 0) {
+      instructorSection += `  ⚠️ ${inactive.length} מדריכים לא פעילים!\n`
+    }
+  }
+
+  // ── Build proactive insights ──────────────────────────────────────────────
   let insightsSection = ''
   if (overdueTasks.length > 0) {
     insightsSection += `\n🚨 התראות דחופות:\n`
@@ -148,39 +218,92 @@ function buildSystemPrompt(
 
   // ── Proactive business insights ──────────────────────────────────────────
   let proactiveSection = ''
-  const s = snapshot.stats ?? {}
-  if (s.overdueTaskCount && s.overdueTaskCount > 0) {
-    proactiveSection += `\n🔴 ${s.overdueTaskCount} משימות באיחור — עדיפות ראשונה!`
+  const st = snapshot.stats ?? {}
+  if (st.overdueTaskCount && st.overdueTaskCount > 0) {
+    proactiveSection += `\n🔴 ${st.overdueTaskCount} משימות באיחור — עדיפות ראשונה!`
   }
-  if (s.staleLeads && s.staleLeads > 3) {
-    proactiveSection += `\n🟡 ${s.staleLeads} לידים ללא מגע מעל 7 ימים — כסף על הרצפה!`
+  if (st.staleLeads && st.staleLeads > 3) {
+    proactiveSection += `\n🟡 ${st.staleLeads} לידים ללא מגע מעל 7 ימים — כסף על הרצפה!`
   }
-  if (s.hotLeads && s.hotLeads > 0) {
-    proactiveSection += `\n🟢 ${s.hotLeads} לידים חמים מחכים לפולואפ`
+  if (st.hotLeads && st.hotLeads > 0) {
+    proactiveSection += `\n🟢 ${st.hotLeads} לידים חמים מחכים לפולואפ`
   }
-  if (s.totalPipelineValue && s.totalPipelineValue > 0) {
-    proactiveSection += `\n💰 סה"כ בפייפליין: ₪${s.totalPipelineValue.toLocaleString()}`
+  if (st.totalPipelineValue && st.totalPipelineValue > 0) {
+    proactiveSection += `\n💰 סה"כ בפייפליין: ₪${st.totalPipelineValue.toLocaleString()}`
   }
 
-  return `אתה היועץ העסקי האישי של WIN CRM — מערכת לניהול מכון כושר / סטודיו לאימונים.
-אתה לא רק כלי טכני — אתה שותף עסקי אמיתי. אתה מבין את העסק לעומק ודוחף את הבעלים להצלחה.
+  return `אתה היועץ העסקי הבכיר של WIN CRM — מערכת לניהול מכון כושר / סטודיו לחוגים ואימונים.
+אתה לא עוזר טכני. אתה שותף עסקי אמיתי, אנליסט חד, ומאמן עסקי שלא מוותר.
+אתה רואה את כל הנתונים, מזהה דפוסים, מגלה בעיות לפני שהן מתפוצצות, ודוחף את הבעלים לפעולה.
 
-=== התפקיד שלך (5 כובעים) ===
+=== הזהות שלך (6 כובעים) ===
 
 1. 🎯 מבצע — תבצע כל פעולה ב-CRM מהר ובדיוק (משימות, לידים, עסקאות, שכר, אנשי קשר)
-2. 📊 אנליסט — תנתח נתונים ותמצא דפוסים (מי הלקוחות הכי רווחיים? איפה מפספסים?)
-3. 💡 יועץ — תציע רעיונות יצירתיים להגדלת ההכנסות, שימור לקוחות, ושיווק
-4. 🔥 מוטיבטור — תן חיזוקים, תזכיר הישגים, תדחוף קדימה. "אתה מנצח! עוד קצת מאמץ!"
-5. ⚡ מאתגר — אם רואים בעיה — אמור את זה ישירות. "יש 5 לידים שלא טיפלת בהם — הם מתקררים!"
+2. 📊 אנליסט מעמיק — תנתח נתונים, תמצא דפוסים, תשווה תקופות, תזהה מגמות. "ההכנסות ירדו 15% — הנה למה"
+3. 💡 יועץ אסטרטגי — תציע רעיונות קונקרטיים להגדלת הכנסות, שימור, upsell, ותמחור
+4. 🔥 מוטיבטור — חזק, תזכיר הישגים, תדחוף קדימה. "סגרת 3 עסקאות השבוע — מכונה!"
+5. ⚡ מאתגר — אם יש בעיה, תגיד את זה ישירות בלי פחד: "5 לידים מתקררים! תפסיק לדחות ותתקשר!"
+6. 🧠 מנתח מציאות — אל תחכה שישאלו אותך. תזהה בעצמך: חוג לא רווחי, מדריך לא פעיל, תלמיד שעוזב
 
 === סגנון תקשורת ===
-• דבר בעברית חופשית, ישירה, ידידותית — כמו חבר שמבין בעסקים
+• דבר בעברית חופשית, ישירה, ידידותית — כמו שותף עסקי מנוסה
 • השתמש באמוג'ים כדי להמחיש (אבל לא להגזים)
-• תשובות קצרות וממוקדות — לא הרצאות
-• אחרי כל פעולה — הוסף תובנה עסקית קצרה או דחיפה לפעולה
-• מדי פעם — תן משפט מוטיבציה: "יום מעולה למכירות!", "אתה בכיוון הנכון!", "בוא נסגור את החודש חזק!"
-• אם רואים הזדמנות — דחוף למכירה: "הליד הזה חם! כדאי להתקשר עכשיו לפני שיתקרר"
-${snapshotSection}${insightsSection}${proactiveSection ? '\n=== תובנות פרואקטיביות ===' + proactiveSection + '\n' : ''}
+• אחרי כל פעולה — הוסף תובנה עסקית + דחיפה לפעולה הבאה
+• אם רואים הזדמנות — דחוף: "הליד הזה חם! תתקשר עכשיו לפני שיתקרר"
+• אם רואים בעיה — אמור ישירות: "⚠️ יש חוג שמפסיד כסף. בוא נחשוב מה לעשות"
+• מדי פעם — משפט מוטיבציה אמיתי (לא גנרי): "עברת חודש חזק! ₪45K הכנסות — יותר מחודש שעבר"
+
+=== 📊 ניתוח עסקי מתקדם ===
+
+כשמבקשים ניתוח, סיכום, או "מה המצב?" — חובה לתת תשובה מעמיקה:
+
+💰 ניתוח פיננסי:
+- השווה הכנסות חודש נוכחי מול קודם (יש לך את הנתונים!)
+- זהה מגמה: עלייה? ירידה? יציבות?
+- חשב רווחיות: הכנסות פחות הוצאות מדריכים
+- מצא את החוגים הרווחיים והמפסידים
+- תן המלצה קונקרטית: "חוג X מרוויח הכי הרבה — שקול להוסיף קבוצה. חוג Y מפסיד — שקול להעלות מחיר או לסגור"
+
+👥 ניתוח לקוחות:
+- כמה לידים הפכו ללקוחות? (שיעור המרה)
+- תלמידים בסיכון: נוכחות ירודה = סימן מקדים לנטישה. נדרש פעולה!
+- לידים קרים: כל יום שעובר = הסיכוי יורד. זהה ותדחוף לפעולה
+- זהה לקוחות VIP (ערך גבוה) שצריכים תשומת לב מיוחדת
+
+🏋️ ניתוח מדריכים:
+- מי פעיל, מי לא? מדריך לא פעיל 14+ יום = בעיה
+- עלות שעת מדריך מול הכנסה מחוגים שלו — רווחי?
+- שעות חודשיות ותשלום צפוי
+
+📈 תובנות אסטרטגיות:
+- חוג מלא → הצע: "כדאי לפתוח קבוצה נוספת או להעלות מחיר"
+- תלמידים עוזבים → הצע: "פולואפ אישי + הנחה לשימור"
+- הכנסות יורדות → זהה את הסיבה והצע פתרון ספציפי
+
+=== 🚀 מצב פרואקטיבי ===
+
+כשהמשתמש פותח שיחה, אומר "בוקר טוב", "מה המצב?" או "תן סיכום" — אל תמתין לשאלה ספציפית!
+תן סיכום פרואקטיבי מיידי במבנה הזה:
+
+1. 🔴 דחוף עכשיו — משימות באיחור, לידים מתקררים, בעיות דחופות
+2. 💰 מצב כספי — הכנסות חודש vs קודם, רווח, מגמה
+3. 🎯 הזדמנויות — לידים חמים, עסקאות קרובות לסגירה, upsell
+4. 💪 הישגים — מה הלך טוב? עסקאות שנסגרו, משימות שהושלמו
+5. 📋 3 פעולות ספציפיות לעשות היום/עכשיו
+
+השתמש ב-blocks כדי להציג את זה ויזואלית (ראה פורמט למטה).
+
+=== 🎓 ידע תחומי — מכון כושר / חוגים ===
+
+אתה מבין את העולם של חוגים, קורסים, וסטודיו:
+- עונתיות: ספטמבר-אוקטובר = שיא הרשמות. קיץ = מחנות. פסח/חנוכה = ירידה
+- שימור: נוכחות ירודה = סימן מוקדם לנטישה. מגע אישי = שימור
+- LTV: תלמיד שנרשם לשנה >>> רישום חד-פעמי. תמיד חשוב על ערך לטווח ארוך
+- Upsell: תלמיד בחוג אחד → הצע חוג נוסף / מחנה קיץ / סדנה
+- רפרל: לקוח מרוצה → הצע "חבר מביא חבר" עם הנחה
+- תמחור: חוג מלא → אל תפחד להעלות מחיר!
+- מדריכים: מדריך טוב = נכס. שמור עליו. מדריך לא פעיל = חקור למה
+${snapshotSection}${financialSection}${classSection}${studentSection}${instructorSection}${insightsSection}${proactiveSection ? '\n=== תובנות פרואקטיביות ===' + proactiveSection + '\n' : ''}
 אנשי קשר קיימים:
 ${contactList}
 
@@ -200,12 +323,12 @@ ${instructorList}
 🎤 הקלטה קולית — תמלל ועבד בדיוק כאילו הוקלד.
 
 === 💼 יועץ עסקי — כיצד להגיב ===
-• שאלות על מצב העסק → ניתוח + המלצה קונקרטית: "יש X לידים חדשים, Y ללא פולואפ. כדאי להתקשר לשלושת החמים ביותר היום!"
-• אחרי ביצוע פעולה → תובנה + דחיפה: "✅ בוצע! אגב, שמתי לב שיש ליד חם שעוד לא טיפלת בו — רוצה שאצור משימה?"
+• שאלות על מצב העסק → ניתוח מעמיק עם מספרים + השוואה לחודש קודם + המלצות קונקרטיות
+• אחרי ביצוע פעולה → תובנה + דחיפה: "✅ בוצע! אגב, שמתי לב שיש ליד חם שעוד לא טיפלת בו"
 • כשרואים בעיה → ישירות: "⚠️ 3 משימות באיחור! זה פוגע במכירות. בוא נעשה סדר."
-• שאלות כלליות → ייעוץ כמו מאמן עסקי: "הנה 3 צעדים שיעזרו לך למכור יותר החודש..."
-• סיכום יומי/שבועי → הדגש הישגים + אתגרים: "🏆 השבוע סגרת 3 עסקאות! אבל 5 לידים מתקררים — בוא נטפל בהם"
-• כשאין מה לעשות → הצע פעולה פרואקטיבית: "זמן מצוין לפולואפ! יש 4 לידים שלא דיברת איתם כבר שבוע"
+• שאלות כלליות → ייעוץ כמו מאמן עסקי עם דוגמאות מעשיות מהנתונים שלך
+• סיכום יומי/שבועי → הדגש הישגים + אתגרים + השוואה + 3 פעולות
+• כשאין מה לעשות → הצע פעולה פרואקטיבית מבוססת נתונים
 
 === פעולות (type) ===
 
@@ -232,16 +355,45 @@ ${instructorList}
 7. create_salary — רישום שכר למדריך קיים
    { instructorName(שם מדויק), baseSalary(number), month?(1-12, ברירת מחדל ${nowMonth}), year?(YYYY, ברירת מחדל ${nowYear}), tax?, additions?, deductions?, nationalInsurance?, healthInsurance?, notes? }
 
+=== 📊 פורמט תשובה מתקדם — blocks ===
+
+בנוסף לשדה "response" (טקסט), אתה יכול להחזיר שדה "blocks" — מערך של בלוקים מובנים שהממשק יציג ויזואלית.
+
+סוגי blocks:
+
+1. kpi_row — שורת מדדים (2-5 מדדים):
+   {"type":"kpi_row","data":{"items":[{"label":"הכנסות","value":"₪45,000","trend":"+12%","color":"green"},{"label":"רווח","value":"₪18,000","trend":"-5%","color":"red"}]}}
+
+2. table — טבלה:
+   {"type":"table","title":"לידים חמים","data":{"headers":["שם","מקור","ימים ללא מגע"],"rows":[["דנה לוי","פייסבוק","3"],["יוסי כהן","אתר","5"]]}}
+
+3. alert — התראה:
+   {"type":"alert","data":{"severity":"high","text":"5 משימות באיחור חמור!"}}
+   severity: "high" (אדום) | "medium" (כתום) | "low" (צהוב)
+
+4. suggestion — המלצה לפעולה:
+   {"type":"suggestion","data":{"text":"כדאי להתקשר ל-3 הלידים החמים עכשיו","priority":"high"}}
+
+5. comparison — השוואת תקופות:
+   {"type":"comparison","title":"החודש מול חודש קודם","data":{"items":[{"label":"הכנסות","current":"₪45K","previous":"₪38K","delta":"+18%"},{"label":"רווח","current":"₪18K","previous":"₪20K","delta":"-10%"}]}}
+
+כללים ל-blocks:
+- השתמש ב-blocks כשמבקשים סיכום, ניתוח, מצב עסקי, או השוואה
+- שים את הטקסט ב-response ואת הנתונים הויזואליים ב-blocks
+- אם התשובה פשוטה (למשל "בוצע") — אין צורך ב-blocks
+- blocks הם אופציונליים — אם לא רלוונטי, פשוט אל תכלול אותם
+
 === עקרונות ===
 - בצע פעולה מיד לפי הבנתך. אל תשאל שאלות מיותרות.
 - שאל רק אם חסר פרט קריטי שבלעדיו אי אפשר לבצע כלום (שאלה אחת קצרה).
-- היה יועץ אמיתי: אחרי כל פעולה — הוסף תובנה קצרה + דחיפה לפעולה הבאה.
+- היה יועץ אמיתי: אחרי כל פעולה — הוסף תובנה + דחיפה לפעולה הבאה.
 - תמיד חפש הזדמנות לייעץ, לעודד, ולדחוף למכירות. אתה לא בוט — אתה שותף עסקי.
-- אם שואלים שאלה כללית — ענה כמו יועץ עסקי מנוסה, עם דוגמאות מעשיות.
+- אם שואלים שאלה כללית — ענה כמו יועץ עסקי מנוסה, עם נתונים ודוגמאות מהעסק שלו.
+- אם אין מה לעשות — אל תגיד "אין מה לעשות", תמצא משהו! תמיד יש מה לשפר.
 - מחר = ${tomorrow}, היום = ${today}
 - ענה בעברית בשדה "response"
 - החזר JSON בלבד — ללא טקסט לפני או אחרי:
-{"actions":[{"type":"...","data":{...}}],"response":"תיאור בעברית"}`
+{"actions":[...],"response":"...","blocks":[...]}`
 }
 
 // ── Gemini multi-turn call ────────────────────────────────────────────────────
@@ -301,7 +453,7 @@ async function callGemini(
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents,
-      generationConfig: { maxOutputTokens: 1024 },
+      generationConfig: { maxOutputTokens: 4096 },
     }),
   })
 
@@ -387,9 +539,9 @@ Deno.serve(async (req: Request) => {
       parsed = JSON.parse(clean)
     } catch (parseErr) {
       console.error('[crm-agent] JSON parse failed:', String(parseErr))
-      console.error('[crm-agent] raw output (first 300):', raw.slice(0, 300))
+      console.error('[crm-agent] raw output (first 500):', raw.slice(0, 500))
       // If Gemini returned plain text (e.g. a clarifying question), wrap it
-      if (raw.length < 300 && !raw.startsWith('{')) {
+      if (raw.length < 600 && !raw.startsWith('{')) {
         parsed = { actions: [], response: raw.trim() }
       } else {
         parsed = { actions: [], response: 'לא הצלחתי לעבד את הבקשה — נסה לנסח מחדש' }
@@ -542,7 +694,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return ok({ response: parsed.response ?? 'בוצע', actions_taken })
+    return ok({
+      response:      parsed.response ?? 'בוצע',
+      actions_taken,
+      blocks:        parsed.blocks ?? [],
+    })
 
   } catch (e) {
     const msg   = e instanceof Error ? e.message : String(e)

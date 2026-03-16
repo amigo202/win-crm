@@ -8,6 +8,7 @@ import {
   processInvoiceImage,
   scanGmail,
   exportInvoicesCSV,
+  importFromZip,
 } from '../services/invoicesService'
 
 export function useInvoices() {
@@ -76,6 +77,17 @@ export function useInvoices() {
     }
   }, [])
 
+  // ── ZIP batch import ───────────────────────────────────────────
+  // Returns array of { filename, extracted, selected, error } for review modal
+  const importZip = useCallback(async (zipFile) => {
+    setProcessing(true)
+    try {
+      return await importFromZip(zipFile)
+    } finally {
+      setProcessing(false)
+    }
+  }, [])
+
   // ── Gmail scan ─────────────────────────────────────────────────
   const scanEmails = useCallback(async () => {
     setScanning(true)
@@ -108,6 +120,7 @@ export function useInvoices() {
     removeInvoice,
     processImage,
     processCamera,
+    importZip,
     scanEmails,
     exportCSV,
   }

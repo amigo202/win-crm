@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import JSZip from 'jszip'
 
 // ── Categories ────────────────────────────────────────────────────
 export const INVOICE_CATEGORIES = [
@@ -172,6 +173,42 @@ export async function scanGmail() {
   })
   if (error) throw error
   return data
+}
+
+// ── ZIP Batch Import ──────────────────────────────────────────────
+export async function importFromZip(zipFile) {
+  const zip = await JSZip.loadAsync(zipFile)
+  const SUPPORTED = /\.(pdf|jpg|jpeg|png|webp)$/i
+
+  const files = Object.values(zip.files).filter(f => !f.dir && SUPPORTED.test(f.name))
+  if (files.length === 0) throw new Error('לא נמצאו קבצי PDF או תמונה ב-ZIP')
+
+  const results = []
+
+  for (const f of files) {
+    try {
+      const arrayBuf = await f.async('arraybuffer')
+      // btoa with large buffers — use chunk approach to avoid call-stack limit
+      const bytes   = new Uint8Array(arrayBuf)
+      let binary    = ''
+      const CHUNK   = 8192
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+      }
+      const base64   = btoa(binary)
+      const nameLow  = f.name.toLowerCase()
+      const mimeType = nameLow.endsWith('.pdf') ? 'application/pdf'
+                     : nameLow.endsWith('.png') ? 'image/png'
+                     : nameLow.endsWith('.webp') ? 'image/webp'
+                     : 'image/jpeg'
+      const extracted = await processInvoiceImage(base64, mimeType)
+      results.push({ filename: f.name, extracted, selected: true, error: null })
+    } catch (e) {
+      results.push({ filename: f.name, extracted: null, selected: false, error: e.message })
+    }
+  }
+
+  return results // [{ filename, extracted, selected, error }]
 }
 
 // ── CSV Export ────────────────────────────────────────────────────
