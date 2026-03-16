@@ -203,13 +203,22 @@ function fileToBase64(file) {
   })
 }
 
-// ── Gmail Scan ────────────────────────────────────────────────────
-export async function scanGmail() {
+// ── Gmail Scan — Phase 1: fast metadata scan (no AI) ─────────────
+export async function scanGmailEmails() {
   const { data, error } = await supabase.functions.invoke('scan-gmail', {
-    body: {}
+    body: { scan_only: true }
   })
   if (error) throw error
-  return data
+  return data // { emails: [{messageId, subject, from, date, hasAttachment, attachments[], snippet}], total }
+}
+
+// ── Gmail Scan — Phase 2: process selected message IDs ───────────
+export async function processGmailEmails(messageIds) {
+  const { data, error } = await supabase.functions.invoke('scan-gmail', {
+    body: { message_ids: messageIds }
+  })
+  if (error) throw error
+  return data // { processed, skipped, total, errors? }
 }
 
 // ── ZIP Batch Import ──────────────────────────────────────────────

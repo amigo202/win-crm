@@ -6,7 +6,8 @@ import {
   deleteInvoice,
   uploadInvoiceImage,
   processInvoiceImage,
-  scanGmail,
+  scanGmailEmails,
+  processGmailEmails,
   exportInvoicesCSV,
   importFromZip,
 } from '../services/invoicesService'
@@ -88,18 +89,26 @@ export function useInvoices() {
     }
   }, [])
 
-  // ── Gmail scan ─────────────────────────────────────────────────
+  // ── Gmail scan — Phase 1: fast scan, returns email candidates ───
   const scanEmails = useCallback(async () => {
     setScanning(true)
     try {
-      const result = await scanGmail()
-      if (result?.processed > 0) {
-        // Reload to get new invoices
-        await load(year)
-      }
-      return result
+      const result = await scanGmailEmails()
+      return result // { emails: [...], total }
     } finally {
       setScanning(false)
+    }
+  }, [])
+
+  // ── Gmail scan — Phase 2: process selected message IDs ──────────
+  const importGmailEmails = useCallback(async (messageIds) => {
+    setProcessing(true)
+    try {
+      const result = await processGmailEmails(messageIds)
+      if (result?.processed > 0) await load(year)
+      return result
+    } finally {
+      setProcessing(false)
     }
   }, [load, year])
 
@@ -122,6 +131,7 @@ export function useInvoices() {
     processCamera,
     importZip,
     scanEmails,
+    importGmailEmails,
     exportCSV,
   }
 }

@@ -263,6 +263,108 @@ function ViewModal({ invoice, onClose, onEdit, onVerify }) {
   )
 }
 
+// ── Gmail Scan Review Modal ────────────────────────────────────────
+function GmailScanModal({ emails, processing, onImport, onClose }) {
+  const [selected, setSelected] = useState(() => new Set(emails.map(e => e.messageId)))
+
+  const toggle = (id) => setSelected(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+  const toggleAll = () => {
+    setSelected(prev => prev.size === emails.length ? new Set() : new Set(emails.map(e => e.messageId)))
+  }
+
+  const fmtDate = (iso) => {
+    try { return new Date(iso).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' }) }
+    catch { return '' }
+  }
+
+  const selectedCount = selected.size
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 720, maxHeight: '90vh', overflowY: 'auto', direction: 'rtl' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <h3 style={{ margin: 0, fontSize: 18 }}>
+            📧 מיילי חשבוניות שנמצאו
+            <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400, marginRight: 8 }}>({emails.length} מיילים)</span>
+          </h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>×</button>
+        </div>
+
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+          בחר את המיילים שברצונך לייבא כחשבוניות. ה-AI יחלץ את הפרטים מכל מייל.
+        </div>
+
+        {/* Select all */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+          <input type="checkbox" checked={selectedCount === emails.length} onChange={toggleAll}
+            style={{ width: 15, height: 15, cursor: 'pointer' }} />
+          <span style={{ fontSize: 12, color: 'var(--muted)', cursor: 'pointer' }} onClick={toggleAll}>
+            {selectedCount === emails.length ? 'בטל הכל' : 'בחר הכל'}
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--muted)', marginRight: 'auto' }}>{selectedCount} נבחרו</span>
+        </div>
+
+        {/* Email list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
+          {emails.map(email => {
+            const isSelected = selected.has(email.messageId)
+            return (
+              <div key={email.messageId}
+                onClick={() => toggle(email.messageId)}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 12px', borderRadius: 9, background: isSelected ? 'var(--bg)' : 'transparent', border: '1px solid var(--border)', cursor: 'pointer', transition: 'background .15s' }}>
+                <input type="checkbox" checked={isSelected} onChange={() => toggle(email.messageId)}
+                  style={{ width: 15, height: 15, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
+                  onClick={e => e.stopPropagation()} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <span style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                      {email.subject}
+                    </span>
+                    {email.hasAttachment && (
+                      <span title="יש קובץ מצורף" style={{ fontSize: 13, flexShrink: 0 }}>📎</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
+                      {email.from}
+                    </span>
+                    <span style={{ flexShrink: 0 }}>{fmtDate(email.date)}</span>
+                  </div>
+                  {email.snippet && (
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {email.snippet}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>
+            ה-AI יעבד רק את {selectedCount} המיילים שנבחרו (עד 20 בכל פעם)
+          </span>
+          <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 9, border: '1px solid var(--border)', background: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>ביטול</button>
+          <button
+            disabled={selectedCount === 0 || processing}
+            onClick={() => onImport([...selected])}
+            style={{ padding: '9px 20px', borderRadius: 9, border: 'none', background: selectedCount && !processing ? '#3b82f6' : '#94a3b8', color: '#fff', cursor: selectedCount && !processing ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+            {processing ? '⏳ מעבד...' : `📥 יבא ${selectedCount} מיילים`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Batch ZIP Import Modal ─────────────────────────────────────────
 function BatchImportModal({ results, onSave, onClose }) {
   const [items, setItems] = useState(() =>
@@ -415,7 +517,7 @@ export default function InvoicesPage({ invoiceStore }) {
     invoices, loading, scanning, processing,
     year, setYear, load,
     addInvoice, editInvoice, removeInvoice,
-    processImage, processCamera, importZip, scanEmails, exportCSV,
+    processImage, processCamera, importZip, scanEmails, importGmailEmails, exportCSV,
   } = invoiceStore
 
   const now = new Date()
@@ -431,7 +533,8 @@ export default function InvoicesPage({ invoiceStore }) {
   const [gmailConnected, setGmailConnected] = useState(false)
   const [exportFrom,  setExportFrom]  = useState(`${now.getFullYear()}-01-01`)
   const [exportTo,    setExportTo]    = useState(`${now.getFullYear()}-12-31`)
-  const [batchResults,setBatchResults]= useState(null)  // ZIP import results
+  const [batchResults,    setBatchResults]    = useState(null)  // ZIP import results
+  const [gmailScanResults,setGmailScanResults] = useState(null)  // Gmail scan results
   const zipInputRef = useRef()
 
   // Load on mount
@@ -562,12 +665,14 @@ export default function InvoicesPage({ invoiceStore }) {
       return
     }
     try {
+      // Phase 1: fast metadata scan — no AI, no timeout risk
       const result = await scanEmails()
-      if (result?.processed > 0) {
-        toast_ok(`נמצאו ${result.processed} חשבוניות חדשות מהמייל! 📧`)
-      } else {
-        toast('לא נמצאו חשבוניות חדשות במייל', 'warning')
+      if (!result?.emails?.length) {
+        toast('לא נמצאו מיילי חשבוניות חדשים', 'warning')
+        return
       }
+      // Show review modal — user selects which to import
+      setGmailScanResults(result.emails)
     } catch (e) {
       if (e.message?.includes('needs_auth') || e.message?.includes('not connected')) {
         try {
@@ -1064,6 +1169,27 @@ export default function InvoicesPage({ invoiceStore }) {
             await load(year)
           }}
           onClose={() => setBatchResults(null)}
+        />
+      )}
+
+      {gmailScanResults && (
+        <GmailScanModal
+          emails={gmailScanResults}
+          processing={processing}
+          onImport={async (selectedIds) => {
+            try {
+              const result = await importGmailEmails(selectedIds)
+              setGmailScanResults(null)
+              if (result?.processed > 0) {
+                toast_ok(`יובאו ${result.processed} חשבוניות מהמייל! 📧`)
+              } else {
+                toast('לא נמצאו חשבוניות בהירים שנבחרו', 'warning')
+              }
+            } catch (e) {
+              toast_err('שגיאה ביבוא: ' + (e.message || e))
+            }
+          }}
+          onClose={() => setGmailScanResults(null)}
         />
       )}
     </div>
