@@ -18,6 +18,18 @@ function jsonRes(data: unknown, status = 200) {
   })
 }
 
+// ── Decode userId from Supabase JWT without extra API call ────────
+function decodeUserId(authHeader: string): string | null {
+  try {
+    const token = authHeader.replace('Bearer ', '')
+    if (!token || !token.includes('.')) return null
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    // Supabase user JWTs have role='authenticated'; anon key has role='anon'
+    if (payload.role !== 'authenticated') return null
+    return payload.sub || null
+  } catch { return null }
+}
+
 // ── Refresh / get valid Google token ─────────────────────────────
 async function getValidToken(supabase: ReturnType<typeof createClient>, userId: string): Promise<string | null> {
   const { data } = await supabase
@@ -53,7 +65,7 @@ async function gmailSearch(accessToken: string, query: string, maxResults = 50) 
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   const data = await res.json()
-  return data.messages || []
+  return (data.messages || []) as Array<{ id: string }>
 }
 
 async function gmailGetMessage(accessToken: string, messageId: string) {
@@ -63,7 +75,7 @@ async function gmailGetMessage(accessToken: string, messageId: string) {
   return res.json()
 }
 
-// ── Extract attachments from Gmail message ────────────────────────
+// ── Extract PDF/image attachments ─────────────────────────────────
 function extractAttachments(message: Record<string, unknown>) {
   const attachments: Array<{ filename: string; mimeType: string; attachmentId: string }> = []
 
@@ -92,6 +104,79 @@ function extractAttachments(message: Record<string, unknown>) {
   return attachments
 }
 
+// ── Extract readable text from email body ─────────────────────────
+function extractEmailText(message: Record<string, unknown>): { subject: string; from: string; body: string } {
+  const payload  = message.payload as Record<string, unknown>
+  const headers  = (payload?.headers as Array<Record<string, string>>) || []
+  const subject  = headers.find(h => h.name === 'Subject')?.value || ''
+  const from     = headers.find(h => h.name === 'From')?.value || ''
+
+  let body = ''
+
+  function decodeBase64(data: string): string {
+    try {
+      // Gmail uses base64url encoding
+      const std = data.replace(/-/g, '+').replace(/_/g, '/')
+      return decodeURIComponent(
+        atob(std).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+      )
+    } catch { return '' }
+  }
+
+  function stripHtml(html: string): string {
+    return html
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<\/div>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
+
+  function walkForBody(parts: Array<Record<string, unknown>>) {
+    for (const part of (parts || [])) {
+      const partBody = part.body as Record<string, unknown>
+      const data     = (partBody?.data as string) || ''
+
+      if (part.mimeType === 'text/plain' && data && !body) {
+        body = decodeBase64(data)
+      } else if (part.mimeType === 'text/html' && data) {
+        const html = decodeBase64(data)
+        if (!body) body = stripHtml(html)
+      }
+
+      if (Array.isArray(part.parts)) walkForBody(part.parts as Array<Record<string, unknown>>)
+    }
+  }
+
+  // Handle simple (non-multipart) messages
+  const directBody = payload?.body as Record<string, unknown>
+  if (directBody?.data) {
+    const data = directBody.data as string
+    const mimeType = payload?.mimeType as string
+    if (mimeType === 'text/html') {
+      body = stripHtml(decodeBase64(data))
+    } else {
+      body = decodeBase64(data)
+    }
+  }
+
+  if (Array.isArray(payload?.parts)) walkForBody(payload.parts as Array<Record<string, unknown>>)
+
+  // Fallback: use Gmail snippet
+  if (!body) body = (message.snippet as string) || ''
+
+  return { subject, from, body: body.slice(0, 6000) }
+}
+
 // ── Download attachment ───────────────────────────────────────────
 async function downloadAttachment(accessToken: string, messageId: string, attachmentId: string) {
   const res = await fetch(
@@ -99,11 +184,10 @@ async function downloadAttachment(accessToken: string, messageId: string, attach
     { headers: { Authorization: `Bearer ${accessToken}` } }
   )
   const data = await res.json()
-  // Gmail returns base64url — convert to standard base64
   return (data.data as string || '').replace(/-/g, '+').replace(/_/g, '/')
 }
 
-// ── Call process-invoice edge function ────────────────────────────
+// ── Call process-invoice (image) ──────────────────────────────────
 async function processInvoiceImage(imageBase64: string, mimeType: string, authToken: string) {
   const res = await fetch(`${SUPABASE_URL()}/functions/v1/process-invoice`, {
     method: 'POST',
@@ -118,16 +202,19 @@ async function processInvoiceImage(imageBase64: string, mimeType: string, authTo
   return res.json()
 }
 
-// ── Decode userId from Supabase JWT without extra API call ────────
-function decodeUserId(authHeader: string): string | null {
-  try {
-    const token = authHeader.replace('Bearer ', '')
-    if (!token || !token.includes('.')) return null
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
-    // Supabase user JWTs have role='authenticated'; anon key has role='anon'
-    if (payload.role !== 'authenticated') return null
-    return payload.sub || null
-  } catch { return null }
+// ── Call process-invoice (email body text) ────────────────────────
+async function processInvoiceText(body: string, subject: string, from: string, authToken: string) {
+  const res = await fetch(`${SUPABASE_URL()}/functions/v1/process-invoice`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${authToken}`,
+      'apikey':        SERVICE_ROLE_KEY(),
+    },
+    body: JSON.stringify({ text: body, subject, from }),
+  })
+  if (!res.ok) return null
+  return res.json()
 }
 
 // ── Main handler ─────────────────────────────────────────────────
@@ -136,7 +223,7 @@ serve(async (req) => {
 
   try {
     const authHeader  = req.headers.get('Authorization') || ''
-    const bearerToken = authHeader.replace('Bearer ', '')   // raw JWT for downstream calls
+    const bearerToken = authHeader.replace('Bearer ', '')
     const supabase    = createClient(SUPABASE_URL(), SERVICE_ROLE_KEY())
 
     // Get user ID directly from JWT (no API call needed)
@@ -149,16 +236,32 @@ serve(async (req) => {
       return jsonRes({ error: 'Gmail not connected. Please connect Google account first.', needs_auth: true }, 401)
     }
 
-    // Gmail search query — looks for invoices in Hebrew and English
-    const searchQuery = 'חשבונית OR invoice OR receipt OR קבלה OR "tax invoice" newer_than:30d'
-    const messages    = await gmailSearch(accessToken, searchQuery, 30)
+    // ── Search Gmail: inbox + sent, 90 days, no attachment filter ──
+    const searchQueries = [
+      '(חשבונית OR invoice OR receipt OR קבלה OR "tax invoice" OR "חשבון עסקה" OR "מסמך מס") newer_than:90d',
+      'in:sent (חשבונית OR invoice OR receipt OR קבלה) newer_than:90d',
+    ]
+
+    // Collect unique message IDs across both queries
+    const seenIds = new Set<string>()
+    const allMessages: Array<{ id: string }> = []
+
+    for (const q of searchQueries) {
+      const msgs = await gmailSearch(accessToken, q, 60)
+      for (const m of msgs) {
+        if (!seenIds.has(m.id)) {
+          seenIds.add(m.id)
+          allMessages.push(m)
+        }
+      }
+    }
 
     let processed = 0
     let skipped   = 0
     const errors: string[] = []
 
-    for (const msg of messages) {
-      const messageId = msg.id as string
+    for (const msg of allMessages) {
+      const messageId = msg.id
 
       // Skip if already imported
       const { data: existing } = await supabase
@@ -170,48 +273,55 @@ serve(async (req) => {
       if (existing) { skipped++; continue }
 
       try {
-        // Get full message with attachments
         const fullMsg    = await gmailGetMessage(accessToken, messageId)
         const attachments = extractAttachments(fullMsg)
+        const { subject, from, body } = extractEmailText(fullMsg)
 
-        if (attachments.length === 0) { skipped++; continue }
+        let extracted: Record<string, unknown> | null = null
 
-        // Process first valid attachment
-        for (const att of attachments) {
-          const base64Data  = await downloadAttachment(accessToken, messageId, att.attachmentId)
-          if (!base64Data)  continue
-
-          const extracted = await processInvoiceImage(base64Data, att.mimeType, bearerToken)
-          if (!extracted)   continue
-
-          // Get email date for fallback
-          const internalDate = fullMsg.internalDate
-            ? new Date(Number(fullMsg.internalDate))
-            : new Date()
-
-          const month = extracted.month || (internalDate.getMonth() + 1)
-          const year  = extracted.year  || internalDate.getFullYear()
-
-          await supabase.from('invoices').insert({
-            owner_id:        userId,
-            vendor:          extracted.vendor          || null,
-            invoice_number:  extracted.invoice_number  || null,
-            invoice_date:    extracted.invoice_date     || internalDate.toISOString().split('T')[0],
-            amount:          extracted.amount           || null,
-            vat_amount:      extracted.vat_amount       || null,
-            total_amount:    extracted.total_amount     || null,
-            category:        extracted.category         || 'אחר',
-            month,
-            year,
-            description:     extracted.description      || null,
-            source:          'email',
-            email_message_id: messageId,
-            status:          'pending',
-          })
-
-          processed++
-          break // only first attachment per email
+        if (attachments.length > 0) {
+          // ── Path A: process attachment (PDF / image) ──
+          for (const att of attachments) {
+            const base64Data = await downloadAttachment(accessToken, messageId, att.attachmentId)
+            if (!base64Data) continue
+            extracted = await processInvoiceImage(base64Data, att.mimeType, bearerToken)
+            if (extracted) break   // first valid attachment wins
+          }
         }
+
+        // ── Path B: no attachment (or attachment failed) → use email body ──
+        if (!extracted && body.length > 80) {
+          extracted = await processInvoiceText(body, subject, from, bearerToken)
+        }
+
+        if (!extracted) { skipped++; continue }
+
+        // Get email date for fallback
+        const internalDate = fullMsg.internalDate
+          ? new Date(Number(fullMsg.internalDate))
+          : new Date()
+
+        const month = extracted.month || (internalDate.getMonth() + 1)
+        const year  = extracted.year  || internalDate.getFullYear()
+
+        await supabase.from('invoices').insert({
+          owner_id:         userId,
+          vendor:           extracted.vendor          || null,
+          invoice_number:   extracted.invoice_number  || null,
+          invoice_date:     extracted.invoice_date     || internalDate.toISOString().split('T')[0],
+          amount:           extracted.amount           || null,
+          vat_amount:       extracted.vat_amount       || null,
+          total_amount:     extracted.total_amount     || null,
+          category:         extracted.category         || 'אחר',
+          month,
+          year,
+          description:      extracted.description      || subject || null,
+          source:           'email',
+          email_message_id: messageId,
+          status:           'pending',
+        })
+
+        processed++
       } catch (e) {
         errors.push(`${messageId}: ${(e as Error).message}`)
       }
@@ -221,7 +331,7 @@ serve(async (req) => {
       success:   true,
       processed,
       skipped,
-      total:     messages.length,
+      total:     allMessages.length,
       errors:    errors.length > 0 ? errors : undefined,
     })
 

@@ -35,13 +35,13 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { imageBase64, mimeType = 'image/jpeg' } = await req.json()
-    if (!imageBase64) return jsonRes({ error: 'imageBase64 is required' }, 400)
+    const { imageBase64, mimeType = 'image/jpeg', text, subject, from } = await req.json()
+    if (!imageBase64 && !text) return jsonRes({ error: 'imageBase64 or text is required' }, 400)
     if (!GEMINI_KEY()) return jsonRes({ error: 'GEMINI_API_KEY not configured' }, 500)
 
     const systemPrompt = `אתה מומחה לקריאת חשבוניות עסקיות ישראליות.
 
-    נתחל תמונה/מסמך של חשבונית ותחלוץ את הנתונים הבאים:
+    קבל תמונה/מסמך/טקסט של חשבונית ותחלוץ את הנתונים הבאים:
     1. שם הספק/העסק שהוציא את החשבונית
     2. מספר חשבונית
     3. תאריך החשבונית (בפורמט YYYY-MM-DD)
@@ -63,23 +63,21 @@ serve(async (req) => {
       "category": "קטגוריה מהרשימה"
     }
 
-    אם שדה מסוים לא נמצא בתמונה, השתמש ב-null.
-    אם אין מידע על מע"מ נפרד, הנח שהסכום הכולל כולל מע"מ 17% וחשב בהתאם.`
+    אם שדה מסוים לא נמצא, השתמש ב-null.
+    אם אין מידע על מע"מ נפרד, הנח שהסכום הכולל כולל מע"מ 17% וחשב בהתאם.
+    אם המקור הוא טקסט מייל — חלץ לפי הנושא, השולח ותוכן המייל.`
+
+    // Build Gemini parts — image or text
+    const userParts: unknown[] = text
+      ? [{ text: `נושא: ${subject || ''}\nמאת: ${from || ''}\n\nתוכן המייל:\n${text.slice(0, 5000)}` }]
+      : [
+          { text: 'חלץ את פרטי החשבונית מהתמונה/מסמך הבא:' },
+          { inline_data: { mime_type: mimeType, data: imageBase64 } },
+        ]
 
     const geminiBody = {
       system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{
-        role: 'user',
-        parts: [
-          { text: 'חלץ את פרטי החשבונית מהתמונה הבאה:' },
-          {
-            inline_data: {
-              mime_type: mimeType,
-              data: imageBase64,
-            },
-          },
-        ],
-      }],
+      contents: [{ role: 'user', parts: userParts }],
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 1024,
