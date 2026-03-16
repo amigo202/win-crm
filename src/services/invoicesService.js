@@ -1,38 +1,75 @@
 import { supabase } from '../lib/supabase'
 import JSZip from 'jszip'
 
-// ── Categories ────────────────────────────────────────────────────
+// ── Israeli Tax Categories (aligned with process-invoice Edge Function) ──
+// Value keys match what Gemini returns; labels are displayed in Hebrew
 export const INVOICE_CATEGORIES = [
-  'משרד וציוד',
-  'שיווק ופרסום',
-  'תחבורה ונסיעות',
-  'מזון ואירוח',
-  'שירותים מקצועיים',
-  'תוכנה ומנויים',
-  'תחזוקה ותיקונים',
-  'שכירות',
-  'חשמל ומים',
-  'ביטוח',
-  'ציוד ומכשור',
-  'הדרכה והשתלמות',
-  'אחר',
+  'marketing',
+  'software_il',
+  'software_abroad',
+  'office',
+  'professional',
+  'communication',
+  'delivery',
+  'freelancers',
+  'car_fuel',
+  'car_maintenance',
+  'flights_hotels',
+  'food',
+  'gifts',
+  'home_office',
+  'insurance',
+  'other',
 ]
 
-export const CATEGORY_COLORS = {
-  'משרד וציוד':         '#6366f1',
-  'שיווק ופרסום':       '#ec4899',
-  'תחבורה ונסיעות':     '#f59e0b',
-  'מזון ואירוח':        '#10b981',
-  'שירותים מקצועיים':   '#3b82f6',
-  'תוכנה ומנויים':      '#8b5cf6',
-  'תחזוקה ותיקונים':    '#f97316',
-  'שכירות':             '#ef4444',
-  'חשמל ומים':          '#06b6d4',
-  'ביטוח':              '#84cc16',
-  'ציוד ומכשור':        '#14b8a6',
-  'הדרכה והשתלמות':     '#f43f5e',
-  'אחר':                '#94a3b8',
+export const CATEGORY_LABELS = {
+  marketing:       'שיווק ופרסום',
+  software_il:     'תוכנה (ספק ישראלי)',
+  software_abroad: 'תוכנה מחו"ל (SaaS)',
+  office:          'ציוד משרדי',
+  professional:    'שירותים מקצועיים',
+  communication:   'תקשורת ואינטרנט',
+  delivery:        'שליחויות',
+  freelancers:     'פרילנסרים',
+  car_fuel:        'רכב ודלק',
+  car_maintenance: 'אחזקת רכב',
+  flights_hotels:  'טיסות ומלונות',
+  food:            'כיבוד ומסעדות',
+  gifts:           'מתנות',
+  home_office:     'הוצאות בית/משרד',
+  insurance:       'ביטוח',
+  other:           'אחר',
 }
+
+// VAT deduction factors per Israeli tax law
+export const VAT_FACTORS = {
+  marketing: 1, software_il: 1, office: 1, professional: 1,
+  communication: 1, delivery: 1, freelancers: 1, insurance: 1, other: 1,
+  car_fuel: 0.666, car_maintenance: 0.666,
+  software_abroad: 0, flights_hotels: 0, food: 0, gifts: 0, home_office: 0,
+}
+
+export const CATEGORY_COLORS = {
+  marketing:       '#ec4899',
+  software_il:     '#8b5cf6',
+  software_abroad: '#6366f1',
+  office:          '#6366f1',
+  professional:    '#3b82f6',
+  communication:   '#06b6d4',
+  delivery:        '#f59e0b',
+  freelancers:     '#a855f7',
+  car_fuel:        '#f97316',
+  car_maintenance: '#f59e0b',
+  flights_hotels:  '#0ea5e9',
+  food:            '#ef4444',
+  gifts:           '#f43f5e',
+  home_office:     '#78716c',
+  insurance:       '#84cc16',
+  other:           '#94a3b8',
+}
+
+// Helper: get display label for a category key
+export const getCategoryLabel = (key) => CATEGORY_LABELS[key] || key || 'אחר'
 
 // ── DB mapping ────────────────────────────────────────────────────
 export function fromDbInvoice(r) {

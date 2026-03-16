@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { INVOICE_CATEGORIES, CATEGORY_COLORS } from '../../services/invoicesService'
+import { INVOICE_CATEGORIES, CATEGORY_COLORS, getCategoryLabel } from '../../services/invoicesService'
 import { getGmailAuthUrl, exchangeCode } from '../../services/googleCalendarService'
 import { toast, toast_ok, toast_err } from '../Toast'
 
@@ -108,7 +108,7 @@ function InvoiceModal({ invoice, onSave, onClose }) {
           <div style={{ ...GRP, gridColumn: '1/-1' }}>
             <label style={LBL}>קטגוריה</label>
             <select style={INP} value={form.category} onChange={e => set('category', e.target.value)}>
-              {INVOICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {INVOICE_CATEGORIES.map(c => <option key={c} value={c}>{getCategoryLabel(c)}</option>)}
             </select>
           </div>
 
@@ -237,7 +237,7 @@ function ViewModal({ invoice, onClose, onEdit, onVerify }) {
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-          <span style={{ background: color + '22', color, padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{invoice.category}</span>
+          <span style={{ background: color + '22', color, padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{getCategoryLabel(invoice.category)}</span>
           <span style={{ background: 'var(--bg)', color: 'var(--muted)', padding: '3px 10px', borderRadius: 20, fontSize: 12 }}>{srcLabel(invoice.source)}</span>
           {invoice.month && <span style={{ background: 'var(--bg)', color: 'var(--muted)', padding: '3px 10px', borderRadius: 20, fontSize: 12 }}>{MONTHS_HE[invoice.month - 1]} {invoice.year}</span>}
           <span style={{ background: invoice.status === 'verified' ? '#10b98122' : '#f9731622', color: invoice.status === 'verified' ? '#10b981' : '#f97316', padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
@@ -266,7 +266,13 @@ function ViewModal({ invoice, onClose, onEdit, onVerify }) {
 // ── Batch ZIP Import Modal ─────────────────────────────────────────
 function BatchImportModal({ results, onSave, onClose }) {
   const [items, setItems] = useState(() =>
-    results.map((r, i) => ({ ...r, _key: i, editing: false }))
+    results.map((r, i) => ({
+      ...r,
+      _key: i,
+      editing: false,
+      // Auto-deselect AI-rejected items (not valid invoices)
+      selected: r.selected && r.extracted?.is_valid_invoice !== false,
+    }))
   )
   const [editIdx, setEditIdx] = useState(null)
 
@@ -347,7 +353,7 @@ function BatchImportModal({ results, onSave, onClose }) {
               <div>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>קטגוריה</div>
                 <select value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))} style={sel}>
-                  {INVOICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {INVOICE_CATEGORIES.map(c => <option key={c} value={c}>{getCategoryLabel(c)}</option>)}
                 </select>
               </div>
             </div>
@@ -360,28 +366,34 @@ function BatchImportModal({ results, onSave, onClose }) {
 
         {/* Results list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-          {items.map((item, i) => (
-            <div key={item._key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: item.error ? '#ef444411' : item.selected ? 'var(--bg)' : 'transparent', border: '1px solid var(--border)', opacity: item.error ? 0.7 : 1 }}>
-              {/* Checkbox */}
-              <input type="checkbox" checked={!!item.selected} disabled={!!item.error} onChange={() => toggle(i)} style={{ width: 16, height: 16, cursor: item.error ? 'not-allowed' : 'pointer', flexShrink: 0 }} />
+          {items.map((item, i) => {
+            const isInvalid = !item.error && item.extracted?.is_valid_invoice === false
+            const isDisabled = !!item.error || isInvalid
+            return (
+              <div key={item._key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: item.error ? '#ef444411' : isInvalid ? '#94a3b811' : item.selected ? 'var(--bg)' : 'transparent', border: '1px solid var(--border)', opacity: isDisabled ? 0.6 : 1 }}>
+                {/* Checkbox */}
+                <input type="checkbox" checked={!!item.selected} disabled={isDisabled} onChange={() => toggle(i)} style={{ width: 16, height: 16, cursor: isDisabled ? 'not-allowed' : 'pointer', flexShrink: 0 }} />
 
-              {/* Filename */}
-              <span style={{ fontSize: 12, color: 'var(--muted)', minWidth: 140, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }} title={item.filename}>
-                📄 {item.filename}
-              </span>
+                {/* Filename */}
+                <span style={{ fontSize: 12, color: 'var(--muted)', minWidth: 140, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }} title={item.filename}>
+                  📄 {item.filename}
+                </span>
 
-              {item.error ? (
-                <span style={{ color: '#ef4444', fontSize: 12, flex: 1 }}>⚠️ שגיאה: {item.error}</span>
-              ) : (
-                <>
-                  <span style={{ fontSize: 13, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.extracted?.vendor || '—'}</span>
-                  <span style={{ fontSize: 12, color: 'var(--muted)', minWidth: 70 }}>{fmtAmt(item.extracted?.total_amount)}</span>
-                  <span style={{ fontSize: 11, color: 'var(--muted)', minWidth: 90, textAlign: 'center' }}>{item.extracted?.category || ''}</span>
-                  <button onClick={() => openEdit(i)} style={{ padding: '4px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>✏️</button>
-                </>
-              )}
-            </div>
-          ))}
+                {item.error ? (
+                  <span style={{ color: '#ef4444', fontSize: 12, flex: 1 }}>⚠️ שגיאה: {item.error}</span>
+                ) : isInvalid ? (
+                  <span style={{ color: 'var(--muted)', fontSize: 12, flex: 1 }}>🚫 לא זוהה כחשבונית — {item.extracted?.rejection_reason || 'AI לא אישר כמסמך מס תקין'}</span>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 13, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.extracted?.vendor || '—'}</span>
+                    <span style={{ fontSize: 12, color: 'var(--muted)', minWidth: 70 }}>{fmtAmt(item.extracted?.total_amount)}</span>
+                    <span style={{ fontSize: 11, color: 'var(--muted)', minWidth: 90, textAlign: 'center' }}>{getCategoryLabel(item.extracted?.category)}</span>
+                    <button onClick={() => openEdit(i)} style={{ padding: '4px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>✏️</button>
+                  </>
+                )}
+              </div>
+            )
+          })}
         </div>
 
         {/* Footer */}
@@ -694,7 +706,7 @@ export default function InvoicesPage({ invoiceStore }) {
             </select>
             <select style={S.sel} value={filterCat} onChange={e => setFilterCat(e.target.value)}>
               <option value="">כל הקטגוריות</option>
-              {INVOICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {INVOICE_CATEGORIES.map(c => <option key={c} value={c}>{getCategoryLabel(c)}</option>)}
             </select>
             <select style={S.sel} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
               <option value="">כל הסטטוסים</option>
@@ -746,7 +758,7 @@ export default function InvoicesPage({ invoiceStore }) {
                       <td style={S.td}>{fmtDate(inv.invoiceDate)}</td>
                       <td style={S.td}>
                         <span style={{ background: (CATEGORY_COLORS[inv.category] || '#94a3b8') + '22', color: CATEGORY_COLORS[inv.category] || '#94a3b8', padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
-                          {inv.category}
+                          {getCategoryLabel(inv.category)}
                         </span>
                       </td>
                       <td style={{ ...S.td, fontWeight: 700, color: '#ef4444' }}>{fmtShekel(inv.totalAmount)}</td>
@@ -932,7 +944,7 @@ export default function InvoicesPage({ invoiceStore }) {
                     }, {})
                   ).sort((a,b) => b[1].total - a[1].total).map(([cat, d]) => (
                     <tr key={cat}>
-                      <td style={S.td}><span style={{ background: (CATEGORY_COLORS[cat]||'#94a3b8') + '22', color: CATEGORY_COLORS[cat]||'#94a3b8', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{cat}</span></td>
+                      <td style={S.td}><span style={{ background: (CATEGORY_COLORS[cat]||'#94a3b8') + '22', color: CATEGORY_COLORS[cat]||'#94a3b8', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{getCategoryLabel(cat)}</span></td>
                       <td style={S.td}>{d.count}</td>
                       <td style={S.td}>{fmtShekel(d.amount)}</td>
                       <td style={S.td}>{fmtShekel(d.vat)}</td>
@@ -970,7 +982,7 @@ export default function InvoicesPage({ invoiceStore }) {
                         <td style={S.td}>{fmtDate(inv.invoiceDate)}</td>
                         <td style={{ ...S.td, fontWeight: 600 }}>{inv.vendor || '—'}</td>
                         <td style={{ ...S.td, color: 'var(--muted)' }}>{inv.invoiceNumber || '—'}</td>
-                        <td style={S.td}><span style={{ background: (CATEGORY_COLORS[inv.category]||'#94a3b8') + '22', color: CATEGORY_COLORS[inv.category]||'#94a3b8', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{inv.category}</span></td>
+                        <td style={S.td}><span style={{ background: (CATEGORY_COLORS[inv.category]||'#94a3b8') + '22', color: CATEGORY_COLORS[inv.category]||'#94a3b8', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{getCategoryLabel(inv.category)}</span></td>
                         <td style={S.td}>{fmtShekel(inv.amount)}</td>
                         <td style={S.td}>{fmtShekel(inv.vatAmount)}</td>
                         <td style={{ ...S.td, fontWeight: 700 }}>{fmtShekel(inv.totalAmount)}</td>

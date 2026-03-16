@@ -76,23 +76,31 @@ async function gmailGetMessage(accessToken: string, messageId: string) {
 }
 
 // ── Extract PDF/image attachments ─────────────────────────────────
+// Minimum 40KB to filter out logos, icons, and decorative images
+const MIN_ATTACHMENT_SIZE = 40 * 1024
+
 function extractAttachments(message: Record<string, unknown>) {
-  const attachments: Array<{ filename: string; mimeType: string; attachmentId: string }> = []
+  const attachments: Array<{ filename: string; mimeType: string; attachmentId: string; size: number }> = []
 
   function walkParts(parts: Array<Record<string, unknown>>) {
     for (const part of (parts || [])) {
       const body = part.body as Record<string, unknown>
+      const mimeType = part.mimeType as string
+      const size = Number(body?.size || 0)
       if (
         body?.attachmentId &&
-        (
-          (part.mimeType as string)?.startsWith('image/') ||
-          part.mimeType === 'application/pdf'
-        )
+        (mimeType?.startsWith('image/') || mimeType === 'application/pdf')
       ) {
+        let filename = (part.filename as string) || ''
+        if (!filename) {
+          const ext = mimeType.split('/')[1] || 'pdf'
+          filename = `invoice_${Date.now()}.${ext}`
+        }
         attachments.push({
-          filename:     (part.filename as string) || 'attachment',
-          mimeType:     (part.mimeType as string) || 'application/octet-stream',
+          filename,
+          mimeType:     mimeType || 'application/octet-stream',
           attachmentId: body.attachmentId as string,
+          size,
         })
       }
       if (Array.isArray(part.parts)) walkParts(part.parts as Array<Record<string, unknown>>)
@@ -101,7 +109,9 @@ function extractAttachments(message: Record<string, unknown>) {
 
   const payload = message.payload as Record<string, unknown>
   if (Array.isArray(payload?.parts)) walkParts(payload.parts as Array<Record<string, unknown>>)
-  return attachments
+
+  // Filter out tiny files (logos, icons) — keep only >= 40KB
+  return attachments.filter(a => a.size === 0 || a.size >= MIN_ATTACHMENT_SIZE)
 }
 
 // ── Extract readable text from email body ─────────────────────────
@@ -236,25 +246,26 @@ serve(async (req) => {
       return jsonRes({ error: 'Gmail not connected. Please connect Google account first.', needs_auth: true }, 401)
     }
 
-    // ── Search Gmail: inbox + sent, 90 days, no attachment filter ──
-    const searchQueries = [
-      '(חשבונית OR invoice OR receipt OR קבלה OR "tax invoice" OR "חשבון עסקה" OR "מסמך מס") newer_than:90d',
-      'in:sent (חשבונית OR invoice OR receipt OR קבלה) newer_than:90d',
-    ]
+    // ── Search Gmail — STRICT mode: require keywords + attachment ──
+    // Modeled after invoice-auto-drive reference project for precision
+    const STRICT_QUERY = [
+      '-in:trash -in:spam -is:draft',
+      '-subject:newsletter -subject:"password reset" -subject:tracking -subject:shipment',
+      '-subject:unsubscribe -subject:welcome -subject:"ברוך הבא" -subject:"verify your"',
+      // Core: invoice keywords AND has an attachment
+      '((subject:invoice OR subject:receipt OR subject:bill',
+      ' OR subject:חשבונית OR subject:החשבונית OR subject:קבלה OR subject:הקבלה',
+      ' OR subject:תשלום OR subject:חיוב OR subject:החיוב OR subject:"מסמך מס") has:attachment)',
+      // Known Israeli & global invoice senders
+      'OR ((from:golan-telecom.co.il OR from:golan.co.il OR from:partner.net.il',
+      ' OR from:cellcom.co.il OR from:hot.net.il OR from:bezeq.co.il OR from:012mobile.co.il',
+      ' OR from:pelephone.co.il OR from:rami-levy.co.il OR from:yes.co.il',
+      ' OR from:isracard.co.il OR from:cal-online.co.il OR from:max.co.il',
+      ' OR from:stripe.com OR from:paypal.com OR from:amazon.com) has:attachment)',
+      'newer_than:90d',
+    ].join(' ')
 
-    // Collect unique message IDs across both queries
-    const seenIds = new Set<string>()
-    const allMessages: Array<{ id: string }> = []
-
-    for (const q of searchQueries) {
-      const msgs = await gmailSearch(accessToken, q, 60)
-      for (const m of msgs) {
-        if (!seenIds.has(m.id)) {
-          seenIds.add(m.id)
-          allMessages.push(m)
-        }
-      }
-    }
+    const allMessages = await gmailSearch(accessToken, STRICT_QUERY, 80)
 
     let processed = 0
     let skipped   = 0
@@ -284,14 +295,21 @@ serve(async (req) => {
           for (const att of attachments) {
             const base64Data = await downloadAttachment(accessToken, messageId, att.attachmentId)
             if (!base64Data) continue
-            extracted = await processInvoiceImage(base64Data, att.mimeType, bearerToken)
-            if (extracted) break   // first valid attachment wins
+            const result = await processInvoiceImage(base64Data, att.mimeType, bearerToken)
+            // Skip if AI says it's not a valid invoice (logo, screenshot, etc.)
+            if (result && result.is_valid_invoice !== false) {
+              extracted = result
+              break   // first valid attachment wins
+            }
           }
         }
 
-        // ── Path B: no attachment (or attachment failed) → use email body ──
+        // ── Path B: no valid attachment → use email body text ──
         if (!extracted && body.length > 80) {
-          extracted = await processInvoiceText(body, subject, from, bearerToken)
+          const result = await processInvoiceText(body, subject, from, bearerToken)
+          if (result && result.is_valid_invoice !== false) {
+            extracted = result
+          }
         }
 
         if (!extracted) { skipped++; continue }
@@ -312,7 +330,7 @@ serve(async (req) => {
           amount:           extracted.amount           || null,
           vat_amount:       extracted.vat_amount       || null,
           total_amount:     extracted.total_amount     || null,
-          category:         extracted.category         || 'אחר',
+          category:         extracted.category         || 'other',
           month,
           year,
           description:      extracted.description      || subject || null,
