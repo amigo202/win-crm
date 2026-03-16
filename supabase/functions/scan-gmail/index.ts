@@ -118,19 +118,30 @@ async function processInvoiceImage(imageBase64: string, mimeType: string, authTo
   return res.json()
 }
 
+// ── Decode userId from Supabase JWT without extra API call ────────
+function decodeUserId(authHeader: string): string | null {
+  try {
+    const token = authHeader.replace('Bearer ', '')
+    if (!token || !token.includes('.')) return null
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    // Supabase user JWTs have role='authenticated'; anon key has role='anon'
+    if (payload.role !== 'authenticated') return null
+    return payload.sub || null
+  } catch { return null }
+}
+
 // ── Main handler ─────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const authHeader = req.headers.get('Authorization') || ''
-    const supabase   = createClient(SUPABASE_URL(), SERVICE_ROLE_KEY())
+    const authHeader  = req.headers.get('Authorization') || ''
+    const bearerToken = authHeader.replace('Bearer ', '')   // raw JWT for downstream calls
+    const supabase    = createClient(SUPABASE_URL(), SERVICE_ROLE_KEY())
 
-    // Get user from JWT
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user } } = await supabase.auth.getUser(token)
-    if (!user) return jsonRes({ error: 'Unauthorized' }, 401)
-    const userId = user.id
+    // Get user ID directly from JWT (no API call needed)
+    const userId = decodeUserId(authHeader)
+    if (!userId) return jsonRes({ error: 'Unauthorized' }, 401)
 
     // Get valid Google token
     const accessToken = await getValidToken(supabase, userId)
@@ -170,7 +181,7 @@ serve(async (req) => {
           const base64Data  = await downloadAttachment(accessToken, messageId, att.attachmentId)
           if (!base64Data)  continue
 
-          const extracted = await processInvoiceImage(base64Data, att.mimeType, token)
+          const extracted = await processInvoiceImage(base64Data, att.mimeType, bearerToken)
           if (!extracted)   continue
 
           // Get email date for fallback
