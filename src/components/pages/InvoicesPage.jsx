@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { INVOICE_CATEGORIES, CATEGORY_COLORS, getCategoryLabel } from '../../services/invoicesService'
+import { INVOICE_CATEGORIES, CATEGORY_COLORS, CATEGORY_LABELS, VAT_FACTORS, getCategoryLabel } from '../../services/invoicesService'
 import { getGmailAuthUrl, exchangeCode } from '../../services/googleCalendarService'
 import { toast, toast_ok, toast_err } from '../Toast'
 
@@ -263,101 +263,153 @@ function ViewModal({ invoice, onClose, onEdit, onVerify }) {
   )
 }
 
-// ── Gmail Scan Review Modal ────────────────────────────────────────
+// ── Gmail Scan Review Modal — upgraded ────────────────────────────
 function GmailScanModal({ emails, processing, onImport, onClose }) {
-  const [selected, setSelected] = useState(() => new Set(emails.map(e => e.messageId)))
+  const [selected,  setSelected]  = useState(() => new Set(emails.map(e => e.messageId)))
+  const [tabFilter, setTabFilter] = useState('all')  // 'all' | 'attachment' | 'link'
 
   const toggle = (id) => setSelected(prev => {
-    const next = new Set(prev)
-    next.has(id) ? next.delete(id) : next.add(id)
-    return next
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
   })
-  const toggleAll = () => {
-    setSelected(prev => prev.size === emails.length ? new Set() : new Set(emails.map(e => e.messageId)))
-  }
+  const dismiss = (id, e) => { e.stopPropagation(); setSelected(prev => { const n = new Set(prev); n.delete(id); return n }) }
 
-  const fmtDate = (iso) => {
+  const fmtD = (iso) => {
     try { return new Date(iso).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' }) }
     catch { return '' }
   }
 
+  const withFile    = emails.filter(e => e.hasAttachment)
+  const linkOnly    = emails.filter(e => !e.hasAttachment)
+  const tabEmails   = tabFilter === 'attachment' ? withFile : tabFilter === 'link' ? linkOnly : emails
+
+  // Sender avatar initial
+  const initials = (from) => (from || '?').trim()[0].toUpperCase()
+  const senderColor = (from) => {
+    const colors = ['#3b82f6','#8b5cf6','#ec4899','#f97316','#10b981','#06b6d4','#f59e0b']
+    let hash = 0; for (const c of (from||'')) hash = ((hash<<5)-hash) + c.charCodeAt(0)
+    return colors[Math.abs(hash) % colors.length]
+  }
+
   const selectedCount = selected.size
+  const canImport = selectedCount > 0 && !processing
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 720, maxHeight: '90vh', overflowY: 'auto', direction: 'rtl' }} onClick={e => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'var(--surface)', borderRadius: 16, width: '100%', maxWidth: 780, maxHeight: '92vh', display: 'flex', flexDirection: 'column', direction: 'rtl', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 18 }}>
-            📧 מיילי חשבוניות שנמצאו
-            <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400, marginRight: 8 }}>({emails.length} מיילים)</span>
-          </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>×</button>
+        <div style={{ padding: '20px 24px 0', flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>חשבוניות לבדיקה</h3>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 24, cursor: 'pointer', lineHeight: 1 }}>×</button>
+          </div>
+
+          {/* Legend */}
+          <div style={{ display: 'flex', gap: 16, marginBottom: 14, fontSize: 12, color: 'var(--muted)' }}>
+            <span><span style={{ color: '#10b981' }}>●</span> ירוק = קובץ מצורף להעלאה</span>
+            <span><span style={{ color: '#3b82f6' }}>●</span> כחול = מייל ללא קבצים, לחץ לפתיחה</span>
+          </div>
+
+          {/* Tab filters */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+            {[['all', `הכל (${emails.length})`], ['attachment', `חשבוניות (${withFile.length})`], ['link', `קישורים בלבד (${linkOnly.length})`]].map(([id, lbl]) => (
+              <button key={id} onClick={() => setTabFilter(id)}
+                style={{ padding: '5px 14px', borderRadius: 20, border: '1px solid var(--border)', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                  background: tabFilter === id ? (id === 'link' ? '#3b82f6' : id === 'attachment' ? '#10b981' : '#f97316') : 'transparent',
+                  color:      tabFilter === id ? '#fff' : 'var(--muted)' }}>
+                {lbl}
+              </button>
+            ))}
+            <div style={{ marginRight: 'auto', fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center' }}>
+              <input type="checkbox" checked={selectedCount === emails.length} onChange={() => setSelected(prev => prev.size === emails.length ? new Set() : new Set(emails.map(e => e.messageId)))}
+                style={{ width: 14, height: 14, cursor: 'pointer', marginLeft: 6 }}/>
+              {selectedCount === emails.length ? 'בטל הכל' : 'בחר הכל'}
+            </div>
+          </div>
         </div>
 
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
-          בחר את המיילים שברצונך לייבא כחשבוניות. ה-AI יחלץ את הפרטים מכל מייל.
-        </div>
-
-        {/* Select all */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
-          <input type="checkbox" checked={selectedCount === emails.length} onChange={toggleAll}
-            style={{ width: 15, height: 15, cursor: 'pointer' }} />
-          <span style={{ fontSize: 12, color: 'var(--muted)', cursor: 'pointer' }} onClick={toggleAll}>
-            {selectedCount === emails.length ? 'בטל הכל' : 'בחר הכל'}
-          </span>
-          <span style={{ fontSize: 12, color: 'var(--muted)', marginRight: 'auto' }}>{selectedCount} נבחרו</span>
-        </div>
-
-        {/* Email list */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
-          {emails.map(email => {
-            const isSelected = selected.has(email.messageId)
-            return (
-              <div key={email.messageId}
-                onClick={() => toggle(email.messageId)}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 12px', borderRadius: 9, background: isSelected ? 'var(--bg)' : 'transparent', border: '1px solid var(--border)', cursor: 'pointer', transition: 'background .15s' }}>
-                <input type="checkbox" checked={isSelected} onChange={() => toggle(email.messageId)}
-                  style={{ width: 15, height: 15, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
-                  onClick={e => e.stopPropagation()} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                    <span style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                      {email.subject}
-                    </span>
-                    {email.hasAttachment && (
-                      <span title="יש קובץ מצורף" style={{ fontSize: 13, flexShrink: 0 }}>📎</span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)' }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
-                      {email.from}
-                    </span>
-                    <span style={{ flexShrink: 0 }}>{fmtDate(email.date)}</span>
-                  </div>
-                  {email.snippet && (
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {email.snippet}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+        {/* Email list — scrollable */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <th style={{ width: 32, padding: '6px 0' }}/>
+                <th style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--muted)', fontWeight: 600 }}>שולח</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--muted)', fontWeight: 600 }}>נושא</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>תאריך</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--muted)', fontWeight: 600 }}>קבצים</th>
+                <th style={{ width: 28, padding: '6px 0' }}/>
+              </tr>
+            </thead>
+            <tbody>
+              {tabEmails.map(email => {
+                const isSelected = selected.has(email.messageId)
+                const dot = email.hasAttachment ? '#10b981' : '#3b82f6'
+                const sc  = senderColor(email.from)
+                return (
+                  <tr key={email.messageId}
+                    onClick={() => toggle(email.messageId)}
+                    style={{ cursor: 'pointer', borderBottom: '1px solid var(--border)', background: isSelected ? dot + '11' : 'transparent', transition: 'background .12s' }}>
+                    <td style={{ padding: '9px 4px' }}>
+                      <input type="checkbox" checked={isSelected} onChange={() => toggle(email.messageId)}
+                        onClick={e => e.stopPropagation()}
+                        style={{ width: 14, height: 14, cursor: 'pointer' }}/>
+                    </td>
+                    <td style={{ padding: '9px 8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: sc, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                          {initials(email.from)}
+                        </div>
+                        <span style={{ fontWeight: 600, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{email.from}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '9px 8px', maxWidth: 300 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0 }}/>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>
+                          {email.subject}
+                        </span>
+                      </div>
+                      {email.snippet && (
+                        <div style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                          {email.snippet}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: '9px 8px', whiteSpace: 'nowrap', color: 'var(--muted)' }}>{fmtD(email.date)}</td>
+                    <td style={{ padding: '9px 8px' }}>
+                      {email.hasAttachment ? (
+                        <span style={{ background: '#10b98122', color: '#10b981', borderRadius: 20, padding: '1px 8px', fontWeight: 600 }}>
+                          📎 {email.attachments?.length || 1}
+                        </span>
+                      ) : (
+                        <span style={{ background: '#3b82f622', color: '#3b82f6', borderRadius: 20, padding: '1px 8px', fontWeight: 600 }}>
+                          🔗 קישור
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '9px 4px' }} onClick={e => e.stopPropagation()}>
+                      <button onClick={e => dismiss(email.messageId, e)}
+                        title="הסר מהרשימה"
+                        style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 2 }}>×</button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>
-            ה-AI יעבד רק את {selectedCount} המיילים שנבחרו (עד 20 בכל פעם)
-          </span>
-          <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 9, border: '1px solid var(--border)', background: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>ביטול</button>
-          <button
-            disabled={selectedCount === 0 || processing}
-            onClick={() => onImport([...selected])}
-            style={{ padding: '9px 20px', borderRadius: 9, border: 'none', background: selectedCount && !processing ? '#3b82f6' : '#94a3b8', color: '#fff', cursor: selectedCount && !processing ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
-            {processing ? '⏳ מעבד...' : `📥 יבא ${selectedCount} מיילים`}
+        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+          <div style={{ flex: 1, fontSize: 12, color: 'var(--muted)' }}>
+            נבחרו <strong style={{ color: 'var(--text)' }}>{selectedCount}</strong> מיילים לעיבוד AI
+            <span style={{ marginRight: 8 }}>· עד 20 בכל פעם</span>
+          </div>
+          <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 9, border: '1px solid var(--border)', background: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>ביטול</button>
+          <button disabled={!canImport} onClick={() => onImport([...selected])}
+            style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: canImport ? '#3b82f6' : '#94a3b8', color: '#fff', cursor: canImport ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+            {processing ? '⏳ מעבד...' : `מעלה... ${selectedCount} מיילים`}
           </button>
         </div>
       </div>
@@ -795,7 +847,7 @@ export default function InvoicesPage({ invoiceStore }) {
 
       {/* Tabs */}
       <div style={S.tabs}>
-        {[['all','📄 כל החשבוניות'],['category','🏷️ לפי קטגוריה'],['month','📅 לפי חודש'],['accountant','📊 לרו"ח']].map(([id, lbl]) => (
+        {[['all','📄 כל החשבוניות'],['category','🏷️ לפי קטגוריה'],['history','📅 היסטוריה ודוחות'],['accountant','📊 לרו"ח']].map(([id, lbl]) => (
           <button key={id} style={S.tab(tab === id)} onClick={() => setTab(id)}>{lbl}</button>
         ))}
       </div>
@@ -836,47 +888,73 @@ export default function InvoicesPage({ invoiceStore }) {
               <table style={S.table}>
                 <thead>
                   <tr>
-                    <th style={S.th}>תמונה</th>
-                    <th style={S.th}>ספק</th>
                     <th style={S.th}>תאריך</th>
-                    <th style={S.th}>קטגוריה</th>
-                    <th style={S.th}>סה"כ</th>
+                    <th style={S.th}>ספק</th>
                     <th style={S.th}>מקור</th>
+                    <th style={S.th}>קטגוריה</th>
+                    <th style={S.th}>סה"כ לתשלום</th>
+                    <th style={S.th}>החזר מע"מ</th>
                     <th style={S.th}>סטטוס</th>
                     <th style={S.th}>פעולות</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((inv, i) => (
-                    <tr key={inv.id} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.02)', cursor: 'pointer' }}
-                      onClick={() => setViewInv(inv)}>
-                      <td style={S.td}>
-                        {inv.imageUrl
-                          ? <img src={inv.imageUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }} onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex' }}/>
-                          : null}
-                        <div style={{ width: 36, height: 36, borderRadius: 6, background: 'var(--bg)', border: '1px solid var(--border)', display: inv.imageUrl ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📄</div>
-                      </td>
-                      <td style={S.td}>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{inv.vendor || '—'}</div>
-                        {inv.invoiceNumber && <div style={{ fontSize: 11, color: 'var(--muted)' }}>#{inv.invoiceNumber}</div>}
-                      </td>
-                      <td style={S.td}>{fmtDate(inv.invoiceDate)}</td>
-                      <td style={S.td}>
-                        <span style={{ background: (CATEGORY_COLORS[inv.category] || '#94a3b8') + '22', color: CATEGORY_COLORS[inv.category] || '#94a3b8', padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
-                          {getCategoryLabel(inv.category)}
-                        </span>
-                      </td>
-                      <td style={{ ...S.td, fontWeight: 700, color: '#ef4444' }}>{fmtShekel(inv.totalAmount)}</td>
-                      <td style={{ ...S.td, fontSize: 12, color: 'var(--muted)' }}>{srcLabel(inv.source)}</td>
-                      <td style={S.td}><span style={statusBadge(inv.status)}>{inv.status === 'verified' ? '✓ אושר' : '⏳ ממתין'}</span></td>
-                      <td style={S.td} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => setEditingInv(inv)} style={{ background: '#3b82f622', color: '#3b82f6', border: 'none', borderRadius: 6, padding: '4px 9px', fontSize: 11, cursor: 'pointer' }}>ערוך</button>
-                          <button onClick={() => handleDelete(inv.id)} style={{ background: '#ef444422', color: '#ef4444', border: 'none', borderRadius: 6, padding: '4px 9px', fontSize: 11, cursor: 'pointer' }}>מחק</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {filtered.map((inv, i) => {
+                    const catColor  = CATEGORY_COLORS[inv.category] || '#94a3b8'
+                    const vatFactor = VAT_FACTORS[inv.category]
+                    const vatBadge  = vatFactor === 1 ? { label: '100%', color: '#10b981' }
+                                    : vatFactor === 0.666 ? { label: '66%', color: '#f59e0b' }
+                                    : null  // 0 = no deduction shown
+                    // Source domain display
+                    const srcDomain = inv.source === 'email'
+                      ? (inv.vendor ? inv.vendor.toLowerCase().replace(/[^a-z0-9.-]/g, '').replace(/^(www\.)/, '') || '📧' : '📧')
+                      : inv.source === 'camera' ? '📷 צילום' : '📎 העלאה'
+                    return (
+                      <tr key={inv.id} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.02)', cursor: 'pointer' }}
+                        onClick={() => setViewInv(inv)}>
+                        <td style={{ ...S.td, whiteSpace: 'nowrap', color: 'var(--muted)', fontSize: 12 }}>{fmtDate(inv.invoiceDate)}</td>
+                        <td style={S.td}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <span style={{ fontWeight: 600, fontSize: 13 }}>{inv.vendor || '—'}</span>
+                            {inv.source !== 'camera' && <span style={{ fontSize: 11, opacity: 0.6 }} title="חולץ ע״י AI">✨</span>}
+                          </div>
+                          {inv.invoiceNumber && <div style={{ fontSize: 11, color: 'var(--muted)' }}>#{inv.invoiceNumber}</div>}
+                        </td>
+                        <td style={{ ...S.td, fontSize: 11, color: 'var(--muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {srcDomain}
+                        </td>
+                        <td style={S.td} onClick={e => e.stopPropagation()}>
+                          <select
+                            value={inv.category || 'other'}
+                            onChange={e => editInvoice(inv.id, { ...inv, category: e.target.value })}
+                            style={{ background: catColor + '22', color: catColor, border: `1px solid ${catColor}44`, borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', outline: 'none', direction: 'rtl', maxWidth: 160 }}>
+                            {INVOICE_CATEGORIES.map(c => <option key={c} value={c}>{getCategoryLabel(c)}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ ...S.td, fontWeight: 700, color: '#ef4444', whiteSpace: 'nowrap' }}>{fmtShekel(inv.totalAmount)}</td>
+                        <td style={S.td}>
+                          {vatBadge ? (
+                            <span style={{ background: vatBadge.color + '22', color: vatBadge.color, padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
+                              {vatBadge.label}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--muted)', fontSize: 11 }}>מס הכנסה</span>
+                          )}
+                        </td>
+                        <td style={S.td}><span style={statusBadge(inv.status)}>{inv.status === 'verified' ? '✓ אושר' : '⏳ ממתין'}</span></td>
+                        <td style={S.td} onClick={e => e.stopPropagation()}>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {inv.imageUrl && (
+                              <a href={inv.imageUrl} target="_blank" rel="noreferrer"
+                                style={{ background: '#3b82f622', color: '#3b82f6', border: 'none', borderRadius: 6, padding: '4px 9px', fontSize: 11, cursor: 'pointer', textDecoration: 'none' }}>↗</a>
+                            )}
+                            <button onClick={() => setEditingInv(inv)} style={{ background: '#3b82f622', color: '#3b82f6', border: 'none', borderRadius: 6, padding: '4px 9px', fontSize: 11, cursor: 'pointer' }}>✏️</button>
+                            <button onClick={() => handleDelete(inv.id)} style={{ background: '#ef444422', color: '#ef4444', border: 'none', borderRadius: 6, padding: '4px 9px', fontSize: 11, cursor: 'pointer' }}>🗑</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -907,7 +985,7 @@ export default function InvoicesPage({ invoiceStore }) {
                   return (
                     <div key={cat} style={{ marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
-                        <span style={{ color: col, fontWeight: 600 }}>{cat}</span>
+                        <span style={{ color: col, fontWeight: 600 }}>{getCategoryLabel(cat)}</span>
                         <span style={{ color: 'var(--muted)' }}>{fmtShekel(total)} ({pct.toFixed(1)}%)</span>
                       </div>
                       <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
@@ -927,7 +1005,7 @@ export default function InvoicesPage({ invoiceStore }) {
                       onClick={() => { setFilterCat(cat); setTab('all') }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
-                          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{cat}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{getCategoryLabel(cat)}</div>
                           <div style={{ fontSize: 11, color: 'var(--muted)' }}>{count} חשבוניות</div>
                         </div>
                         <div style={{ fontSize: 16, fontWeight: 700, color: col }}>{fmtShekel(total)}</div>
@@ -941,39 +1019,127 @@ export default function InvoicesPage({ invoiceStore }) {
         </>
       )}
 
-      {/* ── Tab: By Month ────────────────────────────────── */}
-      {tab === 'month' && (
-        <>
-          {byMonth.length === 0 ? (
-            <div style={S.empty}>אין חשבוניות לתצוגה</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {byMonth.map(({ month, year: y, count, total }) => {
-                const pct = totalAmount ? (total / totalAmount * 100) : 0
-                return (
-                  <div key={`${y}-${month}`} style={{ ...S.card, cursor: 'pointer' }}
-                    onClick={() => { setFilterMonth(month); setTab('all') }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                      <div style={{ minWidth: 100 }}>
-                        <div style={{ fontWeight: 700, fontSize: 15 }}>{MONTHS_HE[(month || 1) - 1]} {y}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{count} חשבוניות</div>
+      {/* ── Tab: History & Reports ───────────────────────── */}
+      {tab === 'history' && (() => {
+        // All invoices across all years for history view
+        const [histYear, setHistYear] = useState('all')
+        const availYears = [...new Set(invoices.map(x => x.year).filter(Boolean))].sort((a,b) => b-a)
+        const histInvs   = histYear === 'all' ? invoices : invoices.filter(x => x.year === Number(histYear))
+
+        // Group by year-month
+        const byYearMonth = {}
+        for (const inv of histInvs) {
+          if (!inv.month || !inv.year) continue
+          const key = `${inv.year}-${String(inv.month).padStart(2,'0')}`
+          if (!byYearMonth[key]) byYearMonth[key] = { year: inv.year, month: inv.month, total: 0, vatTotal: 0, count: 0, pending: 0 }
+          byYearMonth[key].total    += inv.totalAmount || 0
+          byYearMonth[key].vatTotal += inv.vatAmount   || 0
+          byYearMonth[key].count    += 1
+          if (inv.status !== 'verified') byYearMonth[key].pending += 1
+        }
+        const months = Object.entries(byYearMonth).sort((a,b) => b[0].localeCompare(a[0]))
+
+        const histTotal   = histInvs.reduce((s,x) => s + (x.totalAmount||0), 0)
+        const histVAT     = histInvs.reduce((s,x) => s + (x.vatAmount||0), 0)
+        const histMonths  = months.length
+        const histAvg     = histMonths ? histTotal / histMonths : 0
+        const vatPct      = histTotal ? (histVAT / histTotal * 100).toFixed(1) : 0
+
+        return (
+          <>
+            {/* Year selector */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+              {['all', ...availYears].map(y => (
+                <button key={y} onClick={() => setHistYear(String(y))}
+                  style={{ padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                    background: histYear === String(y) ? '#f97316' : 'var(--surface)',
+                    color:      histYear === String(y) ? '#fff'    : 'var(--muted)' }}>
+                  {y === 'all' ? 'הכל' : y}
+                </button>
+              ))}
+            </div>
+
+            {/* KPI cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
+              <div style={{ ...S.kpi, borderRightColor: '#ef4444' }}>
+                <div style={S.kpiLbl}>סה"כ הוצאות</div>
+                <div style={{ ...S.kpiVal, color: '#ef4444' }}>{fmtShekel(histTotal)}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{histInvs.length} חשבוניות</div>
+              </div>
+              <div style={{ ...S.kpi, borderRightColor: '#10b981' }}>
+                <div style={S.kpiLbl}>צפי החזר מע"מ</div>
+                <div style={{ ...S.kpiVal, color: '#10b981' }}>{fmtShekel(histVAT)}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{vatPct}% מההוצאות</div>
+              </div>
+              <div style={{ ...S.kpi, borderRightColor: '#3b82f6' }}>
+                <div style={S.kpiLbl}>ממוצע חודשי</div>
+                <div style={{ ...S.kpiVal, color: '#3b82f6' }}>{fmtShekel(histAvg)}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>הוצאה ממוצעת</div>
+              </div>
+              <div style={{ ...S.kpi, borderRightColor: '#8b5cf6' }}>
+                <div style={S.kpiLbl}>כל התקופות</div>
+                <div style={{ ...S.kpiVal, color: '#8b5cf6' }}>{histMonths} חודשים</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  {availYears.length > 0 ? `${availYears[availYears.length-1]} – ${availYears[0]}` : ''}
+                </div>
+              </div>
+            </div>
+
+            {/* Monthly timeline */}
+            {months.length === 0 ? (
+              <div style={S.empty}>אין חשבוניות לתצוגה</div>
+            ) : (
+              <>
+                {/* Group by year */}
+                {(histYear === 'all' ? [...new Set(months.map(([k,d]) => d.year))].sort((a,b)=>b-a) : [Number(histYear)]).map(yr => {
+                  const yMonths = months.filter(([,d]) => d.year === yr)
+                  if (!yMonths.length) return null
+                  const yTotal = yMonths.reduce((s,[,d])=>s+d.total,0)
+                  return (
+                    <div key={yr} style={{ marginBottom: 28 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--muted)' }}>{yr}</div>
+                        <div style={{ fontSize: 13, color: '#ef4444', fontWeight: 700 }}>{fmtShekel(yTotal)}</div>
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ height: 10, background: 'var(--border)', borderRadius: 5, overflow: 'hidden' }}>
-                          <div style={{ width: `${pct}%`, height: '100%', background: '#f97316', borderRadius: 5, transition: 'width .3s', minWidth: pct > 0 ? 4 : 0 }}/>
-                        </div>
-                      </div>
-                      <div style={{ fontWeight: 700, fontSize: 16, color: '#ef4444', minWidth: 100, textAlign: 'left' }}>
-                        {fmtShekel(total)}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+                        {yMonths.map(([key, { month: m, year: y, total, vatTotal, count, pending }]) => {
+                          const allOk  = pending === 0
+                          const accent = allOk ? '#10b981' : '#f97316'
+                          return (
+                            <div key={key}
+                              onClick={() => { setHistYear(String(y)); setFilterMonth(m); setYear(y); load(y); setTab('all') }}
+                              style={{ background: 'var(--surface)', borderRadius: 14, padding: '16px 18px', cursor: 'pointer', position: 'relative', overflow: 'hidden', border: '1px solid var(--border)', transition: 'transform .15s', ':hover': { transform: 'scale(1.02)' } }}>
+                              {/* Top bar */}
+                              <div style={{ position: 'absolute', top: 0, right: 0, left: 0, height: 3, background: accent }}/>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700 }}>{MONTHS_HE[(m||1)-1]} {y}</div>
+                                <span style={{ fontSize: 14 }}>{allOk ? '✅' : '⚠️'}</span>
+                              </div>
+                              <div style={{ fontSize: 22, fontWeight: 800, color: '#ef4444', marginBottom: 4 }}>
+                                {fmtShekel(total)}
+                              </div>
+                              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                                {count} חשבוניות {!allOk && `· ${pending} ממתינות`}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#10b981' }}>
+                                מע"מ {fmtShekel(vatTotal)}
+                              </div>
+                              {/* Bottom status bar */}
+                              <div style={{ position: 'absolute', bottom: 0, right: 0, left: 0, height: 3, background: accent + '44' }}>
+                                <div style={{ width: count ? `${((count - pending) / count * 100)}%` : '0%', height: '100%', background: accent, transition: 'width .5s' }}/>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </>
-      )}
+                  )
+                })}
+              </>
+            )}
+          </>
+        )
+      })()}
 
       {/* ── Tab: Accountant Export ───────────────────────── */}
       {tab === 'accountant' && (() => {
