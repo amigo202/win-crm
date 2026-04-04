@@ -1,41 +1,41 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Chart from 'chart.js/auto'
 
-// ââ Constants ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-const MONTHS_SHORT = ['×× ××³','×¤××¨×³','××¨×¥','××¤×¨×³','×××','××× ×','××××','××××³','×¡×¤××³','×××§×³','× ×××³','××¦××³']
-const MONTHS_FULL  = ['×× ×××¨','×¤××¨×××¨','××¨×¥','××¤×¨××','×××','××× ×','××××','×××××¡×','×¡×¤××××¨','×××§××××¨','× ×××××¨','××¦×××¨']
+// ── Constants ──────────────────────────────────────────────────────────────
+const MONTHS_SHORT = ['ינו׳','פבר׳','מרץ','אפר׳','מאי','יוני','יולי','אוג׳','ספט׳','אוק׳','נוב׳','דצמ׳']
+const MONTHS_FULL  = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר']
 
 const CAT_COLORS = {
-  '×××××':        '#3b82f6',
-  '×§××¨×¡××':       '#10b981',
-  '×§×××× ××ª':      '#8b5cf6',
-  '×¤×¨××××§×××':    '#f97316',
-  '××¤×§×ª ×¡×¨××× ××': '#ef4444',
+  'חוגים':        '#3b82f6',
+  'קורסים':       '#10b981',
+  'קייטנות':      '#8b5cf6',
+  'פרוייקטים':    '#f97316',
+  'הפקת סרטונים': '#ef4444',
   'PIXMIX':       '#8b5cf6',
-  '×¡×¨×××':        '#ef4444',
-  '××¨×¦××':        '#f59e0b',
-  '×××¢××¥':        '#10b981',
-  '×××¨':          '#64748b',
+  'סרטון':        '#ef4444',
+  'הרצאה':        '#f59e0b',
+  'ייעוץ':        '#10b981',
+  'אחר':          '#64748b',
 }
 
 const CLASS_TYPE_TO_CAT = {
-  '×××': '×××××', '×§××¨×¡': '×§××¨×¡××', '×¡×× ×': '×§××¨×¡××',
-  '××× ×': '×§×××× ××ª', '×××¨××¢': '×¤×¨××××§×××', '××¨×¦××': '××¨×¦××', '×××¨': '×××¨',
+  'חוג': 'חוגים', 'קורס': 'קורסים', 'סדנה': 'קורסים',
+  'מחנה': 'קייטנות', 'אירוע': 'פרוייקטים', 'הרצאה': 'הרצאה', 'אחר': 'אחר',
 }
 const ACT_TYPE_TO_CAT = {
-  'pixmix': 'PIXMIX', 'video': '×¡×¨×××', 'lecture': '××¨×¦××',
-  'consulting': '×××¢××¥', 'content': '×ª×××', 'other': '×××¨',
+  'pixmix': 'PIXMIX', 'video': 'סרטון', 'lecture': 'הרצאה',
+  'consulting': 'ייעוץ', 'content': 'תוכן', 'other': 'אחר',
 }
 
-function fmtShekel(n) { return 'âª' + (Number(n)||0).toLocaleString('he-IL') }
-function fmtK(n) { return n >= 1000 ? 'âª' + Math.round(n/1000) + 'K' : fmtShekel(n) }
+function fmtShekel(n) { return '₪' + (Number(n)||0).toLocaleString('he-IL') }
+function fmtK(n) { return n >= 1000 ? '₪' + Math.round(n/1000) + 'K' : fmtShekel(n) }
 
-// ââ Build unified monthly data from live CRM data ââââââââââââââââââââââââââ
+// ── Build unified monthly data from live CRM data ──────────────────────────
 function buildMonthlyData(classes, activities, year) {
   // 12 buckets, one per month
   const monthly = Array(12).fill(0)
-  const byCategory = {}     // cat â [12 months]
-  const byClient   = {}     // clientName â { cat, total, monthly[12] }
+  const byCategory = {}     // cat → [12 months]
+  const byClient   = {}     // clientName → { cat, total, monthly[12] }
 
   // From classes
   ;(classes || []).forEach(cls => {
@@ -47,8 +47,8 @@ function buildMonthlyData(classes, activities, year) {
     const actual    = Number(cls.actual_income) || 0
     const income    = actual || (students * pps) || agreed
     if (!income) return
-    const cat = CLASS_TYPE_TO_CAT[cls.activity_type] || '×××××'
-    const client = cls.contact_name || cls.class_name || '×× ××××¢'
+    const cat = CLASS_TYPE_TO_CAT[cls.activity_type] || 'חוגים'
+    const client = cls.contact_name || cls.class_name || 'לא ידוע'
     monthly[m-1] += income
     if (!byCategory[cat]) byCategory[cat] = Array(12).fill(0)
     byCategory[cat][m-1] += income
@@ -64,8 +64,8 @@ function buildMonthlyData(classes, activities, year) {
     if (y !== year || m < 1 || m > 12) return
     const income = Number(act.income) || 0
     if (!income) return
-    const cat = ACT_TYPE_TO_CAT[act.activityType] || '×××¨'
-    const client = act.contactName || act.name || '×× ××××¢'
+    const cat = ACT_TYPE_TO_CAT[act.activityType] || 'אחר'
+    const client = act.contactName || act.name || 'לא ידוע'
     monthly[m-1] += income
     if (!byCategory[cat]) byCategory[cat] = Array(12).fill(0)
     byCategory[cat][m-1] += income
@@ -78,7 +78,7 @@ function buildMonthlyData(classes, activities, year) {
   return { monthly, byCategory, byClient }
 }
 
-// ââ KPI Card âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── KPI Card ───────────────────────────────────────────────────────────────
 function KpiCard({ icon, value, label, sub, color }) {
   return (
     <div style={{
@@ -94,7 +94,7 @@ function KpiCard({ icon, value, label, sub, color }) {
   )
 }
 
-// ââ Main component ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Main component ──────────────────────────────────────────────────────────
 export default function ReportsPage({ classes, activities, leads, contacts, deals, dark }) {
   const now    = new Date()
   const curY   = now.getFullYear()
@@ -107,7 +107,7 @@ export default function ReportsPage({ classes, activities, leads, contacts, deal
   const cmpRef    = useRef(null)
   const cRefs     = useRef({})
 
-  // ââ Compute data ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // ── Compute data ──────────────────────────────────────────────────────────
   const dataCur  = useMemo(() => buildMonthlyData(classes, activities, curY),  [classes, activities, curY])
   const dataPrev = useMemo(() => buildMonthlyData(classes, activities, prevY), [classes, activities, prevY])
 
@@ -157,7 +157,7 @@ export default function ReportsPage({ classes, activities, leads, contacts, deal
       .slice(0, 10)
   }, [year, dataCur, dataPrev, activeData])
 
-  // ââ Charts ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // ── Charts ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const tc = dark ? '#94a3b8' : '#64748b'
     const gc = dark ? '#1e293b' : '#e2e8f0'
@@ -270,7 +270,7 @@ export default function ReportsPage({ classes, activities, leads, contacts, deal
     return () => Object.values(cRefs.current).forEach(c => c?.destroy())
   }, [year, dataCur, dataPrev, dark, activeData])
 
-  // ââ Heatmap colors ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // ── Heatmap colors ────────────────────────────────────────────────────────
   const catByCatSrc = year === 'both'
     ? Object.fromEntries(
         [...new Set([...Object.keys(dataCur.byCategory), ...Object.keys(dataPrev.byCategory)])].map(k => [
@@ -283,15 +283,15 @@ export default function ReportsPage({ classes, activities, leads, contacts, deal
   const hmCats = Object.keys(catByCatSrc)
   const hmMax  = Math.max(1, ...hmCats.flatMap(k => catByCatSrc[k]))
 
-  // ââ Render ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ââ Page header ââ */}
+      {/* ── Page header ── */}
       <div className="ph">
         <div>
-          <h2>×××××ª ð</h2>
+          <h2>דוחות 📊</h2>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-            × ×ª×× ×× ×××× ××-CRM Â· ××××× + ×¤×¢××××××ª
+            נתונים חיים מה-CRM · חוגים + פעילויות
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -307,7 +307,7 @@ export default function ReportsPage({ classes, activities, leads, contacts, deal
                 transition: 'all .15s',
               }}
             >
-              {y === 'both' ? '××©××××' : y}
+              {y === 'both' ? 'השוואה' : y}
             </button>
           ))}
         </div>
@@ -315,61 +315,61 @@ export default function ReportsPage({ classes, activities, leads, contacts, deal
 
       <div className="pb">
 
-        {/* ââ KPI Row ââ */}
+        {/* ── KPI Row ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12, marginBottom: 20 }}>
-          <KpiCard icon="ð°" value={fmtShekel(kpiData.total)}
-            label={`×¡×"× ××× ×¡××ª ${year === 'both' ? prevY + '+' + curY : year}`}
-            sub={yoyDelta != null ? (yoyDelta >= 0 ? `â ${yoyDelta}% ××¢×××ª ${prevY}` : `â ${Math.abs(yoyDelta)}% ××¢×××ª ${prevY}`) : `${activeMonths} ××××©×× ×¤×¢××××`}
+          <KpiCard icon="💰" value={fmtShekel(kpiData.total)}
+            label={`סה"כ הכנסות ${year === 'both' ? prevY + '+' + curY : year}`}
+            sub={yoyDelta != null ? (yoyDelta >= 0 ? `↑ ${yoyDelta}% לעומת ${prevY}` : `↓ ${Math.abs(yoyDelta)}% לעומת ${prevY}`) : `${activeMonths} חודשים פעילים`}
             color={yoyDelta == null ? '#10b981' : yoyDelta >= 0 ? '#10b981' : '#ef4444'}
           />
-          <KpiCard icon="ð" value={fmtShekel(avgMonthly)}
-            label="××××¦×¢ ××××©×" sub="×××××©×× ×¤×¢××××" color="#3b82f6"
+          <KpiCard icon="📅" value={fmtShekel(avgMonthly)}
+            label="ממוצע חודשי" sub="לחודשים פעילים" color="#3b82f6"
           />
-          <KpiCard icon="ð" value={maxMonth > 0 ? MONTHS_SHORT[maxMonthIdx] : 'â'}
-            label="××××© ×©××" sub={maxMonth > 0 ? fmtShekel(maxMonth) : ''} color="#8b5cf6"
+          <KpiCard icon="🏆" value={maxMonth > 0 ? MONTHS_SHORT[maxMonthIdx] : '—'}
+            label="חודש שיא" sub={maxMonth > 0 ? fmtShekel(maxMonth) : ''} color="#8b5cf6"
           />
-          <KpiCard icon="ð¥" value={topClients.length}
-            label="××§××××ª ×¤×¢××××" sub={topClients[0]?.name || ''} color="#f97316"
+          <KpiCard icon="👥" value={topClients.length}
+            label="לקוחות פעילים" sub={topClients[0]?.name || ''} color="#f97316"
           />
-          <KpiCard icon="ð¯" value={activeLeads}
-            label="××××× ××¦×× ××¨" sub="××¤×××¤×××× ××¨××¢" color="#ef4444"
+          <KpiCard icon="🎯" value={activeLeads}
+            label="לידים בצינור" sub="בפייפליין כרגע" color="#ef4444"
           />
         </div>
 
-        {/* ââ Charts Row 1: Trend + Doughnut ââ */}
+        {/* ── Charts Row 1: Trend + Doughnut ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14, marginBottom: 14 }}>
           <div className="card">
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-              {year === 'both' ? `××©×××× ××××©××ª â ${prevY} ××× ${curY}` : `××× ×¡××ª ××××©×××ª â ${year}`}
+              {year === 'both' ? `השוואה חודשית — ${prevY} מול ${curY}` : `הכנסות חודשיות — ${year}`}
             </div>
             <div style={{ height: 220 }}><canvas ref={trendRef}/></div>
           </div>
           <div className="card">
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-              ×¤×××× ××¤× ×§××××¨××
+              פילוח לפי קטגוריה
             </div>
             <div style={{ height: 220 }}><canvas ref={catRef}/></div>
           </div>
         </div>
 
-        {/* ââ Charts Row 2: Comparison ââ */}
+        {/* ── Charts Row 2: Comparison ── */}
         <div className="card" style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-            ××©×××× {prevY} ××× {curY} ××¤× ×§××××¨××
+            השוואה {prevY} מול {curY} לפי קטגוריה
           </div>
           <div style={{ height: 180 }}><canvas ref={cmpRef}/></div>
         </div>
 
-        {/* ââ Clients Table ââ */}
+        {/* ── Clients Table ── */}
         <div className="card" style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-            ××§××××ª ××××××× â {year === 'both' ? '××¦×××¨' : year}
+            לקוחות מובילים — {year === 'both' ? 'מצטבר' : year}
           </div>
           {topClients.length === 0
-            ? <div className="empty"><div className="empty-ico">ð</div><p>××× × ×ª×× ×× ×¢×××× â ×××¡×£ ××××× ××¤×¢××××××ª</p></div>
+            ? <div className="empty"><div className="empty-ico">📊</div><p>אין נתונים עדיין — הוסף חוגים ופעילויות</p></div>
             : <div className="tbl-wrap">
                 <table><thead><tr>
-                  <th>#</th><th>××§××</th><th>×§××××¨××</th><th>×¡×"×</th><th style={{minWidth:200}}>× ×ª×</th>
+                  <th>#</th><th>לקוח</th><th>קטגוריה</th><th>סה"כ</th><th style={{minWidth:200}}>נתח</th>
                 </tr></thead>
                 <tbody>
                   {topClients.map((c, i) => {
@@ -403,16 +403,16 @@ export default function ReportsPage({ classes, activities, leads, contacts, deal
           }
         </div>
 
-        {/* ââ Heatmap ââ */}
+        {/* ── Heatmap ── */}
         {hmCats.length > 0 && (
           <div className="card">
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-              ××¤×ª ××× â ××× ×¡××ª ××¤× ××××© ××§××××¨××
+              מפת חום — הכנסות לפי חודש וקטגוריה
             </div>
             <div style={{ overflowX: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: `160px repeat(12, 1fr)`, gap: 3, fontSize: 11, minWidth: 700 }}>
                 {/* Header */}
-                <div style={{ padding: '6px 8px', fontWeight: 700, color: 'var(--muted)' }}>×§××××¨××</div>
+                <div style={{ padding: '6px 8px', fontWeight: 700, color: 'var(--muted)' }}>קטגוריה</div>
                 {MONTHS_SHORT.map(m => (
                   <div key={m} style={{ padding: '6px 4px', textAlign: 'center', color: 'var(--muted)', fontWeight: 600 }}>{m}</div>
                 ))}
@@ -425,22 +425,22 @@ export default function ReportsPage({ classes, activities, leads, contacts, deal
                     ...catByCatSrc[cat].map((v, mi) => {
                       const alpha = v > 0 ? 0.15 + 0.75 * (v / hmMax) : 0
                       return (
-                        <div key={cat + '_' + mi} title={`${cat} â ${MONTHS_FULL[mi]}: ${fmtShekel(v)}`}
+                        <div key={cat + '_' + mi} title={`${cat} — ${MONTHS_FULL[mi]}: ${fmtShekel(v)}`}
                           style={{ padding: '5px 3px', textAlign: 'center', borderRadius: 4, background: `rgba(${r},${g},${b},${alpha})`, color: v > 0 ? col : 'var(--muted)', fontWeight: v > 0 ? 700 : 400 }}>
-                          {v > 0 ? fmtK(v) : 'â'}
+                          {v > 0 ? fmtK(v) : '—'}
                         </div>
                       )
                     })
                   ]
                 })}
                 {/* Total row */}
-                <div style={{ padding: '6px 8px', fontWeight: 700, color: '#f97316' }}>×¡×"×</div>
+                <div style={{ padding: '6px 8px', fontWeight: 700, color: '#f97316' }}>סה"כ</div>
                 {Array(12).fill(0).map((_, mi) => {
                   const v = hmCats.reduce((s, k) => s + (catByCatSrc[k]?.[mi] || 0), 0)
                   return (
-                    <div key={'tot_' + mi} title={`×¡×"× â ${MONTHS_FULL[mi]}: ${fmtShekel(v)}`}
+                    <div key={'tot_' + mi} title={`סה"כ — ${MONTHS_FULL[mi]}: ${fmtShekel(v)}`}
                       style={{ padding: '5px 3px', textAlign: 'center', borderRadius: 4, background: v > 0 ? 'rgba(249,115,22,.15)' : 'transparent', color: v > 0 ? '#f97316' : 'var(--muted)', fontWeight: 700 }}>
-                      {v > 0 ? fmtK(v) : 'â'}
+                      {v > 0 ? fmtK(v) : '—'}
                     </div>
                   )
                 })}
@@ -449,14 +449,14 @@ export default function ReportsPage({ classes, activities, leads, contacts, deal
           </div>
         )}
 
-        {/* ââ Empty state ââ */}
+        {/* ── Empty state ── */}
         {kpiData.total === 0 && (
           <div className="card" style={{ marginTop: 14 }}>
             <div className="empty">
-              <div className="empty-ico">ð</div>
-              <p>××× × ×ª×× ×× ××©× × {year === 'both' ? `${prevY}/${curY}` : year}</p>
+              <div className="empty-ico">📊</div>
+              <p>אין נתונים לשנה {year === 'both' ? `${prevY}/${curY}` : year}</p>
               <p style={{ fontSize: 12, marginTop: 8, color: 'var(--muted)' }}>
-                ×××¡×£ ××××× ×"××××× ××§××¨×¡××" ×× ×¤×¢××××××ª ×"×¤×¢××××××ª" â ×× ×××¤××¢× ××× ××××××××ª
+                הוסף חוגים ב"חוגים וקורסים" או פעילויות ב"פעילויות" — הם יופיעו כאן אוטומטית
               </p>
             </div>
           </div>
