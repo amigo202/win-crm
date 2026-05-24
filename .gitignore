@@ -1,4 +1,6 @@
 node_modules/
 .DS_Store
 *.local
+.env
+.env.*
 # dist/ committed intentionally (pre-built locally for correct Hebrew encoding)
