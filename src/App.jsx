@@ -22,6 +22,7 @@ import FinancialPage        from './components/pages/FinancialPage'
 import ClassesPage          from './components/pages/ClassesPage'
 import AutomationsPage      from './components/pages/AutomationsPage'
 import InvoicesPage         from './components/pages/InvoicesPage'
+import TaxRadarPage         from './components/pages/TaxRadarPage'
 import { useWorkflows }     from './hooks/useWorkflows'
 import { useInvoices }      from './hooks/useInvoices'
 import ActivitiesPage       from './components/pages/ActivitiesPage'
@@ -194,6 +195,7 @@ export default function App() {
     reports:     <ReportsPage classes={cls.classes} activities={act.activities} leads={le.leads} contacts={c.contacts} deals={d.deals} dark={dark}/>,
     automations: <AutomationsPage rules={wf.rules} onAdd={wf.addRule} onUpdate={wf.editRule} onDelete={wf.removeRule} onToggle={wf.toggle} onReload={wf.load} tasks={t.tasks} classes={cls.classes}/>,
     invoices:    <InvoicesPage invoiceStore={inv}/>,
+    taxradar:    <TaxRadarPage />,
   }
 
   return (
