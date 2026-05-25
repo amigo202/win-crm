@@ -21,34 +21,49 @@ const fmtK = n => {
 
 // ── Colors ───────────────────────────────────────────────────────────────────
 const C = {
-  bg:      '#0f172a',
-  card:    '#1e293b',
-  card2:   '#162032',
-  border:  '#334155',
-  text:    '#f1f5f9',
+  bg:      '#f8fafc',
+  card:    '#ffffff',
+  card2:   '#f1f5f9',
+  border:  '#e2e8f0',
+  text:    '#0f172a',
   muted:   '#64748b',
   accent:  '#f97316',
-  green:   '#22c55e',
-  red:     '#ef4444',
-  yellow:  '#f59e0b',
-  blue:    '#3b82f6',
-  purple:  '#a855f7',
+  green:   '#16a34a',
+  red:     '#dc2626',
+  yellow:  '#d97706',
+  blue:    '#2563eb',
+  purple:  '#7c3aed',
 }
 
 const RISK_COLORS = { low: C.green, medium: C.yellow, high: C.accent, critical: C.red }
 const RISK_LABELS = { low: 'נמוכה', medium: 'בינונית', high: 'גבוהה', critical: 'קריטית' }
 
+// KPI card gradient per color
+const KPI_GRADIENTS = {
+  [C.green]:  'linear-gradient(135deg,#16a34a 0%,#15803d 100%)',
+  [C.blue]:   'linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%)',
+  [C.accent]: 'linear-gradient(135deg,#f97316 0%,#ea580c 100%)',
+  [C.yellow]: 'linear-gradient(135deg,#d97706 0%,#b45309 100%)',
+  [C.red]:    'linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)',
+  [C.purple]: 'linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%)',
+}
+
 // ── Styles helpers ───────────────────────────────────────────────────────────
 const card = (extra = {}) => ({
-  background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
-  padding: 20, ...extra,
+  background: C.card,
+  border: `1px solid ${C.border}`,
+  borderRadius: 16,
+  padding: 22,
+  boxShadow: '0 2px 12px rgba(15,23,42,.07)',
+  ...extra,
 })
 const btn = (active, color = C.accent) => ({
   padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
   fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
-  background: active ? color : 'transparent',
+  background: active ? color : '#f1f5f9',
   color: active ? '#fff' : C.muted,
   transition: 'all .15s',
+  boxShadow: active ? `0 4px 12px ${color}44` : 'none',
 })
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -67,7 +82,7 @@ export default function TaxRadarPage() {
   // Loading skeleton
   if (tr.loading) {
     return (
-      <div dir="rtl" style={{ fontFamily: "'Rubik','Segoe UI',Arial,sans-serif", color: C.text, padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
+      <div dir="rtl" style={{ fontFamily: "'Rubik','Segoe UI',Arial,sans-serif", background: C.bg, color: C.text, padding: '20px 24px', maxWidth: 1100, margin: '0 auto', minHeight: '100vh' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
           <span style={{ fontSize: 28 }}>📡</span>
           <div>
@@ -77,7 +92,7 @@ export default function TaxRadarPage() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
           {[1,2,3,4].map(i => (
-            <div key={i} style={{ ...card(), height: 110, background: 'linear-gradient(90deg, #1e293b 25%, #243044 50%, #1e293b 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }}/>
+            <div key={i} style={{ ...card(), height: 120, background: 'linear-gradient(90deg,#e2e8f0 25%,#f1f5f9 50%,#e2e8f0 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }}/>
           ))}
         </div>
         <style>{`@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }`}</style>
@@ -86,14 +101,14 @@ export default function TaxRadarPage() {
   }
 
   return (
-    <div dir="rtl" style={{ fontFamily: "'Rubik','Segoe UI',Arial,sans-serif", color: C.text, padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
+    <div dir="rtl" style={{ fontFamily: "'Rubik','Segoe UI',Arial,sans-serif", background: C.bg, color: C.text, padding: '20px 24px', maxWidth: 1100, margin: '0 auto', minHeight: '100vh' }}>
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 28 }}>📡</span> Tax Radar
-            <span style={{ fontSize: 13, fontWeight: 400, color: C.muted, background: '#1e293b', padding: '3px 10px', borderRadius: 20, border: `1px solid ${C.border}` }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: C.muted, background: C.card2, padding: '3px 10px', borderRadius: 20, border: `1px solid ${C.border}` }}>
               חדר בקרה פיננסי
             </span>
           </h1>
@@ -117,7 +132,7 @@ export default function TaxRadarPage() {
       </div>
 
       {/* ── Tabs ── */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 24, background: C.card2, padding: 5, borderRadius: 12, width: 'fit-content', border: `1px solid ${C.border}` }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 24, background: '#fff', padding: 5, borderRadius: 12, width: 'fit-content', border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(0,0,0,.06)' }}>
         {[
           { id: 'dashboard', label: '📊 דשבורד' },
           { id: 'entry',     label: '✏️ הזנה חודשית' },
@@ -187,13 +202,22 @@ function DashboardTab({ data, year, tr }) {
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
 function KpiCard({ title, value, sub, color, icon }) {
+  const gradient = KPI_GRADIENTS[color] || `linear-gradient(135deg,${color},${color}cc)`
   return (
-    <div style={{ ...card(), position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', top: 0, right: 0, width: 4, height: '100%', background: color, borderRadius: '0 14px 14px 0' }}/>
-      <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
-      <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, color }}>{value}</div>
-      <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{sub}</div>
+    <div style={{
+      background: gradient,
+      borderRadius: 18,
+      padding: '22px 20px',
+      position: 'relative',
+      overflow: 'hidden',
+      boxShadow: `0 8px 24px ${color}44`,
+    }}>
+      <div style={{ position:'absolute', top:-18, left:-18, width:80, height:80, borderRadius:'50%', background:'rgba(255,255,255,.08)', pointerEvents:'none' }}/>
+      <div style={{ position:'absolute', bottom:-10, right:-10, width:60, height:60, borderRadius:'50%', background:'rgba(255,255,255,.06)', pointerEvents:'none' }}/>
+      <div style={{ fontSize: 26, marginBottom: 8 }}>{icon}</div>
+      <div style={{ fontSize: 11, color: 'rgba(255,255,255,.8)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 12, color: 'rgba(255,255,255,.7)', marginTop: 6 }}>{sub}</div>
     </div>
   )
 }
