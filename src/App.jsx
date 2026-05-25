@@ -23,6 +23,7 @@ import ClassesPage          from './components/pages/ClassesPage'
 import AutomationsPage      from './components/pages/AutomationsPage'
 import InvoicesPage         from './components/pages/InvoicesPage'
 import TaxRadarPage         from './components/pages/TaxRadarPage'
+import PipelinePage         from './components/pages/PipelinePage'
 import { useWorkflows }     from './hooks/useWorkflows'
 import { useInvoices }      from './hooks/useInvoices'
 import ActivitiesPage       from './components/pages/ActivitiesPage'
@@ -196,6 +197,7 @@ export default function App() {
     automations: <AutomationsPage rules={wf.rules} onAdd={wf.addRule} onUpdate={wf.editRule} onDelete={wf.removeRule} onToggle={wf.toggle} onReload={wf.load} tasks={t.tasks} classes={cls.classes}/>,
     invoices:    <InvoicesPage invoiceStore={inv}/>,
     taxradar:    <TaxRadarPage />,
+    pipeline:    <PipelinePage />,
   }
 
   return (
