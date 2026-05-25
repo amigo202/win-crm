@@ -3,7 +3,7 @@ import { usePipeline } from '../../hooks/usePipeline'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const MONTHS_SHORT = ['ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצמ']
-const LINE_TYPES   = ['חוגים','קורסים','הפקת סרטונים','קייסנות','סרטונים','שונות']
+const LINE_TYPES   = ['חוגים','קורסים','הפקת סרטונים','קייטנות','סרטונים','שונות']
 const VAT_RATE     = 18 / 118
 
 const fmt = n => n > 0 ? '₪' + Math.round(n).toLocaleString('he-IL') : ''
@@ -183,6 +183,37 @@ export default function PipelinePage() {
     setEditingCell(null)
   }
 
+  // ── Bulk mark helpers ────────────────────────────────────────
+  const bulkMarkMonth = useCallback((month, isPaid) => {
+    p.lines.forEach(line => {
+      const entry = p.getEntry(line.id, year, month)
+      if (entry?.amount > 0 && entry.isPaid !== isPaid) {
+        p.setEntry(line.id, year, month, entry.amount, isPaid)
+      }
+    })
+  }, [p.lines, p.getEntry, p.setEntry, year])
+
+  const bulkMarkRow = useCallback((lineId, isPaid) => {
+    MONTHS_SHORT.forEach((_, i) => {
+      const month = i + 1
+      const entry = p.getEntry(lineId, year, month)
+      if (entry?.amount > 0 && entry.isPaid !== isPaid) {
+        p.setEntry(lineId, year, month, entry.amount, isPaid)
+      }
+    })
+  }, [p.getEntry, p.setEntry, year])
+
+  const isMonthFullyPaid = useCallback((month) => {
+    const linesWithMoney = p.lines.filter(l => (p.getEntry(l.id, year, month)?.amount || 0) > 0)
+    return linesWithMoney.length > 0 && linesWithMoney.every(l => p.getEntry(l.id, year, month)?.isPaid)
+  }, [p.lines, p.getEntry, year])
+
+  const isRowFullyPaid = useCallback((lineId) => {
+    const months = MONTHS_SHORT.map((_, i) => p.getEntry(lineId, year, i + 1))
+    const withMoney = months.filter(e => e?.amount > 0)
+    return withMoney.length > 0 && withMoney.every(e => e?.isPaid)
+  }, [p.getEntry, year])
+
   const currentYear = new Date().getFullYear()
   const currentMonth = new Date().getMonth() + 1
 
@@ -329,13 +360,32 @@ export default function PipelinePage() {
                 <th style={{ padding: '13px 8px', color: '#94a3b8', fontWeight: 600, fontSize: 11, textAlign: 'center' }}>מע&quot;מ</th>
                 {MONTHS_SHORT.map((m, i) => {
                   const isCurrent = year === currentYear && i + 1 === currentMonth
+                  const monthNum  = i + 1
+                  const allPaid   = isMonthFullyPaid(monthNum)
+                  const hasAny    = p.lines.some(l => (p.getEntry(l.id, year, monthNum)?.amount || 0) > 0)
                   return (
                     <th key={i} style={{
-                      padding: '13px 6px', fontWeight: 700, fontSize: 12, textAlign: 'center',
+                      padding: '10px 6px 6px', fontWeight: 700, fontSize: 12, textAlign: 'center',
                       whiteSpace: 'nowrap', minWidth: 80,
                       color: isCurrent ? '#f97316' : '#94a3b8',
                       borderBottom: isCurrent ? '3px solid #f97316' : '3px solid transparent',
-                    }}>{m}</th>
+                    }}>
+                      <div>{m}</div>
+                      {hasAny && (
+                        <button
+                          onClick={() => bulkMarkMonth(monthNum, !allPaid)}
+                          title={allPaid ? 'בטל סימון כולו' : 'סמן עמודה כשולמה'}
+                          style={{
+                            marginTop: 4,
+                            padding: '2px 7px', borderRadius: 6, border: 'none',
+                            cursor: 'pointer', fontSize: 9, fontWeight: 700,
+                            background: allPaid ? 'rgba(74,222,128,.2)' : 'rgba(148,163,184,.15)',
+                            color: allPaid ? '#4ade80' : '#94a3b8',
+                            transition: 'all .15s',
+                          }}
+                        >{allPaid ? '✓ כולו' : '✓ הכל'}</button>
+                      )}
+                    </th>
                   )
                 })}
                 <th style={{ padding: '13px 10px', color: '#f97316', fontWeight: 700, fontSize: 13, textAlign: 'center', minWidth: 90 }}>סה&quot;כ</th>
@@ -459,13 +509,29 @@ export default function PipelinePage() {
                         )
                       })}
 
-                      {/* Row total */}
+                      {/* Row total + bulk-mark */}
                       <td style={{
-                        textAlign: 'center', padding: '6px 8px',
+                        textAlign: 'center', padding: '4px 8px',
                         fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap',
                         color: lt > 0 ? '#f97316' : '#e2e8f0',
                       }}>
-                        {lt > 0 ? fmt(lt) : ''}
+                        {lt > 0 && (
+                          <>
+                            <div>{fmt(lt)}</div>
+                            <button
+                              onClick={() => bulkMarkRow(line.id, !isRowFullyPaid(line.id))}
+                              title={isRowFullyPaid(line.id) ? 'בטל תשלום שורה' : 'סמן שורה כשולמה'}
+                              style={{
+                                marginTop: 3,
+                                padding: '2px 8px', borderRadius: 6, border: 'none',
+                                cursor: 'pointer', fontSize: 9, fontWeight: 700,
+                                background: isRowFullyPaid(line.id) ? '#dcfce7' : '#f1f5f9',
+                                color: isRowFullyPaid(line.id) ? '#16a34a' : '#64748b',
+                                transition: 'all .15s',
+                              }}
+                            >{isRowFullyPaid(line.id) ? '✓ שולם' : '✓ סמן'}</button>
+                          </>
+                        )}
                       </td>
 
                       {/* Delete */}

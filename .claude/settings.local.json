@@ -63,7 +63,14 @@
       "PowerShell(npx supabase db --help 2>&1)",
       "Bash(ping -n 10 google.com)",
       "mcp__Claude_in_Chrome__list_connected_browsers",
-      "mcp__Claude_in_Chrome__select_browser"
+      "mcp__Claude_in_Chrome__select_browser",
+      "mcp__23927374-5c7d-4cc9-8edd-6f2a064fecf3__read_file_content",
+      "mcp__Claude_in_Chrome__read_network_requests",
+      "mcp__Claude_in_Chrome__form_input",
+      "mcp__23927374-5c7d-4cc9-8edd-6f2a064fecf3__download_file_content",
+      "Bash(python3 -c \"import openpyxl; print\\('openpyxl ok'\\)\")",
+      "Bash(python -c \"import openpyxl; print\\('openpyxl ok'\\)\")",
+      "Bash(pip install *)"
     ]
   }
 }

@@ -4,6 +4,7 @@ import { CONTACT_TYPES, STAGES, PROGRAMS, PRIORITIES } from '../../constants'
 import { fmtShekel, fmtDT } from '../../utils/format'
 import { computeAlerts, noSessionDays, studentStatus } from '../../utils/alerts'
 import { Ico } from '../icons/Ico'
+import { usePipeline } from '../../hooks/usePipeline'
 
 // ── Activity-type metadata (matches ActivitiesPage) ──────────────────────────
 const CLASS_TYPE_LABELS = { 'חוג': 'חוגים', 'קורס': 'קורסים', 'סדנה': 'סדנאות', 'מחנה': 'מחנות', 'אירוע': 'אירועים', 'הרצאה': 'הרצאות' }
@@ -11,6 +12,9 @@ const BIZ_TYPE_LABELS   = { pixmix: 'PIXMIX', video: 'סרטונים', content: 
 const SOURCE_COLORS     = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#ec4899','#06b6d4','#f97316']
 
 export default function Dashboard({ contacts, deals, tasks, instructors, students, leads, classes, activities, dark, setPage }) {
+  // ── Pipeline hook (standalone, reads its own Supabase data) ─
+  const pipeline = usePipeline()
+
   // ── Current period ──────────────────────────────────────────
   const now        = new Date()
   const curMonth   = now.getMonth() + 1
@@ -70,6 +74,24 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
   const prevTotalInc = prevClassInc + prevActInc
 
   const incDelta  = prevTotalInc > 0 ? Math.round(((curTotalInc - prevTotalInc) / prevTotalInc) * 100) : 0
+
+  // ── Pipeline stats (current month + year) ───────────────────
+  const pipelineStats = useMemo(() => {
+    let monthGross = 0, monthPaid = 0, yearGross = 0, yearPaid = 0
+    pipeline.lines.forEach(line => {
+      for (let m = 1; m <= 12; m++) {
+        const e = pipeline.getEntry(line.id, curYear, m)
+        if (!e?.amount) continue
+        yearGross += e.amount
+        if (e.isPaid) yearPaid += e.amount
+        if (m === curMonth) {
+          monthGross += e.amount
+          if (e.isPaid) monthPaid += e.amount
+        }
+      }
+    })
+    return { monthGross, monthPaid, monthUnpaid: monthGross - monthPaid, yearGross, yearPaid, yearUnpaid: yearGross - yearPaid }
+  }, [pipeline.lines, pipeline.entries, curMonth, curYear, pipeline.getEntry])
 
   // ── Source breakdown (current month) ────────────────────────
   const sourceBreakdown = useMemo(() => {
@@ -307,6 +329,60 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
             </div>
           ))}
         </div>
+
+        {/* ── Pipeline Revenue Bar ─────────────────────────── */}
+        {!pipeline.loading && pipelineStats.yearGross > 0 && (
+          <div
+            onClick={() => setPage?.('pipeline')}
+            onMouseEnter={hoverUp} onMouseLeave={hoverDown}
+            role="button" tabIndex={0}
+            style={{
+              background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 60%, #1a1060 100%)',
+              borderRadius: 16, padding: '16px 24px', marginBottom: 20,
+              cursor: 'pointer', transition: 'transform .15s, box-shadow .15s',
+              boxShadow: '0 4px 20px rgba(15,23,42,.25)',
+              display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+              position: 'relative', overflow: 'hidden',
+            }}
+          >
+            {/* decorative orb */}
+            <div style={{ position:'absolute', top:-30, left:-30, width:120, height:120, borderRadius:'50%', background:'rgba(249,115,22,.06)', pointerEvents:'none' }}/>
+            <div style={{ fontSize: 28 }}>📊</div>
+            <div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 2 }}>פייפליין הכנסות {curYear} — לחץ לפרטים</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#f97316' }}>
+                סה&quot;כ שנה: {fmtShekel(pipelineStats.yearGross)}
+              </div>
+            </div>
+            <div style={{ width: 1, height: 40, background: 'rgba(255,255,255,.1)' }}/>
+            {/* Stat chips */}
+            {[
+              { label: 'החודש', value: fmtShekel(pipelineStats.monthGross), color: '#94a3b8' },
+              { label: 'שולם', value: fmtShekel(pipelineStats.yearPaid), color: '#4ade80', bg: 'rgba(74,222,128,.12)' },
+              { label: 'נותר לגבייה', value: fmtShekel(pipelineStats.yearUnpaid), color: '#f97316', bg: 'rgba(249,115,22,.1)' },
+            ].map((s, i) => (
+              <div key={i} style={{ background: s.bg || 'rgba(255,255,255,.05)', borderRadius: 10, padding: '8px 14px', textAlign: 'center', border: `1px solid ${s.color}22` }}>
+                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>{s.label}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: s.color }}>{s.value}</div>
+              </div>
+            ))}
+            {/* Progress bar */}
+            {pipelineStats.yearGross > 0 && (
+              <div style={{ flex: 1, minWidth: 120 }}>
+                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 5 }}>
+                  {Math.round((pipelineStats.yearPaid / pipelineStats.yearGross) * 100)}% נגבה
+                </div>
+                <div style={{ background: 'rgba(255,255,255,.1)', borderRadius: 99, height: 8, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', borderRadius: 99, transition: 'width .6s',
+                    width: `${Math.round((pipelineStats.yearPaid / pipelineStats.yearGross) * 100)}%`,
+                    background: 'linear-gradient(90deg, #4ade80, #16a34a)',
+                  }}/>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Quick stats row ──────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
