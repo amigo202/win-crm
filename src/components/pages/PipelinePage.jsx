@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { usePipeline } from '../../hooks/usePipeline'
+import { useIsMobile } from '../../hooks/useIsMobile'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const MONTHS_SHORT = ['ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצמ']
@@ -128,9 +129,222 @@ function SumCard({ label, value, icon, gradient, textColor }) {
   )
 }
 
+// ─── Mobile Card View ────────────────────────────────────────────────────────
+function MobileCardView({ p, year, currentMonth, lineTotal, bulkMarkRow, isRowFullyPaid, onDeleteLine }) {
+  const [editCell, setEditCell] = useState(null)   // { lineId, month }
+  const [editVal,  setEditVal]  = useState('')
+  const inputRef = useRef()
+
+  const openEdit = (lineId, month) => {
+    const e = p.getEntry(lineId, year, month)
+    setEditVal(e?.amount > 0 ? String(e.amount) : '')
+    setEditCell({ lineId, month })
+    setTimeout(() => inputRef.current?.select(), 80)
+  }
+
+  const commitEdit = () => {
+    if (!editCell) return
+    const num = parseFloat(editVal.replace(/,/g, '')) || 0
+    const e = p.getEntry(editCell.lineId, year, editCell.month)
+    p.setEntry(editCell.lineId, year, editCell.month, num, e?.isPaid || false)
+    setEditCell(null)
+  }
+
+  const paidTotal = lineId => MONTHS_SHORT.reduce((s, _, i) => {
+    const e = p.getEntry(lineId, year, i + 1)
+    return s + (e?.isPaid ? e.amount : 0)
+  }, 0)
+
+  if (p.loading) return (
+    <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
+      <div style={{ fontSize: 28, marginBottom: 10 }}>⏳</div>
+      <div style={{ fontWeight: 600 }}>טוען נתונים...</div>
+    </div>
+  )
+
+  if (p.lines.length === 0) return (
+    <div style={{ textAlign: 'center', padding: 70, color: '#94a3b8' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: '#64748b', marginBottom: 6 }}>אין שורות עדיין</div>
+      <div style={{ fontSize: 13 }}>לחץ &quot;+ הוסף שורה&quot; להתחיל</div>
+    </div>
+  )
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      {p.lines.map(line => {
+        const lt     = lineTotal(line.id)
+        const paid   = paidTotal(line.id)
+        const cur    = p.getEntry(line.id, year, currentMonth)
+        const curAmt = cur?.amount || 0
+        const curPd  = cur?.isPaid || false
+        const allPd  = isRowFullyPaid(line.id)
+        const pct    = lt > 0 ? Math.min(100, Math.round((paid / lt) * 100)) : 0
+
+        return (
+          <div key={line.id} style={{
+            background: '#fff',
+            border: `1px solid ${allPd ? '#86efac' : '#e2e8f0'}`,
+            borderRadius: 16,
+            padding: '14px 16px',
+            marginBottom: 12,
+            boxShadow: '0 2px 10px rgba(0,0,0,.06)',
+            borderRight: `4px solid ${allPd ? '#16a34a' : lt > 0 ? '#3b82f6' : '#e2e8f0'}`,
+          }}>
+
+            {/* Header row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{line.name}</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <span>{line.type}</span>
+                  {line.hasVat && <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 6, fontSize: 10 }}>מע&quot;מ</span>}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                {lt > 0 && <div style={{ fontSize: 16, fontWeight: 900, color: '#f97316' }}>{fmt(lt)}</div>}
+                <button
+                  onClick={() => { if (window.confirm(`מחק את "${line.name}"?`)) onDeleteLine(line.id) }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 20, padding: 0, lineHeight: 1 }}
+                >×</button>
+              </div>
+            </div>
+
+            {/* Current month highlight */}
+            <div
+              onClick={() => openEdit(line.id, currentMonth)}
+              style={{
+                background: curAmt > 0 ? (curPd ? 'linear-gradient(135deg,#dcfce7,#bbf7d0)' : 'linear-gradient(135deg,#dbeafe,#bfdbfe)') : '#f8fafc',
+                borderRadius: 12, padding: '10px 14px', marginBottom: 10,
+                border: `1px solid ${curAmt > 0 ? (curPd ? '#86efac' : '#93c5fd') : '#e2e8f0'}`,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 2 }}>
+                  {MONTHS_SHORT[currentMonth - 1]} {year} (החודש)
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: curAmt > 0 ? (curPd ? '#16a34a' : '#1d4ed8') : '#94a3b8' }}>
+                  {curAmt > 0 ? fmt(curAmt) : <span style={{ fontSize: 13 }}>לחץ להזין ₪</span>}
+                </div>
+              </div>
+              {curAmt > 0 && (
+                <button
+                  onClick={e => { e.stopPropagation(); p.togglePaid(line.id, year, currentMonth) }}
+                  style={{
+                    padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                    fontWeight: 700, fontSize: 13,
+                    background: curPd ? 'rgba(22,163,74,.15)' : '#3b82f6',
+                    color: curPd ? '#16a34a' : '#fff',
+                  }}
+                >
+                  {curPd ? '✓ שולם' : 'סמן כשולם'}
+                </button>
+              )}
+            </div>
+
+            {/* Progress bar */}
+            {lt > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
+                  <span>שולם: {fmt(paid)}</span>
+                  <span>{pct}%</span>
+                </div>
+                <div style={{ background: '#f1f5f9', borderRadius: 99, height: 5, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 99, width: `${pct}%`, background: 'linear-gradient(90deg,#4ade80,#16a34a)', transition: 'width .4s' }}/>
+                </div>
+              </div>
+            )}
+
+            {/* Month chips */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+              {MONTHS_SHORT.map((m, i) => {
+                const month = i + 1
+                const entry = p.getEntry(line.id, year, month)
+                const isCur = month === currentMonth
+                return (
+                  <button key={month} onClick={() => openEdit(line.id, month)} style={{
+                    padding: '4px 7px', borderRadius: 7, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                    border: `1.5px solid ${isCur ? '#f97316' : entry?.isPaid ? '#86efac' : entry?.amount > 0 ? '#93c5fd' : '#e2e8f0'}`,
+                    background: entry?.isPaid ? '#dcfce7' : entry?.amount > 0 ? '#dbeafe' : 'transparent',
+                    color: entry?.isPaid ? '#16a34a' : entry?.amount > 0 ? '#1d4ed8' : '#94a3b8',
+                    minWidth: 32, textAlign: 'center',
+                  }}>
+                    {m}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Bulk mark row */}
+            {lt > 0 && (
+              <button onClick={() => bulkMarkRow(line.id, !allPd)} style={{
+                width: '100%', padding: '8px', borderRadius: 9, border: 'none',
+                cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                background: allPd ? '#dcfce7' : '#f1f5f9',
+                color: allPd ? '#16a34a' : '#64748b',
+              }}>
+                {allPd ? '✓ כל השנה שולמה' : '✓ סמן כל השנה כשולמה'}
+              </button>
+            )}
+          </div>
+        )
+      })}
+
+      {/* Edit overlay */}
+      {editCell && (
+        <div
+          onClick={() => setEditCell(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.6)', zIndex: 200, display: 'flex', alignItems: 'flex-end' }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{
+            background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px',
+            width: '100%', boxShadow: '0 -8px 40px rgba(0,0,0,.25)',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 14 }}>
+              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 4 }}>
+                {MONTHS_SHORT[editCell.month - 1]} {year} — {p.lines.find(l => l.id === editCell.lineId)?.name}
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>הזן סכום</div>
+            </div>
+            <input
+              ref={inputRef}
+              autoFocus
+              type="number" min="0"
+              value={editVal}
+              onChange={e => setEditVal(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditCell(null) }}
+              placeholder="0"
+              style={{
+                width: '100%', padding: '14px 16px', borderRadius: 12,
+                border: '2px solid #f97316', fontSize: 22, fontWeight: 700,
+                textAlign: 'center', color: '#0f172a', fontFamily: 'Rubik, sans-serif',
+                background: '#fff', outline: 'none', boxSizing: 'border-box', marginBottom: 14,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setEditCell(null)} style={{
+                flex: 1, padding: '12px', borderRadius: 10, border: '1.5px solid #e2e8f0',
+                background: '#f8fafc', color: '#64748b', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+              }}>ביטול</button>
+              <button onClick={commitEdit} style={{
+                flex: 2, padding: '12px', borderRadius: 10, border: 'none',
+                background: 'linear-gradient(135deg,#f97316,#ea580c)', color: '#fff',
+                fontWeight: 800, fontSize: 15, cursor: 'pointer',
+              }}>שמור ✓</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function PipelinePage() {
   const p = usePipeline()
+  const isMobile = useIsMobile()
   const [year,        setYear]        = useState(new Date().getFullYear())
   const [editingCell, setEditingCell] = useState(null)
   const [showAdd,     setShowAdd]     = useState(false)
@@ -218,17 +432,17 @@ export default function PipelinePage() {
   const currentMonth = new Date().getMonth() + 1
 
   return (
-    <div style={{ padding: '20px 16px', fontFamily: 'Rubik, sans-serif', direction: 'rtl', minHeight: '100vh', background: 'var(--bg, #f8fafc)' }}>
+    <div style={{ padding: isMobile ? '12px 10px' : '20px 16px', fontFamily: 'Rubik, sans-serif', direction: 'rtl', minHeight: '100vh', background: 'var(--bg, #f8fafc)' }}>
 
       {/* ── Hero Header ── */}
       <div style={{
         background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #1a1060 100%)',
-        borderRadius: 20,
-        padding: '22px 28px',
-        marginBottom: 20,
+        borderRadius: isMobile ? 14 : 20,
+        padding: isMobile ? '14px 16px' : '22px 28px',
+        marginBottom: isMobile ? 14 : 20,
         display: 'flex',
         alignItems: 'center',
-        gap: 16,
+        gap: isMobile ? 10 : 16,
         flexWrap: 'wrap',
         boxShadow: '0 8px 32px rgba(15,23,42,.35)',
         position: 'relative',
@@ -337,8 +551,17 @@ export default function PipelinePage() {
         </div>
       )}
 
-      {/* ── Table ── */}
-      <div style={{
+      {/* ── Mobile Card View ── */}
+      {isMobile && (
+        <MobileCardView
+          p={p} year={year} currentMonth={currentMonth}
+          lineTotal={lineTotal} bulkMarkRow={bulkMarkRow} isRowFullyPaid={isRowFullyPaid}
+          onDeleteLine={id => { if (window.confirm('מחק שורה?')) p.deleteLine(id) }}
+        />
+      )}
+
+      {/* ── Desktop Table ── */}
+      {!isMobile && <div style={{
         background: '#fff',
         borderRadius: 20,
         boxShadow: '0 4px 24px rgba(15,23,42,.1)',
@@ -612,31 +835,40 @@ export default function PipelinePage() {
             )}
           </table>
         </div>
-      </div>
+      </div>}
 
       {/* Legend */}
-      <div style={{
-        display: 'flex', gap: 20, fontSize: 12, color: '#64748b',
-        flexWrap: 'wrap', alignItems: 'center',
-        background: '#fff', borderRadius: 12, padding: '12px 18px',
-        boxShadow: '0 2px 8px rgba(0,0,0,.06)', border: '1px solid #f1f5f9',
-      }}>
-        <span>💡 <b style={{ color: '#374151' }}>לחץ תא</b> — הזן סכום</span>
-        <span style={{ width: 1, height: 16, background: '#e2e8f0', display: 'inline-block' }}/>
-        <span>🟢 <b style={{ color: '#374151' }}>נקודה ירוקה</b> — סמן כשולם</span>
-        <span style={{ width: 1, height: 16, background: '#e2e8f0', display: 'inline-block' }}/>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(135deg,#16a34a,#15803d)' }}/>
-          <b style={{ color: '#374151' }}>ירוק</b> = שולם
-        </span>
-        <span style={{ width: 1, height: 16, background: '#e2e8f0', display: 'inline-block' }}/>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(135deg,#dbeafe,#bfdbfe)' }}/>
-          <b style={{ color: '#374151' }}>כחול</b> = ממתין לתשלום
-        </span>
-        <span style={{ width: 1, height: 16, background: '#e2e8f0', display: 'inline-block' }}/>
-        <span>✏️ <b style={{ color: '#374151' }}>לחץ פעמיים על שם</b> — ערוך</span>
-      </div>
+      {!isMobile && (
+        <div style={{
+          display: 'flex', gap: 20, fontSize: 12, color: '#64748b',
+          flexWrap: 'wrap', alignItems: 'center',
+          background: '#fff', borderRadius: 12, padding: '12px 18px',
+          boxShadow: '0 2px 8px rgba(0,0,0,.06)', border: '1px solid #f1f5f9',
+        }}>
+          <span>💡 <b style={{ color: '#374151' }}>לחץ תא</b> — הזן סכום</span>
+          <span style={{ width: 1, height: 16, background: '#e2e8f0', display: 'inline-block' }}/>
+          <span>🟢 <b style={{ color: '#374151' }}>נקודה ירוקה</b> — סמן כשולם</span>
+          <span style={{ width: 1, height: 16, background: '#e2e8f0', display: 'inline-block' }}/>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(135deg,#16a34a,#15803d)' }}/>
+            <b style={{ color: '#374151' }}>ירוק</b> = שולם
+          </span>
+          <span style={{ width: 1, height: 16, background: '#e2e8f0', display: 'inline-block' }}/>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(135deg,#dbeafe,#bfdbfe)' }}/>
+            <b style={{ color: '#374151' }}>כחול</b> = ממתין לתשלום
+          </span>
+          <span style={{ width: 1, height: 16, background: '#e2e8f0', display: 'inline-block' }}/>
+          <span>✏️ <b style={{ color: '#374151' }}>לחץ פעמיים על שם</b> — ערוך</span>
+        </div>
+      )}
+      {isMobile && (
+        <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#64748b', flexWrap: 'wrap', alignItems: 'center', background: '#fff', borderRadius: 12, padding: '10px 14px', boxShadow: '0 2px 8px rgba(0,0,0,.06)', border: '1px solid #f1f5f9' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: '#16a34a' }}/>שולם</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 2, background: '#3b82f6' }}/>ממתין</span>
+          <span>💡 לחץ חודש לעריכה</span>
+        </div>
+      )}
     </div>
   )
 }

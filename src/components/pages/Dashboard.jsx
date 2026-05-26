@@ -5,6 +5,7 @@ import { fmtShekel, fmtDT } from '../../utils/format'
 import { computeAlerts, noSessionDays, studentStatus } from '../../utils/alerts'
 import { Ico } from '../icons/Ico'
 import { usePipeline } from '../../hooks/usePipeline'
+import { useIsMobile } from '../../hooks/useIsMobile'
 
 // ── Activity-type metadata (matches ActivitiesPage) ──────────────────────────
 const CLASS_TYPE_LABELS = { 'חוג': 'חוגים', 'קורס': 'קורסים', 'סדנה': 'סדנאות', 'מחנה': 'מחנות', 'אירוע': 'אירועים', 'הרצאה': 'הרצאות' }
@@ -14,6 +15,7 @@ const SOURCE_COLORS     = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#e
 export default function Dashboard({ contacts, deals, tasks, instructors, students, leads, classes, activities, dark, setPage }) {
   // ── Pipeline hook (standalone, reads its own Supabase data) ─
   const pipeline = usePipeline()
+  const isMobile = useIsMobile()
 
   // ── Current period ──────────────────────────────────────────
   const now        = new Date()
@@ -307,7 +309,7 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
       <div className="pb">
 
         {/* ── KPI Cards (unified income) ────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? 10 : 12, marginBottom: 20 }}>
           {[
             { icon: '💰', label: 'הכנסה החודש',  value: fmtShekel(curTotalInc),  color: dark ? '#6ee7b7' : '#10b981', bg: dark ? '#064e3b' : '#d1fae5',
               sub: incDelta !== 0 ? `${incDelta > 0 ? '↑' : '↓'} ${Math.abs(incDelta)}% מחודש קודם` : 'חוגים + פעילויות', page: 'financial' },
@@ -319,13 +321,13 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
               sub: atRiskLeads.length ? `⚠ ${atRiskLeads.length} בסיכון` : newLeadsToday.length ? `+${newLeadsToday.length} היום` : 'בפייפליין', page: 'sales' },
           ].map((f, i) => (
             <div key={i} onClick={() => setPage?.(f.page)} onMouseEnter={hoverUp} onMouseLeave={hoverDown} role="button" tabIndex={0} aria-label={`${f.label}: ${f.value}`}
-              style={{ background: f.bg, borderRadius: 12, padding: '16px 18px', border: `1px solid ${f.color}22`, cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}>
+              style={{ background: f.bg, borderRadius: 12, padding: isMobile ? '12px 12px' : '16px 18px', border: `1px solid ${f.color}22`, cursor: 'pointer', transition: 'transform .15s, box-shadow .15s' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                <span style={{ fontSize: 24 }}>{f.icon}</span>
-                <span style={{ fontSize: 22, fontWeight: 800, color: f.color }}>{f.value}</span>
+                <span style={{ fontSize: isMobile ? 18 : 24 }}>{f.icon}</span>
+                <span style={{ fontSize: isMobile ? 16 : 22, fontWeight: 800, color: f.color }}>{f.value}</span>
               </div>
-              <div style={{ fontWeight: 700, fontSize: 13, color: f.color, marginTop: 6 }}>{f.label}</div>
-              <div style={{ fontSize: 11, color: f.color, opacity: .7, marginTop: 3 }}>{f.sub}</div>
+              <div style={{ fontWeight: 700, fontSize: isMobile ? 11 : 13, color: f.color, marginTop: 6 }}>{f.label}</div>
+              <div style={{ fontSize: 10, color: f.color, opacity: .7, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.sub}</div>
             </div>
           ))}
         </div>
@@ -338,10 +340,10 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
             role="button" tabIndex={0}
             style={{
               background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 60%, #1a1060 100%)',
-              borderRadius: 16, padding: '16px 24px', marginBottom: 20,
+              borderRadius: 16, padding: isMobile ? '14px 16px' : '16px 24px', marginBottom: 20,
               cursor: 'pointer', transition: 'transform .15s, box-shadow .15s',
               boxShadow: '0 4px 20px rgba(15,23,42,.25)',
-              display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+              display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 20, flexWrap: 'wrap',
               position: 'relative', overflow: 'hidden',
             }}
           >
@@ -385,7 +387,7 @@ export default function Dashboard({ contacts, deals, tasks, instructors, student
         )}
 
         {/* ── Quick stats row ──────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3,1fr)' : 'repeat(3,1fr)', gap: isMobile ? 8 : 12, marginBottom: 20 }}>
           {[
             { icon: '🔥', label: 'משימות להיום', value: todayTasks.length, color: dark ? '#fb923c' : '#f97316', bg: dark ? '#431407' : '#fff7ed',
               sub: todayTasks.length ? todayTasks.slice(0,2).map(t=>t.title).join(', ') : 'הכל מסודר!', page: 'tasks' },

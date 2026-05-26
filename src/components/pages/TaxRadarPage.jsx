@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTaxRadar } from '../../hooks/useTaxRadar'
 import { supabase } from '../../lib/supabase'
+import { useIsMobile } from '../../hooks/useIsMobile'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const MONTH_HE  = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר']
@@ -69,6 +70,7 @@ const btn = (active, color = C.accent) => ({
 // ════════════════════════════════════════════════════════════════════════════
 export default function TaxRadarPage() {
   const tr = useTaxRadar()
+  const isMobile = useIsMobile()
   const [tab,  setTab]  = useState('dashboard')   // dashboard | entry | agent
   const [year, setYear] = useState(2025)
 
@@ -101,52 +103,53 @@ export default function TaxRadarPage() {
   }
 
   return (
-    <div dir="rtl" style={{ fontFamily: "'Rubik','Segoe UI',Arial,sans-serif", background: C.bg, color: C.text, padding: '20px 24px', maxWidth: 1100, margin: '0 auto', minHeight: '100vh' }}>
+    <div dir="rtl" style={{ fontFamily: "'Rubik','Segoe UI',Arial,sans-serif", background: C.bg, color: C.text, padding: isMobile ? '14px 12px' : '20px 24px', maxWidth: 1100, margin: '0 auto', minHeight: '100vh' }}>
 
       {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 28 }}>📡</span> Tax Radar
-            <span style={{ fontSize: 13, fontWeight: 500, color: C.muted, background: C.card2, padding: '3px 10px', borderRadius: 20, border: `1px solid ${C.border}` }}>
-              חדר בקרה פיננסי
-            </span>
+          <h1 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.text, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: isMobile ? 22 : 28 }}>📡</span> Tax Radar
+            {!isMobile && (
+              <span style={{ fontSize: 13, fontWeight: 500, color: C.muted, background: C.card2, padding: '3px 10px', borderRadius: 20, border: `1px solid ${C.border}` }}>
+                חדר בקרה פיננסי
+              </span>
+            )}
           </h1>
-          <p style={{ margin: '4px 0 0', color: C.muted, fontSize: 13 }}>כמה הרווחת, כמה מס צפוי, וכמה באמת שלך</p>
+          {!isMobile && <p style={{ margin: '4px 0 0', color: C.muted, fontSize: 13 }}>כמה הרווחת, כמה מס צפוי, וכמה באמת שלך</p>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Sync status badge */}
-          <span title={tr.synced ? 'מסונכרן עם Supabase' : 'שמור מקומית בלבד'} style={{
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span title={tr.synced ? 'מסונכרן' : 'מקומי'} style={{
             fontSize: 11, padding: '3px 9px', borderRadius: 20, fontWeight: 600,
             background: tr.synced ? 'rgba(34,197,94,.12)' : 'rgba(245,158,11,.1)',
             color: tr.synced ? C.green : C.yellow,
             border: `1px solid ${tr.synced ? 'rgba(34,197,94,.3)' : 'rgba(245,158,11,.25)'}`,
           }}>
-            {tr.synced ? '☁️ Supabase' : '💾 מקומי'}
+            {tr.synced ? '☁️' : '💾'}
           </span>
           <select value={year} onChange={e => setYear(+e.target.value)}
-            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 12px', color: C.text, fontFamily: 'inherit', fontSize: 14 }}>
+            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: isMobile ? '5px 8px' : '6px 12px', color: C.text, fontFamily: 'inherit', fontSize: isMobile ? 13 : 14 }}>
             {[2025, 2024, 2023].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
       </div>
 
       {/* ── Tabs ── */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 24, background: '#fff', padding: 5, borderRadius: 12, width: 'fit-content', border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(0,0,0,.06)' }}>
+      <div style={{ display: 'flex', gap: 5, marginBottom: 20, background: '#fff', padding: 4, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(0,0,0,.06)', width: isMobile ? '100%' : 'fit-content' }}>
         {[
-          { id: 'dashboard', label: '📊 דשבורד' },
-          { id: 'entry',     label: '✏️ הזנה חודשית' },
-          { id: 'agent',     label: '🤖 סוכן פיננסי' },
+          { id: 'dashboard', label: isMobile ? '📊 דשבורד' : '📊 דשבורד' },
+          { id: 'entry',     label: isMobile ? '✏️ הזנה'   : '✏️ הזנה חודשית' },
+          { id: 'agent',     label: isMobile ? '🤖 סוכן'   : '🤖 סוכן פיננסי' },
         ].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={btn(tab === t.id)}>
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ ...btn(tab === t.id), flex: isMobile ? 1 : undefined, padding: isMobile ? '7px 8px' : '8px 18px', fontSize: isMobile ? 12 : 13 }}>
             {t.label}
           </button>
         ))}
       </div>
 
       {/* ── Tab content ── */}
-      {tab === 'dashboard' && <DashboardTab data={data} year={year} tr={tr} />}
-      {tab === 'entry'     && <EntryTab     data={data} year={year} tr={tr} />}
+      {tab === 'dashboard' && <DashboardTab data={data} year={year} tr={tr} isMobile={isMobile} />}
+      {tab === 'entry'     && <EntryTab     data={data} year={year} tr={tr} isMobile={isMobile} />}
       {tab === 'agent'     && <AgentTab     data={data} year={year} />}
     </div>
   )
@@ -155,7 +158,7 @@ export default function TaxRadarPage() {
 // ════════════════════════════════════════════════════════════════════════════
 // TAB 1 — Dashboard
 // ════════════════════════════════════════════════════════════════════════════
-function DashboardTab({ data, year, tr }) {
+function DashboardTab({ data, year, tr, isMobile }) {
   const {
     totalIncome, totalExpenses, totalProfit, projectedAnnualProfit,
     estimatedTaxTotal, paidToDate, missingReserve, monthlyReserve,
@@ -163,30 +166,30 @@ function DashboardTab({ data, year, tr }) {
   } = data
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 20 }}>
 
       {/* ── Row 1: Main KPI cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-        <KpiCard title="רווח מצטבר" value={`${fmt(totalProfit)} ₪`} sub={`מתוך ${fmt(totalIncome)} ₪ הכנסות`} color={totalProfit >= 0 ? C.green : C.red} icon="💰"/>
-        <KpiCard title="קצב שנתי משוער" value={`${fmt(projectedAnnualProfit)} ₪`} sub={`ממוצע חודשי ${fmt(totalProfit / Math.max(months.length,1))} ₪`} color={C.blue} icon="📈"/>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(auto-fit, minmax(220px, 1fr))', gap: isMobile ? 10 : 16 }}>
+        <KpiCard title="רווח מצטבר" value={`${fmt(totalProfit)} ₪`} sub={`מתוך ${fmt(totalIncome)} ₪`} color={totalProfit >= 0 ? C.green : C.red} icon="💰" isMobile={isMobile}/>
+        <KpiCard title="קצב שנתי" value={`${fmt(projectedAnnualProfit)} ₪`} sub={`ממוצע ${fmt(totalProfit / Math.max(months.length,1))} ₪/חודש`} color={C.blue} icon="📈" isMobile={isMobile}/>
         <KpiCard
-          title="רמת סיכון מס"
+          title="סיכון מס"
           value={RISK_LABELS[riskLevel]}
-          sub={`${taxRate}% מהרווח = ${fmt(estimatedTaxTotal)} ₪`}
+          sub={`${taxRate}% = ${fmt(estimatedTaxTotal)} ₪`}
           color={RISK_COLORS[riskLevel]}
-          icon="⚠️"
+          icon="⚠️" isMobile={isMobile}
         />
         <KpiCard
-          title="לשים בצד החודש"
+          title="לשים בצד"
           value={`${fmt(monthlyReserve)} ₪`}
-          sub="כדי לכסות את המס השנתי"
+          sub="לכיסוי המס השנתי"
           color={C.accent}
-          icon="🏦"
+          icon="🏦" isMobile={isMobile}
         />
       </div>
 
       {/* ── Row 2: Tax Reserve + Real Money ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 14 : 16 }}>
         <TaxReserveCard data={data} tr={tr} year={year} />
         <RealMoneyCard  data={data} tr={tr} />
       </div>
@@ -201,23 +204,23 @@ function DashboardTab({ data, year, tr }) {
 }
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
-function KpiCard({ title, value, sub, color, icon }) {
+function KpiCard({ title, value, sub, color, icon, isMobile }) {
   const gradient = KPI_GRADIENTS[color] || `linear-gradient(135deg,${color},${color}cc)`
   return (
     <div style={{
       background: gradient,
-      borderRadius: 18,
-      padding: '22px 20px',
+      borderRadius: isMobile ? 14 : 18,
+      padding: isMobile ? '14px 14px' : '22px 20px',
       position: 'relative',
       overflow: 'hidden',
       boxShadow: `0 8px 24px ${color}44`,
     }}>
       <div style={{ position:'absolute', top:-18, left:-18, width:80, height:80, borderRadius:'50%', background:'rgba(255,255,255,.08)', pointerEvents:'none' }}/>
       <div style={{ position:'absolute', bottom:-10, right:-10, width:60, height:60, borderRadius:'50%', background:'rgba(255,255,255,.06)', pointerEvents:'none' }}/>
-      <div style={{ fontSize: 26, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontSize: 11, color: 'rgba(255,255,255,.8)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', lineHeight: 1.1 }}>{value}</div>
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,.7)', marginTop: 6 }}>{sub}</div>
+      <div style={{ fontSize: isMobile ? 20 : 26, marginBottom: isMobile ? 4 : 8 }}>{icon}</div>
+      <div style={{ fontSize: isMobile ? 10 : 11, color: 'rgba(255,255,255,.8)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: isMobile ? 3 : 6 }}>{title}</div>
+      <div style={{ fontSize: isMobile ? 18 : 26, fontWeight: 900, color: '#fff', lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: isMobile ? 10 : 12, color: 'rgba(255,255,255,.7)', marginTop: 4 }}>{sub}</div>
     </div>
   )
 }
@@ -528,24 +531,24 @@ function AlertsPanel({ alerts }) {
 // ════════════════════════════════════════════════════════════════════════════
 // TAB 2 — Monthly Entry
 // ════════════════════════════════════════════════════════════════════════════
-function EntryTab({ data, year, tr }) {
+function EntryTab({ data, year, tr, isMobile }) {
   const [selMonth, setSelMonth] = useState(null)   // null = list view
 
   if (selMonth !== null) {
-    return <MonthForm year={year} month={selMonth} tr={tr} onClose={() => setSelMonth(null)} />
+    return <MonthForm year={year} month={selMonth} tr={tr} onClose={() => setSelMonth(null)} isMobile={isMobile} />
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>נתונים חודשיים — {year}</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0, fontSize: isMobile ? 15 : 17, fontWeight: 700 }}>נתונים חודשיים — {year}</h2>
         <button onClick={() => setSelMonth(new Date().getMonth() + 1)}
-          style={{ padding: '8px 18px', background: C.accent, color: '#fff', border: 'none', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 14 }}>
-          + הזן חודש חדש
+          style={{ padding: isMobile ? '7px 14px' : '8px 18px', background: C.accent, color: '#fff', border: 'none', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: isMobile ? 13 : 14 }}>
+          + הזן חודש
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3,1fr)' : 'repeat(auto-fill, minmax(220px, 1fr))', gap: isMobile ? 8 : 12 }}>
         {MONTH_HE.map((label, i) => {
           const m = tr.months.find(x => x.year === year && x.month === i + 1)
           return (
@@ -574,7 +577,7 @@ function EntryTab({ data, year, tr }) {
 }
 
 // ── Month Form ────────────────────────────────────────────────────────────────
-function MonthForm({ year, month, tr, onClose }) {
+function MonthForm({ year, month, tr, onClose, isMobile }) {
   const existing = tr.months.find(m => m.year === year && m.month === month)
   const [form, setForm] = useState({
     income:                (existing?.income                || 0),
@@ -616,7 +619,7 @@ function MonthForm({ year, month, tr, onClose }) {
         {existing && <span style={{ fontSize: 12, color: C.muted, fontWeight: 400, marginRight: 8 }}>(עריכה)</span>}
       </h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 12 : 16 }}>
         <div style={card({ gridColumn: '1 / -1' })}>
           <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: C.green }}>💰 הכנסות</h3>
           {f('income', 'סה"כ הכנסות ₪')}
@@ -624,7 +627,7 @@ function MonthForm({ year, month, tr, onClose }) {
 
         <div style={card({ gridColumn: '1 / -1' })}>
           <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: C.red }}>📤 הוצאות</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
             {f('payroll',               'שכר עובדים ₪')}
             {f('subcontractors',        'קבלני משנה ₪')}
             {f('professional_services', 'שירותים מקצועיים ₪')}
@@ -645,8 +648,8 @@ function MonthForm({ year, month, tr, onClose }) {
       </div>
 
       {/* Summary + Save */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, padding: '16px 20px', background: C.card, borderRadius: 12, border: `1px solid ${C.border}` }}>
-        <div style={{ display: 'flex', gap: 32 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, padding: '16px 20px', background: C.card, borderRadius: 12, border: `1px solid ${C.border}`, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', gap: isMobile ? 16 : 32 }}>
           {[
             { label: 'הכנסות',   val: form.income, color: C.green },
             { label: 'הוצאות',   val: totalExp,    color: C.red },
